@@ -1,0 +1,17 @@
+# https://EditorConfig.org
+
+# This is the top-level configuration file
+root = true
+
+[*]
+# See: https://gitlab.com/SKA-TDT/cheetah/-/blob/master/doc/developers_guide.md#indendation-crlf-of-source-files
+end_of_line = lf
+indent_style = space
+indent_size = 4
+trim_trailing_whitespace = true
+# Additional conventions:
+insert_final_newline = true
+charset = utf-8
+
+[Makefile]
+indent_style = tab
