@@ -35,6 +35,28 @@ channel float2 chanin7 __attribute__((depth(0)));
 
 int bit_reversed(int x, int bits);
 
+/*
+ * NDRange kernel 'fetch':
+ *   Multiplies tiles of 2048 complex input values with 2048-element wide filter templates. The result is reordered and
+ *   passed to the 'fdfir' kernel via channels.
+ *
+ * The kernel handles two filter templates (indices 'i' and 'i+43', i.e. one from both filter groups) in parallel.
+ *
+ * A work group consists of 2048 work items. Each work item handles 4 input values at once. Therefore, a work group
+ * covers 8192 complex input values, and cycles 4 times through the filter coefficients.
+ *
+ *     ◀───────── work group = 2048 work items ──────────▶
+ *    ┌────────────┬────────────┬────────────┬────────────┐
+ * ...│2048 inputs │2048 inputs │2048 inputs │2048 inputs │...
+ *    └────────────┴────────────┴────────────┴────────────┘
+ *          x            x            x            x
+ *    ┌────────────┬────────────┬────────────┬────────────┐
+ *    │filter[i]   │filter[i]   │filter[i]   │filter[i]   │
+ *    ├────────────┼────────────┼────────────┼────────────┤
+ *    │filter[i+43]│filter[i+43]│filter[i+43]│filter[i+43]│
+ *    └────────────┴────────────┴────────────┴────────────┘
+ *     ◀──512 WI──▶ ◀──512 WI──▶ ◀──512 WI──▶ ◀──512 WI──▶
+ */
 __attribute__((reqd_work_group_size((1 << LOGN), 1, 1)))
 kernel void fetch(global float *restrict src,
                   global float *restrict coef_0,
@@ -42,47 +64,59 @@ kernel void fetch(global float *restrict src,
 ) {
     const int N = (1 << LOGN);
 
-    local
-    float2 buf_0[4 * N];
-    local
-    float2 buf_1[4 * N];
+    // One buffer per filter template, sized to hold the work group's multiplication result
+    local float2 buf_0[4 * N];
+    local float2 buf_1[4 * N];
+
+    // Work item's base index in 'src' is its global id scaled by 4 (because each WI handles 4 values)
     unsigned where_global = get_global_id(0) << 2;
-    unsigned i_local = get_local_id(0);
+
+    // Work item's base index in the local buffers is the global base index modulo 8192
     unsigned where_local = where_global & ((1 << (LOGN + 2)) - 1);
-//  unsigned ifilter = 8 * (i_local%(N/8));
+
+    // The base indices in 'coef_0': 'filter_index' (resp. 'filter_index'+43) selects a particular filter template.
+    // Then, the work item's local id, modulo 512, is scaled by 4 to refer to a 4-pack of coefficients.
+    // Note: The device buffer behind 'coef_0' holds 86 templates. The bogus 86th filter output is discarded later
+    unsigned i_local = get_local_id(0);
     unsigned ifilter_0 = filter_index * N + 4 * (i_local & (N / 4 - 1));
     unsigned ifilter_1 = (filter_index + 43) * N + 4 * (i_local & (N / 4 - 1)); //43 = ceil(85/2)
 
+    // Complex multiplications. The base indices compute above are scaled again by 2 in order to address the individual,
+    // i.e. real and imaginary, floating point values in 'src' and 'coef_0'
+    buf_0[where_local + 0].x = src[2 * (where_global + 0)    ] * coef_0[2 * (ifilter_0 + 0)] - src[2 * (where_global + 0) + 1] * coef_0[2 * (ifilter_0 + 0) + 1];
+    buf_0[where_local + 0].y = src[2 * (where_global + 0) + 1] * coef_0[2 * (ifilter_0 + 0)] + src[2 * (where_global + 0)    ] * coef_0[2 * (ifilter_0 + 0) + 1];
+    buf_0[where_local + 1].x = src[2 * (where_global + 1)    ] * coef_0[2 * (ifilter_0 + 1)] - src[2 * (where_global + 1) + 1] * coef_0[2 * (ifilter_0 + 1) + 1];
+    buf_0[where_local + 1].y = src[2 * (where_global + 1) + 1] * coef_0[2 * (ifilter_0 + 1)] + src[2 * (where_global + 1)    ] * coef_0[2 * (ifilter_0 + 1) + 1];
+    buf_0[where_local + 2].x = src[2 * (where_global + 2)    ] * coef_0[2 * (ifilter_0 + 2)] - src[2 * (where_global + 2) + 1] * coef_0[2 * (ifilter_0 + 2) + 1];
+    buf_0[where_local + 2].y = src[2 * (where_global + 2) + 1] * coef_0[2 * (ifilter_0 + 2)] + src[2 * (where_global + 2)    ] * coef_0[2 * (ifilter_0 + 2) + 1];
+    buf_0[where_local + 3].x = src[2 * (where_global + 3)    ] * coef_0[2 * (ifilter_0 + 3)] - src[2 * (where_global + 3) + 1] * coef_0[2 * (ifilter_0 + 3) + 1];
+    buf_0[where_local + 3].y = src[2 * (where_global + 3) + 1] * coef_0[2 * (ifilter_0 + 3)] + src[2 * (where_global + 3)    ] * coef_0[2 * (ifilter_0 + 3) + 1];
 
-    buf_0[where_local + 0].x = src[2 * (where_global + 0)] * coef_0[2 * ifilter_0] - src[2 * where_global + 1] * coef_0[2 * ifilter_0 + 1];
-    buf_0[where_local + 0].y = src[2 * (where_global + 0) + 1] * coef_0[2 * ifilter_0] + src[2 * where_global] * coef_0[2 * ifilter_0 + 1];
-    buf_0[where_local + 1].x = src[2 * (where_global + 1)] * coef_0[2 * (ifilter_0 + 1)] - src[2 * (where_global + 1) + 1] * coef_0[2 * (ifilter_0 + 1) + 1];
-    buf_0[where_local + 1].y = src[2 * (where_global + 1) + 1] * coef_0[2 * (ifilter_0 + 1)] + src[2 * (where_global + 1)] * coef_0[2 * (ifilter_0 + 1) + 1];
-    buf_0[where_local + 2].x = src[2 * (where_global + 2)] * coef_0[2 * (ifilter_0 + 2)] - src[2 * (where_global + 2) + 1] * coef_0[2 * (ifilter_0 + 2) + 1];
-    buf_0[where_local + 2].y = src[2 * (where_global + 2) + 1] * coef_0[2 * (ifilter_0 + 2)] + src[2 * (where_global + 2)] * coef_0[2 * (ifilter_0 + 2) + 1];
-    buf_0[where_local + 3].x = src[2 * (where_global + 3)] * coef_0[2 * (ifilter_0 + 3)] - src[2 * (where_global + 3) + 1] * coef_0[2 * (ifilter_0 + 3) + 1];
-    buf_0[where_local + 3].y = src[2 * (where_global + 3) + 1] * coef_0[2 * (ifilter_0 + 3)] + src[2 * (where_global + 3)] * coef_0[2 * (ifilter_0 + 3) + 1];
+    buf_1[where_local + 0].x = src[2 * (where_global + 0)    ] * coef_0[2 * (ifilter_1 + 0)] - src[2 * (where_global + 0) + 1] * coef_0[2 * (ifilter_1 + 0) + 1];
+    buf_1[where_local + 0].y = src[2 * (where_global + 0) + 1] * coef_0[2 * (ifilter_1 + 0)] + src[2 * (where_global + 0)    ] * coef_0[2 * (ifilter_1 + 0) + 1];
+    buf_1[where_local + 1].x = src[2 * (where_global + 1)    ] * coef_0[2 * (ifilter_1 + 1)] - src[2 * (where_global + 1) + 1] * coef_0[2 * (ifilter_1 + 1) + 1];
+    buf_1[where_local + 1].y = src[2 * (where_global + 1) + 1] * coef_0[2 * (ifilter_1 + 1)] + src[2 * (where_global + 1)    ] * coef_0[2 * (ifilter_1 + 1) + 1];
+    buf_1[where_local + 2].x = src[2 * (where_global + 2)    ] * coef_0[2 * (ifilter_1 + 2)] - src[2 * (where_global + 2) + 1] * coef_0[2 * (ifilter_1 + 2) + 1];
+    buf_1[where_local + 2].y = src[2 * (where_global + 2) + 1] * coef_0[2 * (ifilter_1 + 2)] + src[2 * (where_global + 2)    ] * coef_0[2 * (ifilter_1 + 2) + 1];
+    buf_1[where_local + 3].x = src[2 * (where_global + 3)    ] * coef_0[2 * (ifilter_1 + 3)] - src[2 * (where_global + 3) + 1] * coef_0[2 * (ifilter_1 + 3) + 1];
+    buf_1[where_local + 3].y = src[2 * (where_global + 3) + 1] * coef_0[2 * (ifilter_1 + 3)] + src[2 * (where_global + 3)    ] * coef_0[2 * (ifilter_1 + 3) + 1];
 
-    buf_1[where_local + 0].x = src[2 * (where_global + 0)] * coef_0[2 * ifilter_1] - src[2 * where_global + 1] * coef_0[2 * ifilter_1 + 1];
-    buf_1[where_local + 0].y = src[2 * (where_global + 0) + 1] * coef_0[2 * ifilter_1] + src[2 * where_global] * coef_0[2 * ifilter_1 + 1];
-    buf_1[where_local + 1].x = src[2 * (where_global + 1)] * coef_0[2 * (ifilter_1 + 1)] - src[2 * (where_global + 1) + 1] * coef_0[2 * (ifilter_1 + 1) + 1];
-    buf_1[where_local + 1].y = src[2 * (where_global + 1) + 1] * coef_0[2 * (ifilter_1 + 1)] + src[2 * (where_global + 1)] * coef_0[2 * (ifilter_1 + 1) + 1];
-    buf_1[where_local + 2].x = src[2 * (where_global + 2)] * coef_0[2 * (ifilter_1 + 2)] - src[2 * (where_global + 2) + 1] * coef_0[2 * (ifilter_1 + 2) + 1];
-    buf_1[where_local + 2].y = src[2 * (where_global + 2) + 1] * coef_0[2 * (ifilter_1 + 2)] + src[2 * (where_global + 2)] * coef_0[2 * (ifilter_1 + 2) + 1];
-    buf_1[where_local + 3].x = src[2 * (where_global + 3)] * coef_0[2 * (ifilter_1 + 3)] - src[2 * (where_global + 3) + 1] * coef_0[2 * (ifilter_1 + 3) + 1];
-    buf_1[where_local + 3].y = src[2 * (where_global + 3) + 1] * coef_0[2 * (ifilter_1 + 3)] + src[2 * (where_global + 3)] * coef_0[2 * (ifilter_1 + 3) + 1];
-
+    // Synchronise work items, and ensure coherent view of the local buffers
     barrier(CLK_LOCAL_MEM_FENCE);
 
+    // 'base' refers to one of the 4 tiles handled by this work group
     int base = get_local_id(0) >> (LOGN - 2);
+    // 'offset' is the work item's local id modulo 512
     int offset = get_local_id(0) & (N / 4 - 1);
 
-    write_channel_altera(chanin0, buf_0[base * N + offset]);
+    // Write multiplication result to channels. The particular order of elements is mandated by the FFT engine, see
+    // also kernel 'fdfir'
+    write_channel_altera(chanin0, buf_0[base * N + 0 * N / 4 + offset]);
     write_channel_altera(chanin1, buf_0[base * N + 2 * N / 4 + offset]);
     write_channel_altera(chanin2, buf_0[base * N + 1 * N / 4 + offset]);
     write_channel_altera(chanin3, buf_0[base * N + 3 * N / 4 + offset]);
 
-    write_channel_altera(chanin4, buf_1[base * N + offset]);
+    write_channel_altera(chanin4, buf_1[base * N + 0 * N / 4 + offset]);
     write_channel_altera(chanin5, buf_1[base * N + 2 * N / 4 + offset]);
     write_channel_altera(chanin6, buf_1[base * N + 1 * N / 4 + offset]);
     write_channel_altera(chanin7, buf_1[base * N + 3 * N / 4 + offset]);
