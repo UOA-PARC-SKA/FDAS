@@ -121,21 +121,41 @@ kernel void fetch(global float *restrict src,
     write_channel_altera(chanin7, buf_1[base * N + 3 * N / 4 + offset]);
 }
 
+/*
+ * Single work item kernel 'fdfir':
+ *   Performs a tile-wise inverse FFT on the 'fetch'ed data, computes the spectral power of the result, and passes it
+ *   on to the 'reversed' kernel.
+ *
+ * The kernel uses a pipelined radix-4 feed-forward FFT architecture, as described in:
+ *   M. Garrido, J. Grajal, M. A. Sanchez, and O. Gustafsson, ‘Pipelined Radix-2^k Feedforward FFT Architectures’,
+ *     IEEE Trans. VLSI Syst., vol. 21, no. 1, 2013, doi: 10.1109/TVLSI.2011.2178275
+ *
+ * The particular configuration used here accepts 4 input points in each step, and requires 512 steps to process a
+ * 2048-element tile of data. Multiple tiles can be fed back-to-back to the engine. At the end, zeroes are inserted
+ * for 511 additional steps, in order to flush out the last valid results.
+ *
+ * The kernel uses 2 FFT engines to process the 2 independent data channels supplied by the 'fetch' kernel in parallel.
+ */
 __attribute__((task))
 kernel void fdfir(int const count,
                   int const inverse) {
-
     const int N = (1 << LOGN);
+
+    // Sliding window arrays, used internally by the FFT engine for data reordering
     float2 fft_delay_elements_0[N + 4 * (LOGN - 2)];
     float2 fft_delay_elements_1[N + 4 * (LOGN - 2)];
 
+    // Process 'count' tiles and flush the engine's pipeline
     for (unsigned i = 0; i < count * (N / 4) + N / 4 - 1; i++) {
-
+        // Buffers to hold engine's input/output in each iteration
         float2x4 data_0;
         float2x4 data_1;
+
+        // Buffers to store the spectral power of the iFFT outputs (4 real values)
         float power_0[4];
         float power_1[4];
 
+        // Read actual input from the channels, respectively inject zeroes to flush the pipeline
         if (i < count * (N / 4)) {
             data_0.i0 = read_channel_altera(chanin0);
             data_0.i1 = read_channel_altera(chanin1);
@@ -150,11 +170,12 @@ kernel void fdfir(int const count,
             data_0.i0 = data_0.i1 = data_0.i2 = data_0.i3 = 0;
             data_1.i0 = data_1.i1 = data_1.i2 = data_1.i3 = 0;
         }
-        // Perform one step of the FFT engine
+
+        // Perform one step of the FFT engines
         data_0 = fft_step(data_0, i % (N / 4), fft_delay_elements_0, inverse, LOGN);
         data_1 = fft_step(data_1, i % (N / 4), fft_delay_elements_1, inverse, LOGN);
 
-
+        // Compute spectral power
         power_0[0] = data_0.i0.x * data_0.i0.x + data_0.i0.y * data_0.i0.y;
         power_0[1] = data_0.i1.x * data_0.i1.x + data_0.i1.y * data_0.i1.y;
         power_0[2] = data_0.i2.x * data_0.i2.x + data_0.i2.y * data_0.i2.y;
@@ -164,9 +185,9 @@ kernel void fdfir(int const count,
         power_1[1] = data_1.i1.x * data_1.i1.x + data_1.i1.y * data_1.i1.y;
         power_1[2] = data_1.i2.x * data_1.i2.x + data_1.i2.y * data_1.i2.y;
         power_1[3] = data_1.i3.x * data_1.i3.x + data_1.i3.y * data_1.i3.y;
-        /* Store data back to memory. FFT engine outputs are delayed by
-         * N / 8 - 1 steps, hence gate writes accordingly
-         */
+
+        // Pass output to the 'reversed' kernel. Recall that FFT engine outputs are delayed by N / 4 - 1 steps, hence
+        // gate channel writes accordingly.
         if (i >= N / 4 - 1) {
             write_channel_altera(chan0, power_0[0]);
             write_channel_altera(chan1, power_0[1]);
