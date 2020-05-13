@@ -60,8 +60,7 @@ int bit_reversed(int x, int bits);
 __attribute__((reqd_work_group_size((1 << LOGN), 1, 1)))
 kernel void fetch(global float *restrict src,
                   global float *restrict coef_0,
-                  int const filter_index
-) {
+                  int const filter_index) {
     const int N = (1 << LOGN);
 
     // One buffer per filter template, sized to hold the work group's multiplication result
@@ -122,11 +121,9 @@ kernel void fetch(global float *restrict src,
     write_channel_altera(chanin7, buf_1[base * N + 3 * N / 4 + offset]);
 }
 
-__attribute((task))
-kernel void fdfir(
-        int const count,
-        int const inverse
-) {
+__attribute__((task))
+kernel void fdfir(int const count,
+                  int const inverse) {
 
     const int N = (1 << LOGN);
     float2 fft_delay_elements_0[N + 4 * (LOGN - 2)];
@@ -237,14 +234,12 @@ int bit_reversed(int x, int bits) {
 
 
 __attribute__((task))
-__kernel void discard(
-        __global float *restrict dataPtr_0,   //2048 x GROUP_N x FILTER_N / 2
-        __global float *restrict dataPtr_1,   //2048 x GROUP_N x FILTER_N / 2
-        __global float *restrict outputPtr,   //1627 x GROUP_N x FILTER_N
+kernel void discard(global float *restrict dataPtr_0,   //2048 x GROUP_N x FILTER_N / 2
+                    global float *restrict dataPtr_1,   //2048 x GROUP_N x FILTER_N / 2
+                    global float *restrict outputPtr,   //1627 x GROUP_N x FILTER_N
 //         const unsigned int tile_size,       //TILE_SIZE
 //         const unsigned int filter_size      //FILTER_SIZE
-        const unsigned int totalGroup     //GROUP_N*FILTER_N/2
-) {
+                    const unsigned int totalGroup) {     //GROUP_N*FILTER_N/2
     for (unsigned iload = 0; iload < totalGroup; iload++) {
 #pragma unroll 8
         for (unsigned i = 0; i < 1627; i++) {
@@ -261,16 +256,13 @@ __kernel void discard(
 }
 
 __attribute__((task))
-__kernel
-void harmonic_summing(
-        __global volatile float *restrict dataPtr,   //2^LOGN
-        __global float *restrict detection,
-        __constant float *restrict threshold, //SP_N
-        __global unsigned int *restrict detection_l,
-        const unsigned int singleLength,       //2^LOGN/HM_PF - 1
-        const unsigned int totalLength,     //2^LOGN x T_N / HM_PF
-        __global float *restrict resultPtr //2^LOGN x T_N
-) {
+kernel void harmonic_summing(global volatile float *restrict dataPtr,   //2^LOGN
+                             global float *restrict detection,
+                             constant float *restrict threshold, //SP_N
+                             global unsigned int *restrict detection_l,
+                             const unsigned int singleLength,       //2^LOGN/HM_PF - 1
+                             const unsigned int totalLength,     //2^LOGN x T_N / HM_PF
+                             global float *restrict resultPtr) { //2^LOGN x T_N
     float local_result_0[SP_N];
     float local_result_1[SP_N];
 //  float __attribute__((numbanks(16),bankwidth(64))) local_detection[SP_N][DS];     
@@ -380,4 +372,3 @@ void harmonic_summing(
         }
     }
 } 
-
