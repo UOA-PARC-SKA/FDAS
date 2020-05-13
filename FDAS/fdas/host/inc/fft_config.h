@@ -24,6 +24,3 @@
 // Values smaller than 12 use the precomputed twiddle factors
 
 #define LOGN 10
-
-
-

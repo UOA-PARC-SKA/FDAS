@@ -39,42 +39,55 @@
 
 #include "PcaCArray.h"
 
-struct fdFirVariables{
-  PcaCArrayFloat input;
-  PcaCArrayFloat filter;
-  PcaCArrayFloat result;
-  PcaCArrayFloat reorder;
-  PcaCArrayFloat discard;
-  PcaCArrayFloat threshold;
-  PcaCArrayFloat detection;
-  PcaCArrayInt detLocation;
-  PcaCArrayFloat time;
-  int   numFilters;
-  int   inputLength;
-  int   filterLength;
-  int   resultLength;
-  int   arguments;
-  int   dataSet;
+struct fdFirVariables {
+    PcaCArrayFloat input;
+    PcaCArrayFloat filter;
+    PcaCArrayFloat result;
+    PcaCArrayFloat reorder;
+    PcaCArrayFloat discard;
+    PcaCArrayFloat threshold;
+    PcaCArrayFloat detection;
+    PcaCArrayInt detLocation;
+    PcaCArrayFloat time;
+    int numFilters;
+    int inputLength;
+    int filterLength;
+    int resultLength;
+    int arguments;
+    int dataSet;
 };
 
 bool init();
+
 void fdFirSetup(struct fdFirVariables *fdFirVars);
+
 void fdFirCPU(struct fdFirVariables *fdFirVars);
+
 void fdFirComplete(struct fdFirVariables *fdFirVars);
+
 int fdFirCompare(struct fdFirVariables *fdFirVars);
+
 void test_fft(struct fdFirVariables *fdFirVars, int iterations);
+
 void harmonicFPGA(struct fdFirVariables *fdFirVariables);
 
-void elCplxMul(float *dataPtr, float *filterPtr, 
-	       float *resultPtr, int inputLength);
-void printVector(float * dataPtr, int inputLength);
-template <typename T>
+void elCplxMul(float *dataPtr, float *filterPtr,
+               float *resultPtr, int inputLength);
+
+void printVector(float *dataPtr, int inputLength);
+
+template<typename T>
 void zeroData(T *dataPtr, int length, int filters);
+
 void fdFirVerify(struct fdFirVariables *fdFirVars);
+
 void fdFirVerifyComplete(struct fdFirVariables *fdFirVars);
+
 void sorting_descending(float *dataPtr, int length);
+
 // FPGA specific routines
-void tdFirFPGA(struct tdFirVariables *tdFirVars); 
+void tdFirFPGA(struct tdFirVariables *tdFirVars);
+
 void harmonicCompare(struct fdFirVariables *fdFirVars);
 
 #endif

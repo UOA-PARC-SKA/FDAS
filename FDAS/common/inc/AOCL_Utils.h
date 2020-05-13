@@ -33,13 +33,15 @@ namespace aocl_utils {
 
 // Host allocation functions
 void *alignedMalloc(size_t size);
+
 void alignedFree(void *ptr);
 
 // Error functions
 void printError(cl_int error);
+
 void _checkError(int line,
-								 const char *file,
-								 cl_int error,
+                 const char *file,
+                 cl_int error,
                  const char *msg,
                  ...); // does not return
 #define checkError(status, ...) _checkError(__LINE__, __FILE__, status, __VA_ARGS__)
@@ -110,28 +112,45 @@ void waitMilliseconds(unsigned ms);
 template<typename T>
 class scoped_ptr {
 public:
-  typedef scoped_ptr<T> this_type;
+    typedef scoped_ptr<T> this_type;
 
-  scoped_ptr() : m_ptr(NULL) {}
-  scoped_ptr(T *ptr) : m_ptr(ptr) {}
-  ~scoped_ptr() { reset(); }
+    scoped_ptr() : m_ptr(NULL) {}
 
-  T *get() const { return m_ptr; }
-  operator T *() const { return m_ptr; }
-  T *operator ->() const { return m_ptr; }
-  T &operator *() const { return *m_ptr; }
+    scoped_ptr(T *ptr) : m_ptr(ptr) {}
 
-  this_type &operator =(T *ptr) { reset(ptr); return *this; }
+    ~scoped_ptr() { reset(); }
 
-  void reset(T *ptr = NULL) { delete m_ptr; m_ptr = ptr; }
-  T *release() { T *ptr = m_ptr; m_ptr = NULL; return ptr; }
+    T *get() const { return m_ptr; }
+
+    operator T *() const { return m_ptr; }
+
+    T *operator->() const { return m_ptr; }
+
+    T &operator*() const { return *m_ptr; }
+
+    this_type &operator=(T *ptr) {
+        reset(ptr);
+        return *this;
+    }
+
+    void reset(T *ptr = NULL) {
+        delete m_ptr;
+        m_ptr = ptr;
+    }
+
+    T *release() {
+        T *ptr = m_ptr;
+        m_ptr = NULL;
+        return ptr;
+    }
 
 private:
-  T *m_ptr;
+    T *m_ptr;
 
-  // noncopyable
-  scoped_ptr(const this_type &);
-  this_type &operator =(const this_type &);
+    // noncopyable
+    scoped_ptr(const this_type &);
+
+    this_type &operator=(const this_type &);
 };
 
 // scoped_array: assumes pointer was allocated with operator new[]; destroys with operator delete[]
@@ -140,31 +159,51 @@ private:
 template<typename T>
 class scoped_array {
 public:
-  typedef scoped_array<T> this_type;
+    typedef scoped_array<T> this_type;
 
-  scoped_array() : m_ptr(NULL) {}
-  scoped_array(T *ptr) : m_ptr(NULL) { reset(ptr); }
-  explicit scoped_array(size_t n) : m_ptr(NULL) { reset(n); }
-  ~scoped_array() { reset(); }
+    scoped_array() : m_ptr(NULL) {}
 
-  T *get() const { return m_ptr; }
-  operator T *() const { return m_ptr; }
-  T *operator ->() const { return m_ptr; }
-  T &operator *() const { return *m_ptr; }
-  T &operator [](int index) const { return m_ptr[index]; }
+    scoped_array(T *ptr) : m_ptr(NULL) { reset(ptr); }
 
-  this_type &operator =(T *ptr) { reset(ptr); return *this; }
+    explicit scoped_array(size_t n) : m_ptr(NULL) { reset(n); }
 
-  void reset(T *ptr = NULL) { delete[] m_ptr; m_ptr = ptr; }
-  void reset(size_t n) { reset(new T[n]); }
-  T *release() { T *ptr = m_ptr; m_ptr = NULL; return ptr; }
+    ~scoped_array() { reset(); }
+
+    T *get() const { return m_ptr; }
+
+    operator T *() const { return m_ptr; }
+
+    T *operator->() const { return m_ptr; }
+
+    T &operator*() const { return *m_ptr; }
+
+    T &operator[](int index) const { return m_ptr[index]; }
+
+    this_type &operator=(T *ptr) {
+        reset(ptr);
+        return *this;
+    }
+
+    void reset(T *ptr = NULL) {
+        delete[] m_ptr;
+        m_ptr = ptr;
+    }
+
+    void reset(size_t n) { reset(new T[n]); }
+
+    T *release() {
+        T *ptr = m_ptr;
+        m_ptr = NULL;
+        return ptr;
+    }
 
 private:
-  T *m_ptr;
+    T *m_ptr;
 
-  // noncopyable
-  scoped_array(const this_type &);
-  this_type &operator =(const this_type &);
+    // noncopyable
+    scoped_array(const this_type &);
+
+    this_type &operator=(const this_type &);
 };
 
 // scoped_aligned_ptr: assumes pointer was allocated with alignedMalloc; destroys with alignedFree
@@ -173,34 +212,53 @@ private:
 template<typename T>
 class scoped_aligned_ptr {
 public:
-  typedef scoped_aligned_ptr<T> this_type;
+    typedef scoped_aligned_ptr<T> this_type;
 
-  scoped_aligned_ptr() : m_ptr(NULL) {}
-  scoped_aligned_ptr(T *ptr) : m_ptr(NULL) { reset(ptr); }
-  explicit scoped_aligned_ptr(size_t n) : m_ptr(NULL) { reset(n); }
-  ~scoped_aligned_ptr() { reset(); }
+    scoped_aligned_ptr() : m_ptr(NULL) {}
 
-  T *get() const { return m_ptr; }
-  operator T *() const { return m_ptr; }
-  T *operator ->() const { return m_ptr; }
-  T &operator *() const { return *m_ptr; }
-  T &operator [](int index) const { return m_ptr[index]; }
+    scoped_aligned_ptr(T *ptr) : m_ptr(NULL) { reset(ptr); }
 
-  this_type &operator =(T *ptr) { reset(ptr); return *this; }
+    explicit scoped_aligned_ptr(size_t n) : m_ptr(NULL) { reset(n); }
 
-  void reset(T *ptr = NULL) { if(m_ptr) alignedFree(m_ptr); m_ptr = ptr; }
-  void reset(size_t n) { reset((T*) alignedMalloc(sizeof(T) * n)); }
-  T *release() { T *ptr = m_ptr; m_ptr = NULL; return ptr; }
+    ~scoped_aligned_ptr() { reset(); }
+
+    T *get() const { return m_ptr; }
+
+    operator T *() const { return m_ptr; }
+
+    T *operator->() const { return m_ptr; }
+
+    T &operator*() const { return *m_ptr; }
+
+    T &operator[](int index) const { return m_ptr[index]; }
+
+    this_type &operator=(T *ptr) {
+        reset(ptr);
+        return *this;
+    }
+
+    void reset(T *ptr = NULL) {
+        if (m_ptr) alignedFree(m_ptr);
+        m_ptr = ptr;
+    }
+
+    void reset(size_t n) { reset((T *) alignedMalloc(sizeof(T) * n)); }
+
+    T *release() {
+        T *ptr = m_ptr;
+        m_ptr = NULL;
+        return ptr;
+    }
 
 private:
-  T *m_ptr;
+    T *m_ptr;
 
-  // noncopyable
-  scoped_aligned_ptr(const this_type &);
-  this_type &operator =(const this_type &);
+    // noncopyable
+    scoped_aligned_ptr(const this_type &);
+
+    this_type &operator=(const this_type &);
 };
 
 } // ns aocl_utils
 
 #endif
-

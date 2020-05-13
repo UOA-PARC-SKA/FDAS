@@ -65,42 +65,42 @@ typedef unsigned int uint32;
 
 /* File header contants for id purposes */
 static const uint32 Version = 2;
-static const uint32 EndianIndicator    = 0xDEADBEEF;
+static const uint32 EndianIndicator = 0xDEADBEEF;
 static const uint32 RevEndianIndicator = 0xEFBEADDE;
-static const uint32 ComplexIndicator   = 0x2;
+static const uint32 ComplexIndicator = 0x2;
 
 /* For internal use */
 union FourByteWord {
-  unsigned char s[sizeof(uint32)];
-  uint32 l;
+    unsigned char s[sizeof(uint32)];
+    uint32 l;
 };
 
 /*************************************************/
 /* Structures for Complex int and float */
 typedef struct ComplexInt {
-  int r, i;
+    int r, i;
 } ComplexInt;
 
 typedef struct ComplexFloat {
-  float r, i;
+    float r, i;
 } ComplexFloat;
 
 /*************************************************/
 /* C Array structure for int and float */
 typedef struct PcaCArrayInt {
-  int               *data;                  /* pointer to the start of the memory block */
-  void              *datav;                 /* void pointer to a multi-dimensional array */
-  unsigned int       size[3];               /* size of each dimension */
-  unsigned int       ndims;                 /* number of dimensions for this array */
-  unsigned int       rctype;                /* data is real/complex - PCA_REAL/PCA_COMPLEX */
+    int *data;                  /* pointer to the start of the memory block */
+    void *datav;                 /* void pointer to a multi-dimensional array */
+    unsigned int size[3];               /* size of each dimension */
+    unsigned int ndims;                 /* number of dimensions for this array */
+    unsigned int rctype;                /* data is real/complex - PCA_REAL/PCA_COMPLEX */
 } PcaCArrayInt;
 
 typedef struct PcaCArrayFloat {
-  float               *data;
-  void                *datav;
-  unsigned int         size[3];
-  unsigned int         ndims;
-  unsigned int         rctype;
+    float *data;
+    void *datav;
+    unsigned int size[3];
+    unsigned int ndims;
+    unsigned int rctype;
 } PcaCArrayFloat;
 
 /*************************************************/
@@ -111,7 +111,7 @@ typedef struct PcaCArrayFloat {
  *
  *    int *ptr = pca_malloc ( int, 5 );
  */
-#define pca_malloc(type,s) (s ? (type*)alignedMalloc(s*sizeof(type)) : NULL)
+#define pca_malloc(type, s) (s ? (type*)alignedMalloc(s*sizeof(type)) : NULL)
 
 /*************************************************/
 /* pca_malloc_1d ( type, ptr, dim1, dtype )
@@ -129,7 +129,7 @@ typedef struct PcaCArrayFloat {
  *    pca_malloc_2d ( float, p2, 3, 4, PCA_REAL );
  *    pca_malloc_3d ( float, p3, 3, 4, 5, PCA_COMPLEX );
  */
-#define pca_malloc_1d(type,ptr,s,rc) \
+#define pca_malloc_1d(type, ptr, s, rc) \
 { int i, actual_d2, d2, d1 = 1; \
    type *blk; \
    d2 = s; \
@@ -138,7 +138,7 @@ typedef struct PcaCArrayFloat {
    ptr = pca_malloc(type*, d1); \
    if (ptr) for (i=0; i<d1; i++) ptr[i] = blk + i*actual_d2; }
 
-#define pca_malloc_2d(type,ptr,d1,d2,rc) \
+#define pca_malloc_2d(type, ptr, d1, d2, rc) \
 { int i, actual_d2; \
    type *blk; \
    actual_d2 = (rc == PCA_REAL) ? d2 : d2 * 2; \
@@ -146,7 +146,7 @@ typedef struct PcaCArrayFloat {
    ptr = pca_malloc(type*, d1); \
    for (i=0; i<d1; i++) ptr[i] =  blk + i*actual_d2; }
 
-#define pca_malloc_3d(type,ptr,d1,d2,d3,rc) \
+#define pca_malloc_3d(type, ptr, d1, d2, d3, rc) \
 { int i, j, actual_d3; \
    type *blk; \
    actual_d3 = (rc == PCA_REAL) ? d3 : d3 * 2; \
@@ -176,7 +176,7 @@ typedef struct PcaCArrayFloat {
  *    pfloat.ndim  -- 2
  *    pfloat.dtype -- PCA_COMPLEX
  */
-#define pca_create_carray_1d(type,carray,d1,rc) \
+#define pca_create_carray_1d(type, carray, d1, rc) \
 { type **ptr; \
    pca_malloc_1d(type, ptr, d1, rc); \
    carray.data  = ptr ? *ptr : NULL; \
@@ -207,7 +207,7 @@ typedef struct PcaCArrayFloat {
  *    pfloat.ndim  -- 2
  *    pfloat.dtype -- PCA_REAL
  */
-#define pca_create_carray_2d(type,carray,d1,d2,rc) \
+#define pca_create_carray_2d(type, carray, d1, d2, rc) \
 { type **ptr; \
    pca_malloc_2d(type, ptr, d1, d2, rc); \
    carray.data  = ptr ? *ptr : NULL; \
@@ -238,7 +238,7 @@ typedef struct PcaCArrayFloat {
  *    pfloat.ndim  -- 3
  *    pfloat.dtype -- PCA_REAL
  */
-#define pca_create_carray_3d(type,carray,d1,d2,d3,rc) \
+#define pca_create_carray_3d(type, carray, d1, d2, d3, rc) \
 { type ***ptr; \
    pca_malloc_3d(type, ptr, d1, d2, d3, rc); \
    carray.data  = ptr ? **ptr : NULL; \
@@ -268,7 +268,7 @@ typedef struct PcaCArrayFloat {
  *    pfloat.size  -- [0 0 0]
  *    pfloat.ndim  -- 0
  */
-#define clean_mem(type,carray) \
+#define clean_mem(type, carray) \
 {  unsigned int i; \
     alignedFree(carray.data); \
     switch (carray.ndims) { \
