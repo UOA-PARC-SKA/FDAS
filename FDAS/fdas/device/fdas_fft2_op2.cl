@@ -126,7 +126,7 @@ kernel void fetch(global float *restrict src,
  *   Performs a tile-wise inverse FFT on the 'fetch'ed data, computes the spectral power of the result, and passes it
  *   on to the 'reversed' kernel.
  *
- * The kernel uses a pipelined radix-4 feed-forward FFT architecture, as described in:
+ * The kernel uses a pipelined radix-2^2 feed-forward FFT architecture, as described in:
  *   M. Garrido, J. Grajal, M. A. Sanchez, and O. Gustafsson, ‘Pipelined Radix-2^k Feedforward FFT Architectures’,
  *     IEEE Trans. VLSI Syst., vol. 21, no. 1, 2013, doi: 10.1109/TVLSI.2011.2178275
  *
@@ -134,7 +134,33 @@ kernel void fetch(global float *restrict src,
  * 2048-element tile of data. Multiple tiles can be fed back-to-back to the engine. At the end, zeroes are inserted
  * for 511 additional steps, in order to flush out the last valid results.
  *
- * The kernel uses 2 FFT engines to process the 2 independent data channels supplied by the 'fetch' kernel in parallel.
+ * The dataflow through the engine is as follows (cf. Fig. 3 in the paper):
+ *
+ *                  Point i arrives:                                   Result i arrives:
+ *
+ *                     in time step:                                      in time step:
+ *                ◀────i mod 2^(N/P)────                             ◀────  (i >> P)   ───
+ *               ┌────┐ ┌────┬────┬────┐         ┌─────────────┐    ┌────┐ ┌────┬────┬────┐
+ *              ││ 511│…│   2│   1│   0│─────0──▶│.___.___.___.│───▶│2044│…│   8│   4│   0││
+ *              │└────┘ └────┴────┴────┘  t      │[__ [__   |  │    └────┘ └────┴────┴────┘│
+ *              │┌────┐ ┌────┬────┬────┐  e      │|   |     |  │    ┌────┐ ┌────┬────┬────┐│
+ *  at terminal:││1535│…│1026│1025│1024│──r──1──▶│             │───▶│2045│…│   9│   5│   1││at terminal:
+ *  bit-reverse(│└────┘ └────┴────┴────┘  m      │ N    = 2048 │    └────┘ └────┴────┴────┘│  i mod P
+ *   i >> (N-P) │┌────┐ ┌────┬────┬────┐  i      │ P    =    4 │    ┌────┐ ┌────┬────┬────┐│
+ *  )           ││1023│…│ 514│ 513│ 512│──n──2──▶│             │───▶│2046│…│  10│   6│   2││
+ *              │└────┘ └────┴────┴────┘  a      │ lat. =  N/P │    └────┘ └────┴────┴────┘│
+ *              │┌────┐ ┌────┬────┬────┐  l      │ II   =    1 │    ┌────┐ ┌────┬────┬────┐│
+ *              ▼│2047│…│1538│1537│1536│─────3──▶│             │───▶│2047│…│  11│   7│   3│▼
+ *               └────┘ └────┴────┴────┘         └─────────────┘    └────┘ └────┴────┴────┘
+ *
+ * TODO: fft_4_1.cl contains a mix of code from Altera's 'fft1d' and 'fft1d_offchip' examples -- best guess is that
+ *       'fft1d' was stripped down to 4 points. However, functional changes were made in the 'fft_step' function
+ *       (step 1 moved to loop, computation of variable 'data_index' simplified).
+ * TODO: The documentation in the original sources says the engine's output is in bit-reversed order, in contrast to
+ *       Garrido et al. and the illustration above! I do not see a bit-reversal step in the example's driver code.
+ *
+ * The kernel uses two FFT engines to process the two independent data channels supplied by the 'fetch' kernel in
+ * parallel.
  */
 __attribute__((task))
 kernel void fdfir(int const count,
@@ -202,17 +228,27 @@ kernel void fdfir(int const count,
     }
 }
 
+/*
+ * NDRange kernel 'reversed':
+ *   Takes in the output from the 'fdfir' kernel, and writes it back to memory in the layout of the FOP.
+ *
+ * Two data streams, corresponding to one filter template each, are processed concurrently.  The work group layout is
+ * similar to the 'fetch' kernel: a work group consists of 2048 work items that handle 2x4 values each.
+ */
 __attribute__((reqd_work_group_size((1 << LOGN), 1, 1)))
 kernel void reversed(global float *restrict dest_0,
                      global float *restrict dest_1,
                      int const filter_index,
-                     int const padded_length) {
-//					 int const N_T) { //, global float * restrict coef
+                     int const padded_length) { // = GROUP_N * TILE_SIZE
     const int N = (1 << LOGN);
-    const int N_T = 2637824;
+    const int N_T = 2637824; // ??? (unused, anyway)
+
+    // Reordering buffers, sized to hold the 8192 real values covered by the current work group
     local float buf_0[4 * N];
     local float buf_1[4 * N];
 
+    // Fill buffers linearly from the channels. The base index is the work item's local id, scaled by 4 as each WI
+    // handles 4 values
     buf_0[4 * get_local_id(0) + 0] = read_channel_altera(chan0);
     buf_0[4 * get_local_id(0) + 1] = read_channel_altera(chan1);
     buf_0[4 * get_local_id(0) + 2] = read_channel_altera(chan2);
@@ -223,21 +259,30 @@ kernel void reversed(global float *restrict dest_0,
     buf_1[4 * get_local_id(0) + 2] = read_channel_altera(chan6);
     buf_1[4 * get_local_id(0) + 3] = read_channel_altera(chan7);
 
+    // Synchronise work items, and ensure coherent view of the local buffers
     barrier(CLK_LOCAL_MEM_FENCE);
 
+    // Address calculation to map the work group's local buffers to the right place (indexed by work group id and
+    // filter id) in a preliminary FOP-like structure (e.g. float[43][1288*2048]) in memory.
+    // Indices into local buffers are bit-reversed first
+    // TODO: cf. comments on 'fdfir' kernel: Shouldn't the output of the FFT engine be already in the correct order?
     int colt = get_local_id(0);
     int group = get_group_id(0);
     int revcolt = bit_reversed(colt, LOGN);
-    int i = get_global_id(0) >> LOGN;
+    int i = get_global_id(0) >> LOGN; // unused
     int where = colt + (group << (LOGN + 2)) + filter_index * padded_length;
 
-    dest_0[where] = buf_0[revcolt] / 4194304;
-    dest_0[N + where] = buf_0[N + revcolt] / 4194304;
+    // Assign (work item id)'th element in each of the 4 tiles handled by the current work group
+    // TODO: Still unclear why this access pattern was chosen (maybe to save the three bit-reversal operations?)
+    // TODO: In case the bit-reversal is actually unnecessary here the destination buffers could be written linearly
+    // TODO: check whether the synthesis tool understands that it does not need dividers here
+    dest_0[0 * N + where] = buf_0[0 * N + revcolt] / 4194304; // divide by 2^22 -- why?
+    dest_0[1 * N + where] = buf_0[1 * N + revcolt] / 4194304;
     dest_0[2 * N + where] = buf_0[2 * N + revcolt] / 4194304;
     dest_0[3 * N + where] = buf_0[3 * N + revcolt] / 4194304;
 
-    dest_1[where] = buf_1[revcolt] / 4194304;
-    dest_1[N + where] = buf_1[N + revcolt] / 4194304;
+    dest_1[0 * N + where] = buf_1[0 * N + revcolt] / 4194304;
+    dest_1[1 * N + where] = buf_1[1 * N + revcolt] / 4194304;
     dest_1[2 * N + where] = buf_1[2 * N + revcolt] / 4194304;
     dest_1[3 * N + where] = buf_1[3 * N + revcolt] / 4194304;
 }
