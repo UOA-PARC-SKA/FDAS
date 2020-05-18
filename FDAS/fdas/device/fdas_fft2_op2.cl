@@ -287,6 +287,9 @@ kernel void reversed(global float *restrict dest_0,
     dest_1[3 * N + where] = buf_1[3 * N + revcolt] / 4194304;
 }
 
+/*
+ * Helper to perform the FFT-typical bit-reversal.
+ */
 int bit_reversed(int x, int bits) {
     int y = 0;
 #pragma unroll
@@ -298,21 +301,29 @@ int bit_reversed(int x, int bits) {
     return y;
 }
 
-
+/*
+ * Single work item kernel 'discard':
+ *   Concatenates the valid parts from two buffer (one per filter group) into the final filter output plane (FOP).
+ *
+ * The first #taps-1 elements in each tile of the intermediate result need to be discarded (cf. overlap-save algorithm).
+ *
+ * TODO: There might be an off-by-one error here -- the code discards #taps elements.
+ */
 __attribute__((task))
-kernel void discard(global float *restrict dataPtr_0,   //2048 x GROUP_N x FILTER_N / 2
-                    global float *restrict dataPtr_1,   //2048 x GROUP_N x FILTER_N / 2
-                    global float *restrict outputPtr,   //1627 x GROUP_N x FILTER_N
-//         const unsigned int tile_size,       //TILE_SIZE
-//         const unsigned int filter_size      //FILTER_SIZE
-                    const unsigned int totalGroup) {     //GROUP_N*FILTER_N/2
+kernel void discard(global float *restrict dataPtr_0,  //2048 x GROUP_N x ceil(FILTER_N / 2)
+                    global float *restrict dataPtr_1,  //2048 x GROUP_N x ceil(FILTER_N / 2)
+                    global float *restrict outputPtr,  //1627 x GROUP_N x FILTER_N
+                    const unsigned int totalGroup) {   //GROUP_N x ceil(FILTER_N/2)
+    // Copy values in bursts of 8 values to the first half of the FOP (filters 0...42)
     for (unsigned iload = 0; iload < totalGroup; iload++) {
 #pragma unroll 8
         for (unsigned i = 0; i < 1627; i++) {
             outputPtr[iload * 1627 + i] = dataPtr_0[iload * 2048 + 421 + i];
         }
     }
-//Because we don't need the 86th output array, the iterate is totalGroup-1288 instead of totalGroup 
+    // Copy values to the second half of the FOP (filters 43...85). As the 86th filter template was introduced for the
+    // sole purpose of balancing the pipeline, discard its results here: iterating for totalGroup-1288 iterations
+    // practically means that we handle only 42 filters in this loop
     for (unsigned iload = 0; iload < totalGroup - 1288; iload++) {
 #pragma unroll 8
         for (unsigned i = 0; i < 1627; i++) {
