@@ -132,32 +132,27 @@ kernel void fetch(global float *restrict src,
  *
  * The particular configuration used here accepts 4 input points in each step, and requires 512 steps to process a
  * 2048-element tile of data. Multiple tiles can be fed back-to-back to the engine. At the end, zeroes are inserted
- * for 511 additional steps, in order to flush out the last valid results.
+ * for 511 additional steps, in order to flush out the last valid results. See 'fft_4p.cl' for more details.
  *
  * The dataflow through the engine is as follows (cf. Fig. 3 in the paper):
  *
- *                  Point i arrives:                                   Result i arrives:
+ *                    Point i arrives in step:                          Result i arrives in step:
  *
- *                     in time step:                                      in time step:
- *                ◀────i mod 2^(N/P)────                             ◀────  (i >> P)   ───
- *               ┌────┐ ┌────┬────┬────┐         ┌─────────────┐    ┌────┐ ┌────┬────┬────┐
- *              ││ 511│…│   2│   1│   0│─────0──▶│.___.___.___.│───▶│2044│…│   8│   4│   0││
- *              │└────┘ └────┴────┴────┘  t      │[__ [__   |  │    └────┘ └────┴────┴────┘│
- *              │┌────┐ ┌────┬────┬────┐  e      │|   |     |  │    ┌────┐ ┌────┬────┬────┐│
- *  at terminal:││1535│…│1026│1025│1024│──r──1──▶│             │───▶│2045│…│   9│   5│   1││at terminal:
- *  bit-reverse(│└────┘ └────┴────┴────┘  m      │ N    = 2048 │    └────┘ └────┴────┴────┘│  i mod P
- *   i >> (N-P) │┌────┐ ┌────┬────┬────┐  i      │ P    =    4 │    ┌────┐ ┌────┬────┬────┐│
- *  )           ││1023│…│ 514│ 513│ 512│──n──2──▶│             │───▶│2046│…│  10│   6│   2││
- *              │└────┘ └────┴────┴────┘  a      │ lat. =  N/P │    └────┘ └────┴────┴────┘│
- *              │┌────┐ ┌────┬────┬────┐  l      │ II   =    1 │    ┌────┐ ┌────┬────┬────┐│
- *              ▼│2047│…│1538│1537│1536│─────3──▶│             │───▶│2047│…│  11│   7│   3│▼
- *               └────┘ └────┴────┴────┘         └─────────────┘    └────┘ └────┴────┴────┘
- *
- * TODO: fft_4_1.cl contains a mix of code from Altera's 'fft1d' and 'fft1d_offchip' examples -- best guess is that
- *       'fft1d' was stripped down to 4 points. However, functional changes were made in the 'fft_step' function
- *       (step 1 moved to loop, computation of variable 'data_index' simplified).
- * TODO: The documentation in the original sources says the engine's output is in bit-reversed order, in contrast to
- *       Garrido et al. and the illustration above! I do not see a bit-reversal step in the example's driver code.
+ *                                                                              bit-reverse(
+ *                                                                               i mod (N/P)
+ *                      ◀─────i mod (N/P)─────                             ◀─── ) >> logP    ───
+ *                     ┌────┐ ┌────┬────┬────┐         ┌─────────────┐    ┌────┐ ┌────┬────┬────┐
+ *                    ││ 511│…│   2│   1│   0│─────0──▶│.___.___.___.│───▶│ 511│…│ 128│ 256│   0│
+ *                    │└────┘ └────┴────┴────┘  t      │[__ [__   |  │    └────┘ └────┴────┴────┘
+ *  Terminal:         │┌────┐ ┌────┬────┬────┐  e      │|   |     |  │    ┌────┐ ┌────┬────┬────┐
+ *                    ││1535│…│1026│1025│1024│──r──1──▶│             │───▶│1535│…│1152│1280│1024│
+ *   bit-reverse(     │└────┘ └────┴────┴────┘  m      │ N    = 2048 │    └────┘ └────┴────┴────┘
+ *    i >> (logN-logP)│┌────┐ ┌────┬────┬────┐  i      │ P    =    4 │    ┌────┐ ┌────┬────┬────┐
+ *   )                ││1023│…│ 514│ 513│ 512│──n──2──▶│             │───▶│1023│…│ 640│ 768│ 512│
+ *                    │└────┘ └────┴────┴────┘  a      │ lat. =  N/P │    └────┘ └────┴────┴────┘
+ *                    │┌────┐ ┌────┬────┬────┐  l      │ II   =    1 │    ┌────┐ ┌────┬────┬────┐
+ *                    ▼│2047│…│1538│1537│1536│─────3──▶│             │───▶│2047│…│1664│1792│1536│
+ *                     └────┘ └────┴────┴────┘         └─────────────┘    └────┘ └────┴────┴────┘
  *
  * The kernel uses two FFT engines to process the two independent data channels supplied by the 'fetch' kernel in
  * parallel.
@@ -264,19 +259,18 @@ kernel void reversed(global float *restrict dest_0,
 
     // Address calculation to map the work group's local buffers to the right place (indexed by work group id and
     // filter id) in a preliminary FOP-like structure (e.g. float[43][1288*2048]) in memory.
-    // Indices into local buffers are bit-reversed first
-    // TODO: cf. comments on 'fdfir' kernel: Shouldn't the output of the FFT engine be already in the correct order?
     int colt = get_local_id(0);
     int group = get_group_id(0);
     int revcolt = bit_reversed(colt, LOGN);
     int i = get_global_id(0) >> LOGN; // unused
     int where = colt + (group << (LOGN + 2)) + filter_index * padded_length;
 
-    // Assign (work item id)'th element in each of the 4 tiles handled by the current work group
-    // TODO: Still unclear why this access pattern was chosen (maybe to save the three bit-reversal operations?)
-    // TODO: In case the bit-reversal is actually unnecessary here the destination buffers could be written linearly
-    // TODO: check whether the synthesis tool understands that it does not need dividers here
-    dest_0[0 * N + where] = buf_0[0 * N + revcolt] / 4194304; // divide by 2^22 -- why?
+    // Assign (work item id)'th element in each of the 4 tiles handled by the current work group, and handle
+    // peculiarities of this particular FFT engine:
+    //   - results are still in bit-reversed order -> use bit-reversed index when accessing local buffers.
+    //   - results are not normalised with the usual 1/N factor -> divide the previously squared values by N^2.
+    // TODO: Make sure that the synthesis tool does not instantiate actual dividers here
+    dest_0[0 * N + where] = buf_0[0 * N + revcolt] / 4194304;
     dest_0[1 * N + where] = buf_0[1 * N + revcolt] / 4194304;
     dest_0[2 * N + where] = buf_0[2 * N + revcolt] / 4194304;
     dest_0[3 * N + where] = buf_0[3 * N + revcolt] / 4194304;
