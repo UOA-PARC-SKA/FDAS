@@ -1,5 +1,5 @@
 
-#include "fft_4_1.cl"
+#include "fft_4p.cl"
 
 #define TRUE 0
 #define LOGN 11
@@ -168,8 +168,8 @@ kernel void fdfir(int const count,
     const int N = (1 << LOGN);
 
     // Sliding window arrays, used internally by the FFT engine for data reordering
-    float2 fft_delay_elements_0[N + 4 * (LOGN - 2)];
-    float2 fft_delay_elements_1[N + 4 * (LOGN - 2)];
+    float2 fft_delay_elements_0[N + 4 * (LOGN - 3)];
+    float2 fft_delay_elements_1[N + 4 * (LOGN - 3)];
 
     // Process 'count' tiles and flush the engine's pipeline
     for (unsigned i = 0; i < count * (N / 4) + N / 4 - 1; i++) {
