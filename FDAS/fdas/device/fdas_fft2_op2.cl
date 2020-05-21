@@ -286,7 +286,7 @@ kernel void reversed(global float *restrict dest_0,
  */
 int bit_reversed(int x, int bits) {
     int y = 0;
-#pragma unroll
+    #pragma unroll
     for (int i = 0; i < bits; i++) {
         y <<= 1;
         y |= x & 1;
@@ -310,7 +310,7 @@ kernel void discard(global float *restrict dataPtr_0,  //2048 x GROUP_N x ceil(F
                     const unsigned int totalGroup) {   //GROUP_N x ceil(FILTER_N/2)
     // Copy values in bursts of 8 values to the first half of the FOP (filters 0...42)
     for (unsigned iload = 0; iload < totalGroup; iload++) {
-#pragma unroll 8
+        #pragma unroll 8
         for (unsigned i = 0; i < 1627; i++) {
             outputPtr[iload * 1627 + i] = dataPtr_0[iload * 2048 + 421 + i];
         }
@@ -319,7 +319,7 @@ kernel void discard(global float *restrict dataPtr_0,  //2048 x GROUP_N x ceil(F
     // sole purpose of balancing the pipeline, discard its results here: iterating for totalGroup-1288 iterations
     // practically means that we handle only 42 filters in this loop
     for (unsigned iload = 0; iload < totalGroup - 1288; iload++) {
-#pragma unroll 8
+        #pragma unroll 8
         for (unsigned i = 0; i < 1627; i++) {
             outputPtr[iload * 1627 + i + 43 * SIGNAL_LENGTH] = dataPtr_1[iload * 2048 + 421 + i];
         }
@@ -336,23 +336,23 @@ kernel void harmonic_summing(global volatile float *restrict dataPtr,   //2^LOGN
                              global float *restrict resultPtr) { //2^LOGN x T_N
     float local_result_0[SP_N];
     float local_result_1[SP_N];
-//  float __attribute__((numbanks(16),bankwidth(64))) local_detection[SP_N][DS];     
-//  unsigned int __attribute__((numbanks(16),bankwidth(64))) detection_location[SP_N][DS];
+    // float __attribute__((numbanks(16),bankwidth(64))) local_detection[SP_N][DS];
+    // unsigned int __attribute__((numbanks(16),bankwidth(64))) detection_location[SP_N][DS];
     float local_detection_0[SP_N][DS / 2];
     float local_detection_1[SP_N][DS / 2];
     unsigned int detection_location_0[SP_N][DS / 2];
     unsigned int detection_location_1[SP_N][DS / 2];
 
 
-// initialize intermediate result array
-#pragma unroll
+    // initialize intermediate result array
+    #pragma unroll
     for (int ilen = 0; ilen < SP_N; ilen++) {
         local_result_0[ilen] = 0.0f;
         local_result_1[ilen] = 0.0f;
     }
 
     for (int ilen_1 = 0; ilen_1 < DS / 2; ilen_1++) {
-#pragma unroll
+        #pragma unroll
         for (int ilen_2 = 0; ilen_2 < P_F; ilen_2++) {
             detection_location_0[ilen_2][ilen_1] = 0;
             detection_location_1[ilen_2][ilen_1] = 0;
@@ -366,12 +366,12 @@ kernel void harmonic_summing(global volatile float *restrict dataPtr,   //2^LOGN
     char i_count_0[8];
     char i_count_1[8];
 
-#pragma unroll
+    #pragma unroll
     for (int i = 0; i < SP_N; i++) {
         i_count_0[i] = 0;
         i_count_1[i] = 0;
     }
-//  #pragma unroll 2
+    // #pragma unroll 2
     for (int ilen = 0; ilen < totalLength; ilen++) {
 
         int m_x = freq_bin; // has to times HM_PF
@@ -379,7 +379,7 @@ kernel void harmonic_summing(global volatile float *restrict dataPtr,   //2^LOGN
         int s_x_0[SP_N];
         int s_x_1[SP_N];
         int s_y[SP_N];// = (m_y >> logharmonic);
-#pragma unroll
+        #pragma unroll
         for (char ilen_0 = 0; ilen_0 < SP_N; ilen_0++) {
             s_x_0[ilen_0] = (m_x * HM_PF + 0) / (ilen_0 + 1);
             s_x_1[ilen_0] = (m_x * HM_PF + 1) / (ilen_0 + 1);
@@ -390,7 +390,7 @@ kernel void harmonic_summing(global volatile float *restrict dataPtr,   //2^LOGN
         float __attribute__((register)) load_0[SP_N];
         float __attribute__((register)) load_1[SP_N];
 
-#pragma unroll
+        #pragma unroll
         for (char ilen_0 = 0; ilen_0 < SP_N; ilen_0++) {
             load_0[ilen_0] = dataPtr[s_x_0[ilen_0] + (s_y[ilen_0] * SIGNAL_LENGTH)];
             load_1[ilen_0] = dataPtr[s_x_1[ilen_0] + (s_y[ilen_0] * SIGNAL_LENGTH)];
@@ -398,7 +398,7 @@ kernel void harmonic_summing(global volatile float *restrict dataPtr,   //2^LOGN
         local_result_0[0] = load_0[0];
         local_result_1[0] = load_1[0];
 
-#pragma unroll
+        #pragma unroll
         for (char ilen_0 = 1; ilen_0 < SP_N; ilen_0++) {
             local_result_0[ilen_0] = local_result_0[ilen_0 - 1] + load_0[ilen_0];
             local_result_1[ilen_0] = local_result_1[ilen_0 - 1] + load_1[ilen_0];
@@ -409,7 +409,7 @@ kernel void harmonic_summing(global volatile float *restrict dataPtr,   //2^LOGN
 
         // Serach the generated f-fdot plane
 
-#pragma unroll
+        #pragma unroll
         for (int k = 0; k < SP_N; k++) {
             if (local_result_0[k] > threshold[(i_template << 3) + k]) {
                 detection_location_0[k][i_count_0[k]] = ((i_template & 0x7F) << 25) + ((k & 0x7) << 22) + freq_bin * HM_PF + 0;
@@ -422,7 +422,7 @@ kernel void harmonic_summing(global volatile float *restrict dataPtr,   //2^LOGN
                 i_count_1[k] = (i_count_1[k] == (DS / HM_PF - 1)) ? (DS / HM_PF - 1) : i_count_1[k] + 1;
             }
         }
-/**/
+
         if (freq_bin == singleLength) {
             i_template++;
         }
@@ -434,7 +434,7 @@ kernel void harmonic_summing(global volatile float *restrict dataPtr,   //2^LOGN
     }
 
     for (int ilen = 0; ilen < DS / HM_PF; ilen++) {
-//      #pragma unroll  
+        // #pragma unroll
         for (int k = 0; k < SP_N; k++) {
             detection_l[ilen * SP_N + k] = detection_location_0[k][ilen];
             detection[ilen * SP_N + k] = local_detection_0[k][ilen];
@@ -442,4 +442,4 @@ kernel void harmonic_summing(global volatile float *restrict dataPtr,   //2^LOGN
             detection[(ilen + DS / HM_PF) * SP_N + k] = local_detection_1[k][ilen];
         }
     }
-} 
+}

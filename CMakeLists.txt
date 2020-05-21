@@ -11,7 +11,6 @@ add_executable(fdas
         FDAS/common/inc/AOCL_Utils.h
         FDAS/common/src/AOCL_Utils.cpp
         FDAS/fdas/host/inc/fdas.h
-        FDAS/fdas/host/inc/fft_config.h
         FDAS/fdas/host/inc/PcaCArray.h
         FDAS/fdas/host/src/main.cpp)
 
