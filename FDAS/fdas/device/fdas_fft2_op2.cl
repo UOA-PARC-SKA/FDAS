@@ -1,17 +1,14 @@
 
 #include "fft_4p.cl"
 
-#define TRUE 0
 #define LOGN 11
 #define FFT  0
 #define IFFT 1
-//#define SIGNAL_LENGTH 4096
-#define SIGNAL_LENGTH 2095576
-#define T_N  85     // Number of templates
-#define DS   40      // maximum detection size
-#define SP_N 8      // Number of stretched planes
-#define P_F 8
-#define HM_PF 2
+#define SIGNAL_LENGTH 2095576 // GROUP_N * (TILE_SIZE-FILTER_SIZE) = 1288 * 1627
+#define DS   40 // Maximum detection size
+#define SP_N 8  // Number of harmonic and stretch planes
+#define P_F 8   // Used in place of SP_N
+#define HM_PF 2 // Number of channels handled concurrently in harmonic_summing
 
 #pragma OPENCL EXTENSION cl_altera_channels : enable
 
