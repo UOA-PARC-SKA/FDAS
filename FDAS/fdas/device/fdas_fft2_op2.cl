@@ -1,14 +1,9 @@
 
 #include "fft_4p.cl"
+#include "../host/inc/fdas_config.h"
 
-#define LOGN 11
 #define FFT  0
 #define IFFT 1
-#define SIGNAL_LENGTH 2095576 // GROUP_N * (TILE_SIZE-FILTER_SIZE) = 1288 * 1627
-#define DS   40 // Maximum detection size
-#define SP_N 8  // Number of harmonic and stretch planes
-#define P_F 8   // Used in place of SP_N
-#define HM_PF 2 // Number of channels handled concurrently in harmonic_summing
 
 #pragma OPENCL EXTENSION cl_altera_channels : enable
 
@@ -54,28 +49,27 @@ int bit_reversed(int x, int bits);
  *    └────────────┴────────────┴────────────┴────────────┘
  *     ◀──512 WI──▶ ◀──512 WI──▶ ◀──512 WI──▶ ◀──512 WI──▶
  */
-__attribute__((reqd_work_group_size((1 << LOGN), 1, 1)))
+__attribute__((reqd_work_group_size(NDR_WORK_GROUP_SZ, 1, 1)))
 kernel void fetch(global float *restrict src,
                   global float *restrict coef_0,
-                  int const filter_index) {
-    const int N = (1 << LOGN);
+                  const int filter_index) {
 
     // One buffer per filter template, sized to hold the work group's multiplication result
-    local float2 buf_0[4 * N];
-    local float2 buf_1[4 * N];
+    local float2 buf_0[NDR_N_POINTS_PER_WORK_GROUP];
+    local float2 buf_1[NDR_N_POINTS_PER_WORK_GROUP];
 
     // Work item's base index in 'src' is its global id scaled by 4 (because each WI handles 4 values)
-    unsigned where_global = get_global_id(0) << 2;
+    unsigned where_global = get_global_id(0) * NDR_N_POINTS_PER_WORK_ITEM;
 
     // Work item's base index in the local buffers is the global base index modulo 8192
-    unsigned where_local = where_global & ((1 << (LOGN + 2)) - 1);
+    unsigned where_local = where_global % NDR_N_POINTS_PER_WORK_GROUP;
 
     // The base indices in 'coef_0': 'filter_index' (resp. 'filter_index'+43) selects a particular filter template.
     // Then, the work item's local id, modulo 512, is scaled by 4 to refer to a 4-pack of coefficients.
     // Note: The device buffer behind 'coef_0' holds 86 templates. The bogus 86th filter output is discarded later
     unsigned i_local = get_local_id(0);
-    unsigned ifilter_0 = filter_index * N + 4 * (i_local & (N / 4 - 1));
-    unsigned ifilter_1 = (filter_index + 43) * N + 4 * (i_local & (N / 4 - 1)); //43 = ceil(85/2)
+    unsigned ifilter_0 = (filter_index)                       * FDF_TILE_SZ + NDR_N_POINTS_PER_WORK_ITEM * (i_local % NDR_N_WORK_ITEMS_PER_TILE);
+    unsigned ifilter_1 = (filter_index + FILTER_GROUP_SZ + 1) * FDF_TILE_SZ + NDR_N_POINTS_PER_WORK_ITEM * (i_local % NDR_N_WORK_ITEMS_PER_TILE);
 
     // Complex multiplications. The base indices compute above are scaled again by 2 in order to address the individual,
     // i.e. real and imaginary, floating point values in 'src' and 'coef_0'
@@ -101,21 +95,21 @@ kernel void fetch(global float *restrict src,
     barrier(CLK_LOCAL_MEM_FENCE);
 
     // 'base' refers to one of the 4 tiles handled by this work group
-    int base = get_local_id(0) >> (LOGN - 2);
+    int base = get_local_id(0) / NDR_N_WORK_ITEMS_PER_TILE;
     // 'offset' is the work item's local id modulo 512
-    int offset = get_local_id(0) & (N / 4 - 1);
+    int offset = get_local_id(0) % NDR_N_WORK_ITEMS_PER_TILE;
 
     // Write multiplication result to channels. The particular order of elements is mandated by the FFT engine, see
     // also kernel 'fdfir'
-    write_channel_altera(chanin0, buf_0[base * N + 0 * N / 4 + offset]);
-    write_channel_altera(chanin1, buf_0[base * N + 2 * N / 4 + offset]);
-    write_channel_altera(chanin2, buf_0[base * N + 1 * N / 4 + offset]);
-    write_channel_altera(chanin3, buf_0[base * N + 3 * N / 4 + offset]);
+    write_channel_altera(chanin0, buf_0[base * FDF_TILE_SZ + 0 * (FFT_N_POINTS / FFT_N_PARALLEL) + offset]);
+    write_channel_altera(chanin1, buf_0[base * FDF_TILE_SZ + 2 * (FFT_N_POINTS / FFT_N_PARALLEL) + offset]);
+    write_channel_altera(chanin2, buf_0[base * FDF_TILE_SZ + 1 * (FFT_N_POINTS / FFT_N_PARALLEL) + offset]);
+    write_channel_altera(chanin3, buf_0[base * FDF_TILE_SZ + 3 * (FFT_N_POINTS / FFT_N_PARALLEL) + offset]);
 
-    write_channel_altera(chanin4, buf_1[base * N + 0 * N / 4 + offset]);
-    write_channel_altera(chanin5, buf_1[base * N + 2 * N / 4 + offset]);
-    write_channel_altera(chanin6, buf_1[base * N + 1 * N / 4 + offset]);
-    write_channel_altera(chanin7, buf_1[base * N + 3 * N / 4 + offset]);
+    write_channel_altera(chanin4, buf_1[base * FDF_TILE_SZ + 0 * (FFT_N_POINTS / FFT_N_PARALLEL) + offset]);
+    write_channel_altera(chanin5, buf_1[base * FDF_TILE_SZ + 2 * (FFT_N_POINTS / FFT_N_PARALLEL) + offset]);
+    write_channel_altera(chanin6, buf_1[base * FDF_TILE_SZ + 1 * (FFT_N_POINTS / FFT_N_PARALLEL) + offset]);
+    write_channel_altera(chanin7, buf_1[base * FDF_TILE_SZ + 3 * (FFT_N_POINTS / FFT_N_PARALLEL) + offset]);
 }
 
 /*
@@ -157,24 +151,23 @@ kernel void fetch(global float *restrict src,
 __attribute__((task))
 kernel void fdfir(int const count,
                   int const inverse) {
-    const int N = (1 << LOGN);
 
     // Sliding window arrays, used internally by the FFT engine for data reordering
-    float2 fft_delay_elements_0[N + 4 * (LOGN - 3)];
-    float2 fft_delay_elements_1[N + 4 * (LOGN - 3)];
+    float2 fft_delay_elements_0[FFT_N_POINTS + FFT_N_PARALLEL * (FFT_N_POINTS_LOG - 3)];
+    float2 fft_delay_elements_1[FFT_N_POINTS + FFT_N_PARALLEL * (FFT_N_POINTS_LOG - 3)];
 
     // Process 'count' tiles and flush the engine's pipeline
-    for (unsigned i = 0; i < count * (N / 4) + N / 4 - 1; i++) {
+    for (unsigned i = 0; i < count * FFT_N_STEPS + FFT_LATENCY; i++) {
         // Buffers to hold engine's input/output in each iteration
         float2x4 data_0;
         float2x4 data_1;
 
         // Buffers to store the spectral power of the iFFT outputs (4 real values)
-        float power_0[4];
-        float power_1[4];
+        float power_0[FFT_N_PARALLEL];
+        float power_1[FFT_N_PARALLEL];
 
         // Read actual input from the channels, respectively inject zeroes to flush the pipeline
-        if (i < count * (N / 4)) {
+        if (i < count * FFT_N_STEPS) {
             data_0.i0 = read_channel_altera(chanin0);
             data_0.i1 = read_channel_altera(chanin1);
             data_0.i2 = read_channel_altera(chanin2);
@@ -190,8 +183,8 @@ kernel void fdfir(int const count,
         }
 
         // Perform one step of the FFT engines
-        data_0 = fft_step(data_0, i % (N / 4), fft_delay_elements_0, inverse, LOGN);
-        data_1 = fft_step(data_1, i % (N / 4), fft_delay_elements_1, inverse, LOGN);
+        data_0 = fft_step(data_0, i % FFT_N_STEPS, fft_delay_elements_0, inverse, FFT_N_POINTS_LOG);
+        data_1 = fft_step(data_1, i % FFT_N_STEPS, fft_delay_elements_1, inverse, FFT_N_POINTS_LOG);
 
         // Compute spectral power
         power_0[0] = data_0.i0.x * data_0.i0.x + data_0.i0.y * data_0.i0.y;
@@ -206,7 +199,7 @@ kernel void fdfir(int const count,
 
         // Pass output to the 'reversed' kernel. Recall that FFT engine outputs are delayed by N / 4 - 1 steps, hence
         // gate channel writes accordingly.
-        if (i >= N / 4 - 1) {
+        if (i >= FFT_LATENCY) {
             write_channel_altera(chan0, power_0[0]);
             write_channel_altera(chan1, power_0[1]);
             write_channel_altera(chan2, power_0[2]);
@@ -227,29 +220,26 @@ kernel void fdfir(int const count,
  * Two data streams, corresponding to one filter template each, are processed concurrently.  The work group layout is
  * similar to the 'fetch' kernel: a work group consists of 2048 work items that handle 2x4 values each.
  */
-__attribute__((reqd_work_group_size((1 << LOGN), 1, 1)))
+__attribute__((reqd_work_group_size(NDR_WORK_GROUP_SZ, 1, 1)))
 kernel void reversed(global float *restrict dest_0,
                      global float *restrict dest_1,
-                     int const filter_index,
-                     int const padded_length) { // = GROUP_N * TILE_SIZE
-    const int N = (1 << LOGN);
-    const int N_T = 2637824; // ??? (unused, anyway)
+                     int const filter_index) {
 
     // Reordering buffers, sized to hold the 8192 real values covered by the current work group
-    local float buf_0[4 * N];
-    local float buf_1[4 * N];
+    local float buf_0[NDR_N_POINTS_PER_WORK_GROUP];
+    local float buf_1[NDR_N_POINTS_PER_WORK_GROUP];
 
     // Fill buffers linearly from the channels. The base index is the work item's local id, scaled by 4 as each WI
     // handles 4 values
-    buf_0[4 * get_local_id(0) + 0] = read_channel_altera(chan0);
-    buf_0[4 * get_local_id(0) + 1] = read_channel_altera(chan1);
-    buf_0[4 * get_local_id(0) + 2] = read_channel_altera(chan2);
-    buf_0[4 * get_local_id(0) + 3] = read_channel_altera(chan3);
+    buf_0[NDR_N_POINTS_PER_WORK_ITEM * get_local_id(0) + 0] = read_channel_altera(chan0);
+    buf_0[NDR_N_POINTS_PER_WORK_ITEM * get_local_id(0) + 1] = read_channel_altera(chan1);
+    buf_0[NDR_N_POINTS_PER_WORK_ITEM * get_local_id(0) + 2] = read_channel_altera(chan2);
+    buf_0[NDR_N_POINTS_PER_WORK_ITEM * get_local_id(0) + 3] = read_channel_altera(chan3);
 
-    buf_1[4 * get_local_id(0) + 0] = read_channel_altera(chan4);
-    buf_1[4 * get_local_id(0) + 1] = read_channel_altera(chan5);
-    buf_1[4 * get_local_id(0) + 2] = read_channel_altera(chan6);
-    buf_1[4 * get_local_id(0) + 3] = read_channel_altera(chan7);
+    buf_1[NDR_N_POINTS_PER_WORK_ITEM * get_local_id(0) + 0] = read_channel_altera(chan4);
+    buf_1[NDR_N_POINTS_PER_WORK_ITEM * get_local_id(0) + 1] = read_channel_altera(chan5);
+    buf_1[NDR_N_POINTS_PER_WORK_ITEM * get_local_id(0) + 2] = read_channel_altera(chan6);
+    buf_1[NDR_N_POINTS_PER_WORK_ITEM * get_local_id(0) + 3] = read_channel_altera(chan7);
 
     // Synchronise work items, and ensure coherent view of the local buffers
     barrier(CLK_LOCAL_MEM_FENCE);
@@ -258,24 +248,24 @@ kernel void reversed(global float *restrict dest_0,
     // filter id) in a preliminary FOP-like structure (e.g. float[43][1288*2048]) in memory.
     int colt = get_local_id(0);
     int group = get_group_id(0);
-    int revcolt = bit_reversed(colt, LOGN);
-    int i = get_global_id(0) >> LOGN; // unused
-    int where = colt + (group << (LOGN + 2)) + filter_index * padded_length;
+    int revcolt = bit_reversed(colt, FFT_N_POINTS_LOG);
+    int where = colt + (group * NDR_N_POINTS_PER_WORK_GROUP) + filter_index * FDF_INTERMEDIATE_SZ;
 
     // Assign (work item id)'th element in each of the 4 tiles handled by the current work group, and handle
     // peculiarities of this particular FFT engine:
     //   - results are still in bit-reversed order -> use bit-reversed index when accessing local buffers.
     //   - results are not normalised with the usual 1/N factor -> divide the previously squared values by N^2.
     // TODO: Make sure that the synthesis tool does not instantiate actual dividers here
-    dest_0[0 * N + where] = buf_0[0 * N + revcolt] / 4194304;
-    dest_0[1 * N + where] = buf_0[1 * N + revcolt] / 4194304;
-    dest_0[2 * N + where] = buf_0[2 * N + revcolt] / 4194304;
-    dest_0[3 * N + where] = buf_0[3 * N + revcolt] / 4194304;
+    const int NN = FFT_N_POINTS * FFT_N_POINTS;
+    dest_0[0 * FDF_TILE_SZ + where] = buf_0[0 * FFT_N_POINTS + revcolt] / NN;
+    dest_0[1 * FDF_TILE_SZ + where] = buf_0[1 * FFT_N_POINTS + revcolt] / NN;
+    dest_0[2 * FDF_TILE_SZ + where] = buf_0[2 * FFT_N_POINTS + revcolt] / NN;
+    dest_0[3 * FDF_TILE_SZ + where] = buf_0[3 * FFT_N_POINTS + revcolt] / NN;
 
-    dest_1[0 * N + where] = buf_1[0 * N + revcolt] / 4194304;
-    dest_1[1 * N + where] = buf_1[1 * N + revcolt] / 4194304;
-    dest_1[2 * N + where] = buf_1[2 * N + revcolt] / 4194304;
-    dest_1[3 * N + where] = buf_1[3 * N + revcolt] / 4194304;
+    dest_1[0 * FDF_TILE_SZ + where] = buf_1[0 * FFT_N_POINTS + revcolt] / NN;
+    dest_1[1 * FDF_TILE_SZ + where] = buf_1[1 * FFT_N_POINTS + revcolt] / NN;
+    dest_1[2 * FDF_TILE_SZ + where] = buf_1[2 * FFT_N_POINTS + revcolt] / NN;
+    dest_1[3 * FDF_TILE_SZ + where] = buf_1[3 * FFT_N_POINTS + revcolt] / NN;
 }
 
 /*
@@ -301,24 +291,23 @@ int bit_reversed(int x, int bits) {
  * TODO: There might be an off-by-one error here -- the code discards #taps elements.
  */
 __attribute__((task))
-kernel void discard(global float *restrict dataPtr_0,  //2048 x GROUP_N x ceil(FILTER_N / 2)
-                    global float *restrict dataPtr_1,  //2048 x GROUP_N x ceil(FILTER_N / 2)
-                    global float *restrict outputPtr,  //1627 x GROUP_N x FILTER_N
-                    const unsigned int totalGroup) {   //GROUP_N x ceil(FILTER_N/2)
+kernel void discard(global float *restrict dataPtr_0,    //2048 x GROUP_N x ceil(FILTER_N / 2)
+                    global float *restrict dataPtr_1,    //2048 x GROUP_N x ceil(FILTER_N / 2)
+                    global float *restrict outputPtr) {  //1627 x GROUP_N x FILTER_N
     // Copy values in bursts of 8 values to the first half of the FOP (filters 0...42)
-    for (unsigned iload = 0; iload < totalGroup; iload++) {
+    for (unsigned iload = 0; iload < (FILTER_GROUP_SZ + 1) * FDF_N_TILES; iload++) {
         #pragma unroll 8
-        for (unsigned i = 0; i < 1627; i++) {
-            outputPtr[iload * 1627 + i] = dataPtr_0[iload * 2048 + 421 + i];
+        for (unsigned i = 0; i < FDF_TILE_PAYLOAD; i++) {
+            outputPtr[iload * FDF_TILE_PAYLOAD + i] = dataPtr_0[iload * FDF_TILE_SZ + FDF_TILE_OVERLAP + i];
         }
     }
     // Copy values to the second half of the FOP (filters 43...85). As the 86th filter template was introduced for the
     // sole purpose of balancing the pipeline, discard its results here: iterating for totalGroup-1288 iterations
     // practically means that we handle only 42 filters in this loop
-    for (unsigned iload = 0; iload < totalGroup - 1288; iload++) {
+    for (unsigned iload = 0; iload < FILTER_GROUP_SZ * FDF_N_TILES; iload++) {
         #pragma unroll 8
-        for (unsigned i = 0; i < 1627; i++) {
-            outputPtr[iload * 1627 + i + 43 * SIGNAL_LENGTH] = dataPtr_1[iload * 2048 + 421 + i];
+        for (unsigned i = 0; i < FDF_TILE_PAYLOAD; i++) {
+            outputPtr[iload * FDF_TILE_PAYLOAD + i + (FILTER_GROUP_SZ + 1) * FDF_OUTPUT_SZ] = dataPtr_1[iload * FDF_TILE_SZ + FDF_TILE_OVERLAP + i];
         }
     }
 }
@@ -389,30 +378,28 @@ kernel void harmonic_summing(global volatile float *restrict dataPtr,   // FILTE
                              global float *restrict detection,          // SP_N * DS
                              constant float *restrict threshold,        // SP_N * FILTER_N
                              global unsigned int *restrict detection_l, // SP_N * DS
-                             const unsigned int singleLength,           //            GROUP_N * (TILE_SIZE - FILTER_SIZE) / 2 - 1
-                             const unsigned int totalLength,            // FILTER_N * GROUP_N * (TILE_SIZE - FILTER_SIZE) / 2;
                              global float *restrict resultPtr) {        // same as dataPtr
     // Buffers to store HP_k(i,j) and HP_k(i, j+1) for all k
-    float local_result_0[SP_N];
-    float local_result_1[SP_N];
+    float local_result_0[HMS_N_PLANES];
+    float local_result_1[HMS_N_PLANES];
 
     // Buffers to build the candidate lists, in the format outlined above. We allocate 40 slots per harmonic plane in
     // total, split up into a buffer for the even and the odd channels
-    float local_detection_0[SP_N][DS / 2];
-    float local_detection_1[SP_N][DS / 2];
-    unsigned int detection_location_0[SP_N][DS / 2];
-    unsigned int detection_location_1[SP_N][DS / 2];
+    float local_detection_0[HMS_N_PLANES][HMS_DETECTION_SZ / 2];
+    float local_detection_1[HMS_N_PLANES][HMS_DETECTION_SZ / 2];
+    unsigned int detection_location_0[HMS_N_PLANES][HMS_DETECTION_SZ / 2];
+    unsigned int detection_location_1[HMS_N_PLANES][HMS_DETECTION_SZ / 2];
 
     // Fill buffers with zeros
     #pragma unroll
-    for (int ilen = 0; ilen < SP_N; ilen++) {
+    for (int ilen = 0; ilen < HMS_N_PLANES; ilen++) {
         local_result_0[ilen] = 0.0f;
         local_result_1[ilen] = 0.0f;
     }
 
-    for (int ilen_1 = 0; ilen_1 < DS / 2; ilen_1++) {
+    for (int ilen_1 = 0; ilen_1 < HMS_DETECTION_SZ / 2; ilen_1++) {
         #pragma unroll
-        for (int ilen_2 = 0; ilen_2 < P_F; ilen_2++) {
+        for (int ilen_2 = 0; ilen_2 < HMS_N_PLANES; ilen_2++) {
             detection_location_0[ilen_2][ilen_1] = 0;
             detection_location_1[ilen_2][ilen_1] = 0;
             local_detection_0[ilen_2][ilen_1] = 0.0f;
@@ -427,12 +414,12 @@ kernel void harmonic_summing(global volatile float *restrict dataPtr,   // FILTE
 
     // Counters for the number of elements already stored in the result buffers ('local_detection_*' and
     // 'detection_location_*'). The literal 8 corresponds to the number of HPs.
-    char i_count_0[8];
-    char i_count_1[8];
+    char i_count_0[HMS_N_PLANES];
+    char i_count_1[HMS_N_PLANES];
 
     // Reset all counters to zero
     #pragma unroll
-    for (int i = 0; i < SP_N; i++) {
+    for (int i = 0; i < HMS_N_PLANES; i++) {
         i_count_0[i] = 0;
         i_count_1[i] = 0;
     }
@@ -440,24 +427,24 @@ kernel void harmonic_summing(global volatile float *restrict dataPtr,   // FILTE
     // Iterate over all points the FOP. Semantically, this is a two-dimensional loop:
     //   for m_y = 1:85 { ...
     //     for m_x = 1:2^20 { ...
-    for (int ilen = 0; ilen < totalLength; ilen++) {
+    for (int ilen = 0; ilen < FOP_SZ / 2; ilen++) {
         // Each iteration handles two adjacent channels 'm_x*HM_PF+0' and 'm_x*HM_PF+1'
         int m_x = freq_bin;
         int m_y = i_template;
 
         // Buffers to store indices for k-stretched views of the FOP
-        int s_x_0[SP_N];
-        int s_x_1[SP_N];
-        int s_y[SP_N];
+        int s_x_0[HMS_N_PLANES];
+        int s_x_1[HMS_N_PLANES];
+        int s_y[HMS_N_PLANES];
 
         // Compute indices
         // TODO: This is potentially expensive due to modulo/div operations -- results could be reused (at least the
         //       s_y computation which is loop-invariant for 2^20 iterations)
         #pragma unroll
-        for (char ilen_0 = 0; ilen_0 < SP_N; ilen_0++) {
+        for (char ilen_0 = 0; ilen_0 < HMS_N_PLANES; ilen_0++) {
             // Compute channel indices into k'th SP (k==ilen_0+1)
-            s_x_0[ilen_0] = (m_x * HM_PF + 0) / (ilen_0 + 1);
-            s_x_1[ilen_0] = (m_x * HM_PF + 1) / (ilen_0 + 1);
+            s_x_0[ilen_0] = (m_x * 2 + 0) / (ilen_0 + 1);
+            s_x_1[ilen_0] = (m_x * 2 + 1) / (ilen_0 + 1);
 
             // Compute template indices. This is floor(m_y/k), but considering the origin of the FOP, as explained above
             s_y[ilen_0] = (m_y - 42) % (ilen_0 + 1) == 0 ?
@@ -466,58 +453,58 @@ kernel void harmonic_summing(global volatile float *restrict dataPtr,   // FILTE
         }
 
         // Buffers to hold values retrieved from the k-stretched views of the FOP
-        float __attribute__((register)) load_0[SP_N];
-        float __attribute__((register)) load_1[SP_N];
+        float __attribute__((register)) load_0[HMS_N_PLANES];
+        float __attribute__((register)) load_1[HMS_N_PLANES];
 
         // Gather values from memory
         #pragma unroll
-        for (char ilen_0 = 0; ilen_0 < SP_N; ilen_0++) {
-            load_0[ilen_0] = dataPtr[s_x_0[ilen_0] + (s_y[ilen_0] * SIGNAL_LENGTH)];
-            load_1[ilen_0] = dataPtr[s_x_1[ilen_0] + (s_y[ilen_0] * SIGNAL_LENGTH)];
+        for (char ilen_0 = 0; ilen_0 < HMS_N_PLANES; ilen_0++) {
+            load_0[ilen_0] = dataPtr[s_x_0[ilen_0] + (s_y[ilen_0] * FDF_OUTPUT_SZ)];
+            load_1[ilen_0] = dataPtr[s_x_1[ilen_0] + (s_y[ilen_0] * FDF_OUTPUT_SZ)];
         }
 
         // Sum-up values to determine the amplitudes at coordinates (m_y, m_x*2) (resp. (m_y, m_x*2+1)) for all HP_k
         local_result_0[0] = load_0[0];
         local_result_1[0] = load_1[0];
         #pragma unroll
-        for (char ilen_0 = 1; ilen_0 < SP_N; ilen_0++) {
+        for (char ilen_0 = 1; ilen_0 < HMS_N_PLANES; ilen_0++) {
             local_result_0[ilen_0] = local_result_0[ilen_0 - 1] + load_0[ilen_0];
             local_result_1[ilen_0] = local_result_1[ilen_0 - 1] + load_1[ilen_0];
         }
 
         // Write back the amplitudes in HP_8 at the current coordinates (validation only)
-        resultPtr[(i_template * SIGNAL_LENGTH) + freq_bin * HM_PF + 0] = local_result_0[7];
-        resultPtr[(i_template * SIGNAL_LENGTH) + freq_bin * HM_PF + 1] = local_result_1[7];
+        resultPtr[(i_template * FDF_OUTPUT_SZ) + freq_bin * 2 + 0] = local_result_0[7];
+        resultPtr[(i_template * FDF_OUTPUT_SZ) + freq_bin * 2 + 1] = local_result_1[7];
 
         // Now, compare the amplitudes in each HP with the corresponding threshold
         #pragma unroll
-        for (int k = 0; k < SP_N; k++) {
+        for (int k = 0; k < HMS_N_PLANES; k++) {
             if (local_result_0[k] > threshold[(i_template << 3) + k]) {
                 //  ┌───────┬───┬──────────────────────┐
                 //  │i_tem..│ k │ freq_bin * HM_PF + 0 │
                 //  └───────┴───┴──────────────────────┘
                 // 31      24  21                      0
-                detection_location_0[k][i_count_0[k]] = ((i_template & 0x7F) << 25) + ((k & 0x7) << 22) + freq_bin * HM_PF + 0;
+                detection_location_0[k][i_count_0[k]] = ((i_template & 0x7F) << 25) + ((k & 0x7) << 22) + freq_bin * 2 + 0;
 
                 // The amplitude is a single-precision FP value
                 local_detection_0[k][i_count_0[k]] = local_result_0[k];
 
                  // Increment the counter (-> next insertion position). Saturate at last index instead of overflowing
                  // TODO: Shouldn't we rather stop collecting candidates instead of overwriting the last one?
-                i_count_0[k] = (i_count_0[k] == (DS / HM_PF - 1)) ? (DS / HM_PF - 1) : (i_count_0[k] + 1);
+                i_count_0[k] = (i_count_0[k] == (HMS_DETECTION_SZ / 2 - 1)) ? (HMS_DETECTION_SZ / 2 - 1) : (i_count_0[k] + 1);
             }
             if (local_result_1[k] > threshold[(i_template << 3) + k]) {
-                detection_location_1[k][i_count_1[k]] = ((i_template & 0x7F) << 25) + ((k & 0x7) << 22) + freq_bin * HM_PF + 1;
+                detection_location_1[k][i_count_1[k]] = ((i_template & 0x7F) << 25) + ((k & 0x7) << 22) + freq_bin * 2 + 1;
                 local_detection_1[k][i_count_1[k]] = local_result_1[k];
-                i_count_1[k] = (i_count_1[k] == (DS / HM_PF - 1)) ? (DS / HM_PF - 1) : i_count_1[k] + 1;
+                i_count_1[k] = (i_count_1[k] == (HMS_DETECTION_SZ / 2 - 1)) ? (HMS_DETECTION_SZ / 2 - 1) : i_count_1[k] + 1;
             }
         }
 
         // Increment 2D loop counters
-        if (freq_bin == singleLength) {
+        if (freq_bin == FDF_OUTPUT_SZ / 2 - 1) {
             i_template++;
         }
-        if (freq_bin == singleLength) {
+        if (freq_bin == FDF_OUTPUT_SZ / 2 - 1) {
             freq_bin = 0;
         } else {
             freq_bin++;
@@ -527,12 +514,12 @@ kernel void harmonic_summing(global volatile float *restrict dataPtr,   // FILTE
     // Write candidate list to output buffer
     // TODO: Why is this not unrolled to allow a burst write?
     // TODO: Couldn't we just write back the candidates on-the-fly, in the main loop?
-    for (int ilen = 0; ilen < DS / HM_PF; ilen++) {
-        for (int k = 0; k < SP_N; k++) {
-            detection_l[ilen * SP_N + k] = detection_location_0[k][ilen];
-            detection[ilen * SP_N + k] = local_detection_0[k][ilen];
-            detection_l[(ilen + DS / HM_PF) * SP_N + k] = detection_location_1[k][ilen];
-            detection[(ilen + DS / HM_PF) * SP_N + k] = local_detection_1[k][ilen];
+    for (int ilen = 0; ilen < HMS_DETECTION_SZ / 2; ilen++) {
+        for (int k = 0; k < HMS_N_PLANES; k++) {
+            detection_l[ilen * HMS_N_PLANES + k] = detection_location_0[k][ilen];
+            detection[ilen * HMS_N_PLANES + k] = local_detection_0[k][ilen];
+            detection_l[(ilen + HMS_DETECTION_SZ / 2) * HMS_N_PLANES + k] = detection_location_1[k][ilen];
+            detection[(ilen + HMS_DETECTION_SZ / 2) * HMS_N_PLANES + k] = local_detection_1[k][ilen];
         }
     }
 }
