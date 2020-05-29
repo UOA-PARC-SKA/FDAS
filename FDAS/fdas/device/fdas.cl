@@ -5,7 +5,16 @@
 #define FFT  0
 #define IFFT 1
 
+// Enable channels, portable across Altera's and Intel's `aoc` versions
+#if defined(INTELFPGA_CL)
+#pragma OPENCL EXTENSION cl_intel_channels : enable
+#define READ_CHANNEL(ch) read_channel_intel(ch)
+#define WRITE_CHANNEL(ch, x) write_channel_intel(ch, x)
+#else
 #pragma OPENCL EXTENSION cl_altera_channels : enable
+#define READ_CHANNEL(ch) read_channel_altera(ch)
+#define WRITE_CHANNEL(ch, x) write_channel_altera(ch, x)
+#endif
 
 /*
  * Channels to and from the FFT engine(s). Currently, this implementation instantiates two FFT engines, and therefore
@@ -107,15 +116,15 @@ kernel void fetch(global float *restrict src,
 
     // Write multiplication result to channels. The particular order of elements is mandated by the FFT engine, see
     // also kernel 'fdfir'
-    write_channel_altera(fft_input_0_0, buf_0[base * FDF_TILE_SZ + 0 * (FFT_N_POINTS / FFT_N_PARALLEL) + offset]);
-    write_channel_altera(fft_input_0_1, buf_0[base * FDF_TILE_SZ + 2 * (FFT_N_POINTS / FFT_N_PARALLEL) + offset]);
-    write_channel_altera(fft_input_0_2, buf_0[base * FDF_TILE_SZ + 1 * (FFT_N_POINTS / FFT_N_PARALLEL) + offset]);
-    write_channel_altera(fft_input_0_3, buf_0[base * FDF_TILE_SZ + 3 * (FFT_N_POINTS / FFT_N_PARALLEL) + offset]);
+    WRITE_CHANNEL(fft_input_0_0, buf_0[base * FDF_TILE_SZ + 0 * (FFT_N_POINTS / FFT_N_PARALLEL) + offset]);
+    WRITE_CHANNEL(fft_input_0_1, buf_0[base * FDF_TILE_SZ + 2 * (FFT_N_POINTS / FFT_N_PARALLEL) + offset]);
+    WRITE_CHANNEL(fft_input_0_2, buf_0[base * FDF_TILE_SZ + 1 * (FFT_N_POINTS / FFT_N_PARALLEL) + offset]);
+    WRITE_CHANNEL(fft_input_0_3, buf_0[base * FDF_TILE_SZ + 3 * (FFT_N_POINTS / FFT_N_PARALLEL) + offset]);
 
-    write_channel_altera(fft_input_1_0, buf_1[base * FDF_TILE_SZ + 0 * (FFT_N_POINTS / FFT_N_PARALLEL) + offset]);
-    write_channel_altera(fft_input_1_1, buf_1[base * FDF_TILE_SZ + 2 * (FFT_N_POINTS / FFT_N_PARALLEL) + offset]);
-    write_channel_altera(fft_input_1_2, buf_1[base * FDF_TILE_SZ + 1 * (FFT_N_POINTS / FFT_N_PARALLEL) + offset]);
-    write_channel_altera(fft_input_1_3, buf_1[base * FDF_TILE_SZ + 3 * (FFT_N_POINTS / FFT_N_PARALLEL) + offset]);
+    WRITE_CHANNEL(fft_input_1_0, buf_1[base * FDF_TILE_SZ + 0 * (FFT_N_POINTS / FFT_N_PARALLEL) + offset]);
+    WRITE_CHANNEL(fft_input_1_1, buf_1[base * FDF_TILE_SZ + 2 * (FFT_N_POINTS / FFT_N_PARALLEL) + offset]);
+    WRITE_CHANNEL(fft_input_1_2, buf_1[base * FDF_TILE_SZ + 1 * (FFT_N_POINTS / FFT_N_PARALLEL) + offset]);
+    WRITE_CHANNEL(fft_input_1_3, buf_1[base * FDF_TILE_SZ + 3 * (FFT_N_POINTS / FFT_N_PARALLEL) + offset]);
 }
 
 /*
@@ -174,15 +183,15 @@ kernel void fdfir(int const count,
 
         // Read actual input from the channels, respectively inject zeroes to flush the pipeline
         if (i < count * FFT_N_STEPS) {
-            data_0.i0 = read_channel_altera(fft_input_0_0);
-            data_0.i1 = read_channel_altera(fft_input_0_1);
-            data_0.i2 = read_channel_altera(fft_input_0_2);
-            data_0.i3 = read_channel_altera(fft_input_0_3);
+            data_0.i0 = READ_CHANNEL(fft_input_0_0);
+            data_0.i1 = READ_CHANNEL(fft_input_0_1);
+            data_0.i2 = READ_CHANNEL(fft_input_0_2);
+            data_0.i3 = READ_CHANNEL(fft_input_0_3);
 
-            data_1.i0 = read_channel_altera(fft_input_1_0);
-            data_1.i1 = read_channel_altera(fft_input_1_1);
-            data_1.i2 = read_channel_altera(fft_input_1_2);
-            data_1.i3 = read_channel_altera(fft_input_1_3);
+            data_1.i0 = READ_CHANNEL(fft_input_1_0);
+            data_1.i1 = READ_CHANNEL(fft_input_1_1);
+            data_1.i2 = READ_CHANNEL(fft_input_1_2);
+            data_1.i3 = READ_CHANNEL(fft_input_1_3);
         } else {
             data_0.i0 = data_0.i1 = data_0.i2 = data_0.i3 = 0;
             data_1.i0 = data_1.i1 = data_1.i2 = data_1.i3 = 0;
@@ -206,15 +215,15 @@ kernel void fdfir(int const count,
         // Pass output to the 'reversed' kernel. Recall that FFT engine outputs are delayed by N / 4 - 1 steps, hence
         // gate channel writes accordingly.
         if (i >= FFT_LATENCY) {
-            write_channel_altera(fft_output_0_0, power_0[0]);
-            write_channel_altera(fft_output_0_1, power_0[1]);
-            write_channel_altera(fft_output_0_2, power_0[2]);
-            write_channel_altera(fft_output_0_3, power_0[3]);
+            WRITE_CHANNEL(fft_output_0_0, power_0[0]);
+            WRITE_CHANNEL(fft_output_0_1, power_0[1]);
+            WRITE_CHANNEL(fft_output_0_2, power_0[2]);
+            WRITE_CHANNEL(fft_output_0_3, power_0[3]);
 
-            write_channel_altera(fft_output_1_0, power_1[0]);
-            write_channel_altera(fft_output_1_1, power_1[1]);
-            write_channel_altera(fft_output_1_2, power_1[2]);
-            write_channel_altera(fft_output_1_3, power_1[3]);
+            WRITE_CHANNEL(fft_output_1_0, power_1[0]);
+            WRITE_CHANNEL(fft_output_1_1, power_1[1]);
+            WRITE_CHANNEL(fft_output_1_2, power_1[2]);
+            WRITE_CHANNEL(fft_output_1_3, power_1[3]);
         }
     }
 }
@@ -237,15 +246,15 @@ kernel void reversed(global float *restrict dest_0,
 
     // Fill buffers linearly from the channels. The base index is the work item's local id, scaled by 4 as each WI
     // handles 4 values
-    buf_0[NDR_N_POINTS_PER_WORK_ITEM * get_local_id(0) + 0] = read_channel_altera(fft_output_0_0);
-    buf_0[NDR_N_POINTS_PER_WORK_ITEM * get_local_id(0) + 1] = read_channel_altera(fft_output_0_1);
-    buf_0[NDR_N_POINTS_PER_WORK_ITEM * get_local_id(0) + 2] = read_channel_altera(fft_output_0_2);
-    buf_0[NDR_N_POINTS_PER_WORK_ITEM * get_local_id(0) + 3] = read_channel_altera(fft_output_0_3);
+    buf_0[NDR_N_POINTS_PER_WORK_ITEM * get_local_id(0) + 0] = READ_CHANNEL(fft_output_0_0);
+    buf_0[NDR_N_POINTS_PER_WORK_ITEM * get_local_id(0) + 1] = READ_CHANNEL(fft_output_0_1);
+    buf_0[NDR_N_POINTS_PER_WORK_ITEM * get_local_id(0) + 2] = READ_CHANNEL(fft_output_0_2);
+    buf_0[NDR_N_POINTS_PER_WORK_ITEM * get_local_id(0) + 3] = READ_CHANNEL(fft_output_0_3);
 
-    buf_1[NDR_N_POINTS_PER_WORK_ITEM * get_local_id(0) + 0] = read_channel_altera(fft_output_1_0);
-    buf_1[NDR_N_POINTS_PER_WORK_ITEM * get_local_id(0) + 1] = read_channel_altera(fft_output_1_1);
-    buf_1[NDR_N_POINTS_PER_WORK_ITEM * get_local_id(0) + 2] = read_channel_altera(fft_output_1_2);
-    buf_1[NDR_N_POINTS_PER_WORK_ITEM * get_local_id(0) + 3] = read_channel_altera(fft_output_1_3);
+    buf_1[NDR_N_POINTS_PER_WORK_ITEM * get_local_id(0) + 0] = READ_CHANNEL(fft_output_1_0);
+    buf_1[NDR_N_POINTS_PER_WORK_ITEM * get_local_id(0) + 1] = READ_CHANNEL(fft_output_1_1);
+    buf_1[NDR_N_POINTS_PER_WORK_ITEM * get_local_id(0) + 2] = READ_CHANNEL(fft_output_1_2);
+    buf_1[NDR_N_POINTS_PER_WORK_ITEM * get_local_id(0) + 3] = READ_CHANNEL(fft_output_1_3);
 
     // Synchronise work items, and ensure coherent view of the local buffers
     barrier(CLK_LOCAL_MEM_FENCE);
