@@ -126,8 +126,7 @@ def main():
     tmpl_args.add_argument("--max-acceleration", dest='tmpl_gen_max_accel', type=float, metavar='A', default=350,
                            help="set maximum acceleration (both positive and negative) in m/s^2 (default: 350 m/s^2)")
     tmpl_args.add_argument("--template-unaccelerated-frequency", dest='tmpl_gen_unaccel_freq', type=float, metavar='F',
-                           default=500,
-                           help="set frequency of unaccelerated signal in MHz (default: 500 MHz)")
+                           default=500, help="set frequency of unaccelerated signal in MHz (default: 500 MHz)")
 
     plot_args = parser.add_argument_group("plotting")
     plot_args.add_argument("--frequency-range", dest='plot_freq_range', nargs=2, type=float, metavar=('f_min', 'f_max'),
@@ -135,7 +134,9 @@ def main():
 
     test_args = parser.add_argument_group("test data")
     test_args.add_argument("--num-channels", dest='test_data_n_chan', type=int, metavar='N', default=2 ** 22,
-                           help="set number of channels in test data (default: 2^22)")
+                           help="set number of channels in test data (default: 4194304 = 4M)")
+    test_args.add_argument("--tile-size", dest='test_data_tile_sz', type=int, metavar='N', default=2 ** 11,
+                           help="set the tile size used in the overlap-save FDFIR implementation (default: 2048 = 2K)")
 
     general_args = parser.add_argument_group("general parameters")
     general_args.add_argument("--sampling-time", dest='t_samp', metavar='T', type=float, default=0.000064,
@@ -168,12 +169,19 @@ def main():
             obsLength=args.t_obs,
             speedOfLight=args.t_c)
 
-        with open(args.output or "fdas_templates.txt", 'wt') as tmpl_file:
+        with open(args.output or "fdas_templates.h", 'wt') as tmpl_file:
+            tile_sz = args.test_data_tile_sz
+            tmpl_lines = []
             for tmpl in templates:
-                tmpl_float = np.empty(2 * tmpl.size, dtype=np.float32)
-                tmpl_float[0::2] = np.real(tmpl)
-                tmpl_float[1::2] = np.imag(tmpl)
-                tmpl_file.write(' '.join(f"{coeff:g}" for coeff in tmpl_float) + '\n')
+                tmpl_ft = scipy.fft.fft(tmpl, tile_sz)
+                tmpl_float = np.empty(2 * tile_sz, dtype=np.float32)
+                tmpl_float[0::2] = np.real(tmpl_ft)
+                tmpl_float[1::2] = np.imag(tmpl_ft)
+                tmpl_lines += [(' ' * 4) + ', '.join(f"{coeff:13.10f}f" for coeff in tmpl_float)]
+
+            tmpl_file.write(f"const float FDAS_TEMPLATES[{len(templates)}][{2 * tile_sz}] = " + "{\n")
+            tmpl_file.write(',\n'.join(tmpl_lines))
+            tmpl_file.write("};\n")
 
         sys.exit(0)
 
