@@ -5,7 +5,6 @@ import argparse
 import struct
 import numpy as np
 import scipy.fft
-import scipy.special
 
 import matplotlib.pyplot as plt
 
@@ -57,133 +56,29 @@ def plot_power_spectrum(freqs, power, freq_range):
     plt.show()
 
 
-def fresnel_wrapper(a):
-    # Workaround: SciPy's fresnel function behaves differently from Matlab on complex numbers
-    if not np.any(np.real(a)) and np.any(np.imag(a)):
-        # Found this through trial and error -- I honestly have NO idea why this is works
-        s, c = scipy.special.fresnel(np.imag(a))
-        s = np.conj(s * 1j)
-        c = c * 1j
-    elif np.any(np.real(a)) and not np.any(np.imag(a)):
-        s, c = scipy.special.fresnel(np.real(a))
-        s = s + 0j
-        c = c + 0j
-    else:
-        raise RuntimeError("Array contains values that are not strictly real or imaginary")
-
-    return s, c
-
-
-def generate_templates(numTemplates, maxAccel, unAccelFreq, obsLength, speedOfLight):
-    # Straight port of https://gitlab.com/SKA-TDT/tdt-matlab-models/-/blob/master/FDAS/templateGenerator.m [2af28d2e]
-    # Comments starting with '%' are taken from the Matlab code
-
-    templates = []
-
-    # % Calculate the acceleration step size based on the number of templates requested
-    accelStep = 2 * maxAccel / numTemplates
-
-    for templateNum in range(numTemplates + 1):
-        # % Calculate how many bins the signal would drift for a 500 Hz signal
-        binsSignalDrifts = (accelStep * templateNum - maxAccel) * unAccelFreq * np.square(obsLength) / speedOfLight
-
-        if binsSignalDrifts != 0:
-            # % Calculate the width of the template. The shift by binsSignalDrifts/2 is to
-            # % center the template so that the edges are not cut off during its calculation
-            templateWidth = np.arange(-np.abs(binsSignalDrifts), np.abs(binsSignalDrifts)) - binsSignalDrifts / 2
-
-            # % Calculate limits for the Fresnel integrals below
-            Y = templateWidth * np.sqrt(np.complex(2 / binsSignalDrifts))
-            Z = (templateWidth + binsSignalDrifts) * np.sqrt(np.complex(2 / binsSignalDrifts))
-
-            # % Calculate Fresnel integrals for use in generating the template
-            sinY, cosY = fresnel_wrapper(Y)
-            sinZ, cosZ = fresnel_wrapper(Z)
-
-            # % Create a template for this acceleration
-            templates += [1 / np.sqrt(np.complex(2 * binsSignalDrifts))
-                          * np.exp(1j * np.pi * np.square(templateWidth) / binsSignalDrifts)
-                          * (sinZ - sinY - 1j * (cosY - cosZ))]
-        else:
-            templates += [np.ones(1, dtype=np.complex)]
-
-    return templates
-
-
 def main():
     parser = argparse.ArgumentParser(description="Generate test vectors for FDAS module.")
 
-    mode_args = parser.add_argument_group("mode")
-    mode_args.add_argument("--generate-templates", dest='mode_gen_tmpl', action='store_true',
-                           help="generate filter templates")
-    mode_args.add_argument("--plot", dest='mode_plot', action='store_true', help="visualise power spectrum")
-    mode_args.add_argument("--make-test-data", dest='mode_make_test_data', action='store_true',
-                           help="read time series data, and write test files (input and reference output) for the FDAS module")
-
-    tmpl_args = parser.add_argument_group("template generator")
-    tmpl_args.add_argument("--num-templates", dest='tmpl_gen_n_tmpl', type=int, metavar='N', default=85,
-                           help="set number of filter templates to generate. Needs to be an odd number (default: 85)")
-    tmpl_args.add_argument("--max-acceleration", dest='tmpl_gen_max_accel', type=float, metavar='A', default=350,
-                           help="set maximum acceleration (both positive and negative) in m/s^2 (default: 350 m/s^2)")
-    tmpl_args.add_argument("--template-unaccelerated-frequency", dest='tmpl_gen_unaccel_freq', type=float, metavar='F',
-                           default=500, help="set frequency of unaccelerated signal in MHz (default: 500 MHz)")
-
-    plot_args = parser.add_argument_group("plotting")
-    plot_args.add_argument("--frequency-range", dest='plot_freq_range', nargs=2, type=float, metavar=('f_min', 'f_max'),
-                           help="set frequency range (in MHz) to plot")
+    parser.add_argument(dest='input', metavar='tim-file', help="SIGPROC *.tim file containing time-series samples")
+    parser.add_argument("--output-directory", dest='out_dir', metavar='path', required=True,
+                        help="set output directory")
 
     test_args = parser.add_argument_group("test data")
-    test_args.add_argument("--num-channels", dest='test_data_n_chan', type=int, metavar='N', default=2 ** 22,
+    test_args.add_argument("--num-channels", dest='test_data_n_chan', type=int, metavar='n', default=2 ** 22,
                            help="set number of channels in test data (default: 4194304 = 4M)")
-    test_args.add_argument("--tile-size", dest='test_data_tile_sz', type=int, metavar='N', default=2 ** 11,
+    test_args.add_argument("--tile-size", dest='test_data_tile_sz', type=int, metavar='n', default=2 ** 11,
                            help="set the tile size used in the overlap-save FDFIR implementation (default: 2048 = 2K)")
+    test_args.add_argument("--sampling-time", dest='t_samp', metavar='t', type=float, default=0.000064,
+                           help="set sampling time in seconds (default: 6.4e-5 s)")
 
-    general_args = parser.add_argument_group("general parameters")
-    general_args.add_argument("--sampling-time", dest='t_samp', metavar='T', type=float, default=0.000064,
-                              help="set sampling time in seconds (default: 6.4e-5 s)")
-    general_args.add_argument("--observation-time", dest='t_obs', metavar='T', type=float, default=600,
-                              help="set total observation time in seconds (default: 600 s)")
-    general_args.add_argument("--speed-of-light", dest='t_c', metavar='T', type=float, default=299792458,
-                              help="set speed of light in m/s (default: 299792458 m/s)")
-
-    io_args = parser.add_argument_group("I/O")
-    io_args.add_argument('-i', "--input", dest='input', metavar="FILE",
-                         help="SIGPROC *.tim file containing time-series samples")
-    io_args.add_argument('-o', "--output", dest='output', metavar='FILE', help="set output file or directory")
+    vis_args = parser.add_argument_group("visualisation")
+    vis_args.add_argument("--plot", dest='plot', action='store_true', help="visualise various intermediate results")
+    vis_args.add_argument("--plot-frequency-range", dest='plot_freq_range', nargs=2, type=float,
+                          metavar=('f_min', 'f_max'), help="set frequency range (in MHz) to plot")
+    vis_args.add_argument("--plot-output-directory", dest='plot_out_dir', metavar='path',
+                          help="set output directory for plots")
 
     args = parser.parse_args()
-
-    # generate templates (only)
-    if args.mode_gen_tmpl:
-        # Number of templates must be odd, as we generate:
-        #    N//2 filters that correspond  to negative accelerations
-        #  +  1   filter  that corresponds to zero acceleration
-        #  + N//2 filters that correspond  to positive accelerations
-        if args.tmpl_gen_n_tmpl % 2 == 0:
-            parser.error("Number of templates must be odd")
-
-        templates = generate_templates(
-            numTemplates=args.tmpl_gen_n_tmpl - 1,  # in the Matlab code, only the non-zero accelerations are counted
-            maxAccel=args.tmpl_gen_max_accel,
-            unAccelFreq=args.tmpl_gen_unaccel_freq,
-            obsLength=args.t_obs,
-            speedOfLight=args.t_c)
-
-        with open(args.output or "fdas_templates.h", 'wt') as tmpl_file:
-            tile_sz = args.test_data_tile_sz
-            tmpl_lines = []
-            for tmpl in templates:
-                tmpl_ft = scipy.fft.fft(tmpl, tile_sz)
-                tmpl_float = np.empty(2 * tile_sz, dtype=np.float32)
-                tmpl_float[0::2] = np.real(tmpl_ft)
-                tmpl_float[1::2] = np.imag(tmpl_ft)
-                tmpl_lines += [(' ' * 4) + ', '.join(f"{coeff:13.10f}f" for coeff in tmpl_float)]
-
-            tmpl_file.write(f"const float FDAS_TEMPLATES[{len(templates)}][{2 * tile_sz}] = " + "{\n")
-            tmpl_file.write(',\n'.join(tmpl_lines))
-            tmpl_file.write("};\n")
-
-        sys.exit(0)
 
     # read samples from time series
     if not args.input:
@@ -217,7 +112,7 @@ def main():
     freqs.resize(n_chan)
     ft.resize(n_chan)
 
-    if args.mode_plot:
+    if args.plot:
         power = np.real(ft * np.conj(ft))
         plot_power_spectrum(freqs, power, args.plot_freq_range or [freqs[0], freqs[-1]])
 
