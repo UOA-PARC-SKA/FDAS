@@ -3,10 +3,10 @@
 import sys
 import argparse
 import struct
+import pathlib
 import numpy as np
 import scipy.fft
-
-import matplotlib.pyplot as plt
+import scipy.signal
 
 
 def get_tim_header_field(tag, fmt, buf):
@@ -47,19 +47,12 @@ def read_tim_file(tim_file):
     return samples, t_samp
 
 
-def plot_power_spectrum(freqs, power, freq_range):
-    plt.title("Power spectrum")
-    plt.xlabel("Frequency [Hz]")
-    plt.ylabel("Power")
-    plt.plot(freqs, power)
-    plt.xlim(*freq_range)
-    plt.show()
-
-
 def main():
     parser = argparse.ArgumentParser(description="Generate test vectors for FDAS module.")
 
     parser.add_argument(dest='input', metavar='tim-file', help="SIGPROC *.tim file containing time-series samples")
+    parser.add_argument("--templates", dest='tmpls', metavar='path', default="tvgen_templates.npy",
+                        help="NumPy *.npy file containing the filter templates (default: 'tvgen_templates.npy")
     parser.add_argument("--output-directory", dest='out_dir', metavar='path', required=True,
                         help="set output directory")
 
@@ -71,14 +64,11 @@ def main():
     test_args.add_argument("--sampling-time", dest='t_samp', metavar='t', type=float, default=0.000064,
                            help="set sampling time in seconds (default: 6.4e-5 s)")
 
-    vis_args = parser.add_argument_group("visualisation")
-    vis_args.add_argument("--plot", dest='plot', action='store_true', help="visualise various intermediate results")
-    vis_args.add_argument("--plot-frequency-range", dest='plot_freq_range', nargs=2, type=float,
-                          metavar=('f_min', 'f_max'), help="set frequency range (in MHz) to plot")
-    vis_args.add_argument("--plot-output-directory", dest='plot_out_dir', metavar='path',
-                          help="set output directory for plots")
-
     args = parser.parse_args()
+
+    # make sure the output directory exists
+    od = args.out_dir
+    pathlib.Path(od).mkdir(parents=True, exist_ok=True)
 
     # read samples from time series
     if not args.input:
@@ -97,10 +87,10 @@ def main():
         print(f"[ERROR] Input file does not contain enough samples. Got {n_samp}, but need at least {2 * n_chan}")
         sys.exit(-1)
     if n_samp > 2 * n_chan:
-        print(
-            f"[INFO] Discarding {n_samp - 2 * n_chan} samples (= {t_samp * (n_samp - 2 * n_chan):.3f} seconds) to match requested number of channels in spectrum")
+        print(f"[INFO] Discarding {n_samp - 2 * n_chan} samples (= {t_samp * (n_samp - 2 * n_chan):.3f} seconds) to "
+              f"match requested number of channels in spectrum")
         n_samp = 2 * n_chan
-        samples.resize(n_samp)
+        samples = np.resize(samples, n_samp)
 
     # perform CXFT: get normalised Fourier transform
     freqs = scipy.fft.fftfreq(n_samp, t_samp)
@@ -109,12 +99,30 @@ def main():
     # discard negative frequencies. SKA-TDT says:
     # % Take only the first half of the series; if the second half is included, the
     # % acceleration with opposite sign to the correct one will be flagged as a candidate
-    freqs.resize(n_chan)
-    ft.resize(n_chan)
+    # additionally, enforce the desired data types
+    freqs = np.array(freqs[:n_chan], dtype=np.float32)
+    ft = np.array(ft[:n_chan], dtype=np.complex64)
 
-    if args.plot:
-        power = np.real(ft * np.conj(ft))
-        plot_power_spectrum(freqs, power, args.plot_freq_range or [freqs[0], freqs[-1]])
+    # save as input for the FDAS module
+    np.save(f"{od}/input.npy", ft)
+    np.save(f"{od}/freqs.npy", freqs)
+
+    # load filter templates
+    templates = np.load(args.tmpls)
+    if templates.ndim != 2 or templates.dtype != np.complex64:
+        print(f"[ERROR] Template file does not contain a two-dimensional np.complex64 array")
+        sys.exit(-1)
+    n_tmpl, max_tmpl_len = templates.shape
+
+    # compute and save filter-output plane
+    fop = np.zeros((n_tmpl, n_chan), dtype=np.float32)
+    for i in range(n_tmpl):
+        print(f"[INFO] Convolving with template #{i:02d}")
+        tmpl = templates[i][np.nonzero(templates[i])]
+        conv = scipy.signal.convolve(ft, tmpl)[:n_chan]  # convolve, and trim to input length
+        fop[i][:] = np.real(conv * np.conj(conv))
+
+    np.save(f"{od}/fop.npy", fop)
 
 
 if __name__ == '__main__':
