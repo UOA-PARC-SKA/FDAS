@@ -4,10 +4,9 @@ import argparse
 import numpy as np
 import scipy.fft
 import scipy.special
-import timeit
 
 
-def fresnel_wrapper(a):
+def _fresnel_wrapper(a):
     # Workaround: SciPy's fresnel function behaves differently from Matlab on complex numbers
     if not np.any(np.real(a)) and np.any(np.imag(a)):
         # Found this through trial and error -- I honestly have NO idea why this is works
@@ -47,8 +46,8 @@ def generate_templates(numTemplates, maxAccel, unAccelFreq, obsLength, speedOfLi
             Z = (templateWidth + binsSignalDrifts) * np.sqrt(np.complex(2 / binsSignalDrifts))
 
             # % Calculate Fresnel integrals for use in generating the template
-            sinY, cosY = fresnel_wrapper(Y)
-            sinZ, cosZ = fresnel_wrapper(Z)
+            sinY, cosY = _fresnel_wrapper(Y)
+            sinZ, cosZ = _fresnel_wrapper(Z)
 
             # % Create a template for this acceleration
             templates += [1 / np.sqrt(np.complex(2 * binsSignalDrifts))
@@ -75,21 +74,14 @@ def main():
     gen_args.add_argument("--speed-of-light", dest='t_c', metavar='c', type=float, default=299792458,
                           help="set speed of light in m/s (default: 299792458 m/s)")
 
-    parser.add_argument("--write-numpy-archive", dest='numpy_archive', metavar='path', nargs='?',
-                        const='fdas_templates.npz',
-                        help="write templates as an *.npz archive, for use in the FDAS test vector generator. (default "
-                             "file name: 'fdas_templates.npz')")
-    parser.add_argument("--write-header-file", dest='header_file', metavar='path', nargs='?',
-                        const="fdas_templates.h",
-                        help="write Fourier transformed templates as an float array in a C header file, for use in the "
-                             "FDAS host code. (default file name: 'fdas_templates.h')")
-    parser.add_argument("--fourier-transform-size", dest='ft_sz', type=int, metavar='n', default=2 ** 11,
-                        help="set the size of each template's Fourier transform (default: 2048 = 2K)")
+    parser.add_argument("-p", "--precision", dest='precision', choices=['single', 'double'], default='single',
+                        help="select output floating point precision (default: single")
+    parser.add_argument("-f", "--fourier-transform", dest='ft_sz', type=int, metavar='n', nargs='?', const=2 ** 11,
+                        help="request (individual) Fourier transform of the templates with the specified size "
+                             "(default: 2048 = 2K)")
+    parser.add_argument("-o", "--output", dest='output', metavar='path', required=True, help="set output file")
 
     args = parser.parse_args()
-
-    if not args.numpy_archive and not args.header_file:
-        parser.error("Nothing to do, use --write-numpy-archive, --write-header-file, or both")
 
     # Number of templates must be odd, as we generate:
     #    N//2 filters that correspond  to negative accelerations
@@ -97,8 +89,6 @@ def main():
     #  + N//2 filters that correspond  to positive accelerations
     if args.n_tmpl % 2 == 0:
         parser.error("Number of templates must be odd")
-
-    gen_start = timeit.default_timer()
 
     templates = generate_templates(
         numTemplates=args.n_tmpl - 1,  # in the Matlab code, only the non-zero acceleration templates are counted
@@ -108,27 +98,26 @@ def main():
         speedOfLight=args.t_c
     )
 
-    gen_end = timeit.default_timer()
-    print(f"[INFO] Generated {len(templates)} templates in {gen_end - gen_start:.3f} seconds")
+    n_tmpl = len(templates)
+    print(f"[INFO] Generated {n_tmpl} templates")
 
-    if args.numpy_archive:
-        np.savez(args.numpy_archive, **{f"template_{i:03d}": templates[i] for i in range(len(templates))})
-        print(f"[INFO] Wrote '{args.numpy_archive}'")
+    out_dtype = np.complex64 if args.precision == 'single' else np.complex128
+    if args.ft_sz:
+        out = np.empty((n_tmpl, args.ft_sz), dtype=out_dtype)
+        for i in range(n_tmpl):
+            out[i][:] = scipy.fft.fft(templates[i], args.ft_sz)
+    else:
+        max_size = max(t.size for t in templates)
+        out = np.zeros((n_tmpl, max_size), dtype=out_dtype)
+        for i in range(n_tmpl):
+            tmpl = templates[i]
+            out[i][:tmpl.size] = tmpl
 
-    if args.header_file:
-        with open(args.header_file, 'wt') as header:
-            tmpl_lines = []
-            for tmpl in templates:
-                tmpl_ft = scipy.fft.fft(tmpl, args.ft_sz)
-                tmpl_float = np.empty(2 * args.ft_sz, dtype=np.float32)
-                tmpl_float[0::2] = np.real(tmpl_ft)
-                tmpl_float[1::2] = np.imag(tmpl_ft)
-                tmpl_lines += [(' ' * 4) + ', '.join(f"{coeff:13.10f}f" for coeff in tmpl_float)]
-
-            header.write(f"const float FDAS_TEMPLATES[{len(templates)}][{2 * args.ft_sz}] = " + "{\n")
-            header.write(',\n'.join(tmpl_lines))
-            header.write("};\n")
-        print(f"[INFO] Wrote '{args.header_file}'")
+    np.save(args.output, out)
+    print(f"[INFO] Wrote '{args.output if args.output.endswith('.npy') else (args.output + '.npy')}':")
+    print(f"         shape:               {out.shape}")
+    print(f"         type:                {out.dtype}")
+    print(f"         Fourier-transformed? {'yes' if args.ft_sz else 'no'}")
 
 
 if __name__ == '__main__':
