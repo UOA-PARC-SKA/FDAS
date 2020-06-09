@@ -7,6 +7,7 @@ import pathlib
 import numpy as np
 import scipy.fft
 import scipy.signal
+import tqdm
 
 
 def get_tim_header_field(tag, fmt, buf):
@@ -51,10 +52,10 @@ def main():
     parser = argparse.ArgumentParser(description="Generate test vectors for FDAS module.")
 
     parser.add_argument(dest='input', metavar='tim-file', help="SIGPROC *.tim file containing time-series samples")
-    parser.add_argument("--templates", dest='tmpls', metavar='path', default="tvgen_templates.npy",
+    parser.add_argument("-t", "--templates", dest='tmpls', metavar='path', default="tvgen_templates.npy",
                         help="NumPy *.npy file containing the filter templates (default: 'tvgen_templates.npy")
-    parser.add_argument("--output-directory", dest='out_dir', metavar='path', required=True,
-                        help="set output directory")
+    parser.add_argument("-B", "--base-directory", dest='base_dir', metavar='path',
+                        help="set base directory (default: $PWD)")
 
     test_args = parser.add_argument_group("test data")
     test_args.add_argument("--num-channels", dest='test_data_n_chan', type=int, metavar='n', default=2 ** 22,
@@ -63,11 +64,14 @@ def main():
                            help="set the tile size used in the overlap-save FDFIR implementation (default: 2048 = 2K)")
     test_args.add_argument("--sampling-time", dest='t_samp', metavar='t', type=float, default=0.000064,
                            help="set sampling time in seconds (default: 6.4e-5 s)")
+    test_args.add_argument("--num-harmonic-planes", dest='test_data_n_hp', type=int, metavar='n', default=8,
+                           help="set number of harmonic planes to compute. Set to '1' to compute only the filter-output"
+                                " plane (default: 8)")
 
     args = parser.parse_args()
 
-    # make sure the output directory exists
-    od = args.out_dir
+    # determine output directory
+    od = pathlib.Path(args.base_dir or '.').joinpath(pathlib.Path(args.input).stem)
     pathlib.Path(od).mkdir(parents=True, exist_ok=True)
 
     # read samples from time series
@@ -115,14 +119,49 @@ def main():
     n_tmpl, max_tmpl_len = templates.shape
 
     # compute and save filter-output plane
-    fop = np.zeros((n_tmpl, n_chan), dtype=np.float32)
-    for i in range(n_tmpl):
-        print(f"[INFO] Convolving with template #{i:02d}")
+    print(f"[INFO] Computing filter-output plane")
+    fop_like = {'shape': (n_tmpl, n_chan), 'dtype': np.float32}
+    fop = np.empty(**fop_like)
+    for i in tqdm.tqdm(range(n_tmpl)):
         tmpl = templates[i][np.nonzero(templates[i])]
         conv = scipy.signal.convolve(ft, tmpl)[:n_chan]  # convolve, and trim to input length
         fop[i][:] = np.real(conv * np.conj(conv))
 
     np.save(f"{od}/fop.npy", fop)
+
+    tmpl0_idx = n_tmpl // 2  # index of filter corresponding to zero acceleration
+
+    # compute harmonic planes
+    prev_hp = fop
+    for k in range(2, args.test_data_n_hp):
+        print(f"[INFO] Computing harmonic plane {k}")
+        hp = np.empty(**fop_like)
+        it = np.nditer(prev_hp, op_flags=['readonly'], flags=['multi_index'])
+        for _ in tqdm.tqdm(it, total=hp.size):
+            # compute indices to simulate access to the k'th stretch plane
+
+            # 'i' and 'j' are the indices into the NumPy arrays
+            i, j = it.multi_index
+
+            # 'i_num' is the filter number (in the range [-n_tmpl//2, n_tmpl//2]). Its sign determines whether we need
+            # to round up or down
+            i_num = i - tmpl0_idx
+            if i_num < 0:
+                i_sp_idx = int(np.ceil(i_num / k)) + tmpl0_idx
+            elif i_num > 0:
+                i_sp_idx = int(np.floor(i_num / k)) + tmpl0_idx
+            else:  # i_num == 0
+                pass
+
+            # j is the channel/frequency bin number -- no special handling required
+            j_sp_idx = j // k
+
+            # see: Eq. (2) in Haomiao's VLSI paper
+            hp[i][j] = prev_hp[i][j] + fop[i_sp_idx][j_sp_idx]
+
+        # save the plane
+        np.save(f"{od}/hp_{k}.npy", hp)
+        prev_hp = hp
 
 
 if __name__ == '__main__':
