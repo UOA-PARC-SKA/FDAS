@@ -60,8 +60,9 @@ def main():
     test_args = parser.add_argument_group("test data")
     test_args.add_argument("--num-channels", dest='test_data_n_chan', type=int, metavar='n', default=2 ** 22,
                            help="set number of channels in test data (default: 4194304 = 4M)")
-    test_args.add_argument("--tile-size", dest='test_data_tile_sz', type=int, metavar='n', default=2 ** 11,
-                           help="set the tile size used in the overlap-save FDFIR implementation (default: 2048 = 2K)")
+    test_args.add_argument("--tile-and-transform", dest='test_data_tile_sz', type=int, metavar='n', nargs='?',
+                           const=2 ** 11, help="prepare input for overlap-save FDFIR algorithm with the given tile size"
+                                               " (default: 2048 = 2K)")
     test_args.add_argument("--sampling-time", dest='t_samp', metavar='t', type=float, default=0.000064,
                            help="set sampling time in seconds (default: 6.4e-5 s)")
     test_args.add_argument("--num-harmonic-planes", dest='test_data_n_hp', type=int, metavar='n', default=8,
@@ -109,6 +110,8 @@ def main():
 
     # save as input for the FDAS module
     np.save(f"{od}/input.npy", ft)
+
+    # save the channel frequencies (to make plotting more convenient)
     np.save(f"{od}/freqs.npy", freqs)
 
     # load filter templates
@@ -117,6 +120,34 @@ def main():
         print(f"[ERROR] Template file does not contain a two-dimensional np.complex64 array")
         sys.exit(-1)
     n_tmpl, max_tmpl_len = templates.shape
+
+    # produce tiled and Fourier transformed input data, if requested
+    if args.test_data_tile_sz:
+        tile_sz = args.test_data_tile_sz
+        tile_olap = max_tmpl_len - 1  # overlap
+        tile_pld = tile_sz - tile_olap  # payload
+        n_tile = n_chan // tile_pld
+        if n_tile * tile_pld < n_chan:
+            print(f"[INFO] Input tiling will discard the upper {n_chan - n_tile * tile_pld} channels")
+        tiles = np.empty((n_tile, tile_sz), dtype=np.complex64)
+        for i in range(n_tile):
+            tile = np.empty(tile_sz, dtype=np.complex64)
+
+            if i == 0:
+                # first tile is padded with zeros
+                tile[:tile_olap] = np.zeros(tile_olap, dtype=np.complex64)
+            else:
+                # all other tiles overlap with previous one
+                tile[:tile_olap] = tiles[i - 1][-tile_olap:]
+
+            # fill the rest of tile with input data
+            tile[tile_olap:] = ft[i * tile_pld:(i + 1) * tile_pld]
+
+            # perform Fourier transformation
+            tiles[i][:] = scipy.fft.fft(tile)
+
+        # save tiles
+        np.save(f"{od}/input_tiled.npy", tiles)
 
     # compute and save filter-output plane
     print(f"[INFO] Computing filter-output plane")
