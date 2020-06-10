@@ -1,9 +1,0 @@
-aocl --version -->16.0.2
--SW emulation
-The compilation command for SW emulation is as follows
-
-aoc -march=emulator device/fdas_fft2_op2.cl -o bin/fdas_fft2_op2_ll.aocx --no-interleaving default
-
--HW
-
-aoc device/fdas_fft2_op2.cl -o bin/fdas_fft2_op2_ll.aocx --no-interleaving default --report --profile -g
