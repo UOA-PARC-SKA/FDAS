@@ -40,7 +40,7 @@ $ docker commit -c 'CMD /bin/bash' -c 'EXPOSE 22' aoc-install aoc:17.1.1
 ```
 5. Clean up:
 ```
-docker rm aoc-install
+$ docker rm aoc-install
 ```
 You may also discard the installation files in `/tmp/opencl-install-files`.
 
