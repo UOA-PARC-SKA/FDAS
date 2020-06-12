@@ -19,8 +19,9 @@
 #include <cstring>
 #include <algorithm>
 #include "CL/opencl.h"
-#include "AOCL_Utils.h"
+#include "AOCLUtils/aocl_utils.h"
 #include "fdas.h"
+#include "libnpy/npy.hpp"
 //#include "fft_config.h"
 
 //env CL_CONTEXT_EMULATOR_DEVICE_ALTERA=1 <host_program>
@@ -180,25 +181,25 @@ void test_fft(struct fdFirVariables *fdFirVars, int iterations) {
     dev_datainput_1 = clCreateBuffer(context, CL_MEM_READ_ONLY,
                                      sizeof(float) * totalDataInputLength, NULL, &err);
     checkError(err, "Failed to allocate device memory!");
-    dev_filterconst = clCreateBuffer(context, CL_MEM_READ_ONLY,//| CL_MEM_BANK_2_ALTERA, 
+    dev_filterconst = clCreateBuffer(context, CL_MEM_READ_ONLY,// | CL_MEM_BANK_2_ALTERA,
                                      sizeof(float) * 2 * TILE_SIZE * (FILTER_N + 1), NULL, &err);
     checkError(err, "Failed to allocate device memory!");
-    dev_result_0 = clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_BANK_2_ALTERA,
+    dev_result_0 = clCreateBuffer(context, CL_MEM_READ_WRITE /* | CL_MEM_BANK_2_ALTERA */,
                                   sizeof(float) * totalDataInputLength_L, NULL, &err);
     checkError(err, "Failed to allocate device memory!");
-    dev_result_a0 = clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_BANK_2_ALTERA,
+    dev_result_a0 = clCreateBuffer(context, CL_MEM_READ_WRITE /* | CL_MEM_BANK_2_ALTERA */,
                                    sizeof(float) * GROUP_N * TILE_SIZE * 43, NULL, &err);
     checkError(err, "Failed to allocate device memory!");
-    dev_result_b0 = clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_BANK_2_ALTERA,
+    dev_result_b0 = clCreateBuffer(context, CL_MEM_READ_WRITE /* | CL_MEM_BANK_2_ALTERA */,
                                    sizeof(float) * GROUP_N * TILE_SIZE * 43, NULL, &err);
     checkError(err, "Failed to allocate device memory!");
-    dev_result_1 = clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_BANK_2_ALTERA,
+    dev_result_1 = clCreateBuffer(context, CL_MEM_READ_WRITE /* | CL_MEM_BANK_2_ALTERA */,
                                   sizeof(float) * totalDataInputLength_L, NULL, &err);
     checkError(err, "Failed to allocate device memory!");
-    dev_result_a1 = clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_BANK_2_ALTERA,
+    dev_result_a1 = clCreateBuffer(context, CL_MEM_READ_WRITE /* | CL_MEM_BANK_2_ALTERA */,
                                    sizeof(float) * GROUP_N * TILE_SIZE * 43, NULL, &err);
     checkError(err, "Failed to allocate device memory!");
-    dev_result_b1 = clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_BANK_2_ALTERA,
+    dev_result_b1 = clCreateBuffer(context, CL_MEM_READ_WRITE /* | CL_MEM_BANK_2_ALTERA */,
                                    sizeof(float) * GROUP_N * TILE_SIZE * 43, NULL, &err);
     checkError(err, "Failed to allocate device memory!");
     dev_discard_0 = clCreateBuffer(context, CL_MEM_READ_WRITE,
@@ -207,10 +208,10 @@ void test_fft(struct fdFirVariables *fdFirVars, int iterations) {
     dev_discard_1 = clCreateBuffer(context, CL_MEM_READ_WRITE,
                                    sizeof(float) * totalDataInputLength_L, NULL, &err);
     checkError(err, "Failed to allocate device memory!");
-//    dev_reorder = clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_BANK_2_ALTERA, 
+//    dev_reorder = clCreateBuffer(context, CL_MEM_READ_WRITE /* | CL_MEM_BANK_2_ALTERA */,
 //                        sizeof(float)*totalDataInputLength_L, NULL, &err);
 //    checkError(err, "Failed to allocate device memory!");
-    dev_threshold = clCreateBuffer(context, CL_MEM_READ_ONLY,//| CL_MEM_BANK_2_ALTERA, 
+    dev_threshold = clCreateBuffer(context, CL_MEM_READ_ONLY,///* | CL_MEM_BANK_2_ALTERA */,
                                    sizeof(float) * totalthresLength, NULL, &err);
     checkError(err, "Failed to allocate device memory!");
     dev_detLocation_0 = clCreateBuffer(context, CL_MEM_WRITE_ONLY,
@@ -565,9 +566,9 @@ bool init() {
     }
 
     // Get the OpenCL platform.
-    platform = findPlatform("Altera");
+    platform = findPlatform("Intel");
     if (platform == NULL) {
-        printf("ERROR: Unable to find Altera OpenCL platform\n");
+        printf("ERROR: Unable to find Intel OpenCL platform\n");
         return false;
     }
     {

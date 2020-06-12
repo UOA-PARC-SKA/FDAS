@@ -45,8 +45,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "AOCL_Utils.h"
-//#include "../../../common/inc/AOCL_Utils.h"
 
 /* Constants for identifying REAL/COMPLEX data */
 #define PCA_REAL    1

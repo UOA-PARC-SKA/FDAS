@@ -1,6 +1,6 @@
 
 #include "fft_4p.cl"
-#include "../host/inc/fdas_config.h"
+#include "fdas_config.h"
 
 #define FFT  0
 #define IFFT 1
