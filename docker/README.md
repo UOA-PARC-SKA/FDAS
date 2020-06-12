@@ -2,9 +2,9 @@
 Follow the instructions below to build a Docker image for OpenCL development targeting Bittware 385A FPGA boards.
 
 Installed components:
-    * Quartus Prime Software v17.1 Update 1
-    * Intel FPGA SDK for OpenCL Pro Edition v17.1 Update 1
-    * Bittware OpenCL BSP `p385a_sch_ax115` version R001.005.0004
+  * Quartus Prime Software v17.1 Update 1
+  * Intel FPGA SDK for OpenCL Pro Edition v17.1 Update 1
+  * Bittware OpenCL BSP `p385a_sch_ax115` version R001.005.0004
 
 In this environment, you can **emulate** OpenCL kernels, and perform the high-level synthesis part of the flow to produce the **detailed HLS report**. To keep the image lean, the Arria 10 device support is not included, therefore a complete synthesis is currently not supported.
 
