@@ -74,6 +74,9 @@
 
 // === Filter-output plane =============================================================================================
 
+// Intermediate result size after applying all filters to all input tiles, but before discarding overlapping elements
+#define FOP_PRE_DISCARD_SZ             (N_FILTERS * FDF_INTERMEDIATE_SZ)
+
 // Size of the filter-output plane (and of the harmonic planes as well)
 #define FOP_SZ                         (N_FILTERS * FDF_OUTPUT_SZ)
 

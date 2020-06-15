@@ -1,6 +1,9 @@
+include_directories(.)
 include_directories(src)
+
 add_executable(fdas
-        src/host/main.cpp)
+        src/host/main.cpp
+        src/host/FDAS.cpp)
 target_link_libraries(fdas npy aoclutils alteracl OpenCL elf)
 
 add_custom_target(fdas-emu
