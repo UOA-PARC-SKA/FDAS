@@ -12,6 +12,31 @@
 #include <CL/cl.hpp>
 
 class FDAS {
+public:
+    using InputType = std::vector<std::complex<float>>;
+    using TemplatesType = std::vector<std::complex<float>>;
+    using FOPType = std::vector<float>;
+    using DetLocType = std::vector<uint32_t>;
+    using DetAmplType = std::vector<float>;
+    using ShapeType = std::vector<unsigned long>;
+
+public:
+    FDAS(std::ostream &log) : log(log) {}
+
+    void print_configuration();
+
+    bool initialise_accelerator(std::string bitstream_file_name, const std::function<bool(const std::string &, const std::string &)> &platform_selector, const std::function<bool(int, int, const std::string &)> &device_selector);
+
+    bool run(const InputType &input, const ShapeType &input_shape,
+             const TemplatesType &templates, const ShapeType &template_shape,
+             DetLocType &detection_location, DetAmplType &detection_amplitude);
+
+    bool retrieveFOP(FOPType &fop, ShapeType &fop_shape);
+
+    static bool chooseFirstPlatform(const std::string &platform_name, const std::string &platform_version) { return true; }
+
+    static bool chooseAcceleratorDevices(int device_num, int device_type, const std::string &device_name) { return device_type == CL_DEVICE_TYPE_ACCELERATOR; }
+
 private:
     cl::Platform platform;
     cl::Device default_device;
@@ -27,36 +52,17 @@ private:
     std::unique_ptr<cl::Kernel> harmonic_kernel;
 
     std::unique_ptr<cl::Buffer> input_buffer;
-    std::unique_ptr<cl::Buffer> discard_buffer;
+    std::unique_ptr<cl::Buffer> templates_buffer;
+    std::unique_ptr<cl::Buffer> discard_buffers[2];
     std::unique_ptr<cl::Buffer> fop_buffer;
     std::unique_ptr<cl::Buffer> detection_location_buffer;
     std::unique_ptr<cl::Buffer> detection_amplitude_buffer;
 
-    std::unique_ptr<cl::CommandQueue> input_queue;
-    std::unique_ptr<cl::CommandQueue> fft_queue;
-    std::unique_ptr<cl::CommandQueue> fop_queue;
-    std::unique_ptr<cl::CommandQueue> detection_queue;
-
     std::ostream &log;
 
-public:
-    using FreqDomainType = std::vector<std::complex<float>>;
-    using FOPType = std::vector<float>;
-    using DetectionType = std::vector<std::pair<uint32_t, float>>;
+private:
+    bool check_dimensions(const ShapeType &input_shape, const ShapeType &templates_shape);
 
-    FDAS(std::ostream &log) : log(log) {}
-
-    void print_configuration();
-
-    bool initialise_accelerator(std::string bitstream_file_name, const std::function<bool(const std::string &, const std::string &)> &platform_selector, const std::function<bool(int, int, const std::string &)> &device_selector);
-
-    void release_accelerator();
-
-    void run(const FreqDomainType &input, DetectionType &detection, FOPType *fop = nullptr);
-
-    static bool chooseFirstPlatform(const std::string &platform_name, const std::string &platform_version) { return true; }
-
-    static bool chooseAcceleratorDevices(int device_num, int device_type, const std::string &device_name) { return device_type == CL_DEVICE_TYPE_ACCELERATOR; }
 };
 
 #endif //SKAPINT_FDAS_H

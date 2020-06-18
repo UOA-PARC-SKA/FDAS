@@ -13,34 +13,36 @@ using std::setprecision;
 using std::fixed;
 
 void FDAS::print_configuration() {
-#define PRINT_CONFIG(X) log << setw(27) << #X << setw(12) << X << endl
-    PRINT_CONFIG(N_CHANNELS);
-    PRINT_CONFIG(FILTER_GROUP_SZ);
-    PRINT_CONFIG(N_FILTERS);
-    PRINT_CONFIG(N_TAPS);
-    PRINT_CONFIG(FFT_N_POINTS_LOG);
-    PRINT_CONFIG(FFT_N_POINTS);
-    PRINT_CONFIG(FFT_N_PARALLEL);
-    PRINT_CONFIG(FFT_N_STEPS);
-    PRINT_CONFIG(FFT_LATENCY);
-    PRINT_CONFIG(FDF_TILE_SZ);
-    PRINT_CONFIG(FDF_TILE_OVERLAP);
-    PRINT_CONFIG(FDF_TILE_PAYLOAD);
-    PRINT_CONFIG(FDF_N_TILES);
-    PRINT_CONFIG(FDF_INPUT_SZ);
-    PRINT_CONFIG(FDF_INTERMEDIATE_SZ);
-    PRINT_CONFIG(FDF_OUTPUT_SZ);
-    PRINT_CONFIG(NDR_N_TILES_PER_WORK_GROUP);
-    PRINT_CONFIG(NDR_N_POINTS_PER_WORK_GROUP);
-    PRINT_CONFIG(NDR_N_POINTS_PER_WORK_ITEM);
-    PRINT_CONFIG(NDR_N_WORK_ITEMS_PER_TILE);
-    PRINT_CONFIG(NDR_WORK_GROUP_SZ);
-    PRINT_CONFIG(FOP_PRE_DISCARD_SZ);
-    PRINT_CONFIG(FOP_SZ);
-    PRINT_CONFIG(HMS_N_PLANES);
-    PRINT_CONFIG(HMS_DETECTION_SZ);
-    PRINT_CONFIG(N_CANDIDATES);
-#undef PRINT_CONFIG
+#define print_config(X) log << setw(27) << #X << setw(12) << X << endl
+    print_config(N_CHANNELS);
+    print_config(FILTER_GROUP_SZ);
+    print_config(N_FILTERS);
+    print_config(N_TAPS);
+    print_config(FFT_N_POINTS_LOG);
+    print_config(FFT_N_POINTS);
+    print_config(FFT_N_PARALLEL);
+    print_config(FFT_N_STEPS);
+    print_config(FFT_LATENCY);
+    print_config(FDF_TILE_SZ);
+    print_config(FDF_TILE_OVERLAP);
+    print_config(FDF_TILE_PAYLOAD);
+    print_config(FDF_N_TILES);
+    print_config(FDF_INPUT_SZ);
+    print_config(FDF_INTERMEDIATE_SZ);
+    print_config(FDF_OUTPUT_SZ);
+    print_config(FDF_TEMPLATES_SZ);
+    print_config(FDF_PRE_DISCARD_SZ);
+    print_config(NDR_N_TILES_PER_WORK_GROUP);
+    print_config(NDR_N_POINTS_PER_WORK_GROUP);
+    print_config(NDR_N_POINTS_PER_WORK_ITEM);
+    print_config(NDR_N_WORK_ITEMS_PER_TILE);
+    print_config(NDR_WORK_GROUP_SZ);
+    print_config(NDR_NDRANGE_SZ);
+    print_config(FOP_SZ);
+    print_config(HMS_N_PLANES);
+    print_config(HMS_DETECTION_SZ);
+    print_config(N_CANDIDATES);
+#undef print_config
 }
 
 bool FDAS::initialise_accelerator(std::string bitstream_file_name,
@@ -101,7 +103,6 @@ bool FDAS::initialise_accelerator(std::string bitstream_file_name,
     }
 
     std::vector<char> bitstream;
-    // XXX: Find out how to use exceptions here (and still get a usable error message)
     std::ifstream bitstream_file(bitstream_file_name, std::ios::ate | std::ios::binary);
     if (bitstream_file.good()) {
         bitstream.reserve(bitstream_file.tellg());
@@ -167,19 +168,28 @@ bool FDAS::initialise_accelerator(std::string bitstream_file_name,
 
     // Buffers
     size_t total_allocated = 0;
-    input_buffer.reset(new cl::Buffer(*context, CL_MEM_READ_ONLY, sizeof(cl_float2) * FDF_INPUT_SZ, nullptr, &status));
+    input_buffer.reset(new cl::Buffer(*context, CL_MEM_READ_ONLY, sizeof(cl_float2) * FDF_INTERMEDIATE_SZ, nullptr, &status)); // change this to FDF_INPUT_SZ once input FFT is implemented
     if (status != CL_SUCCESS) {
         log << "[ERROR] Allocating buffer 'input' failed with status: " << status << endl;
         return false;
     }
     total_allocated += input_buffer->getInfo<CL_MEM_SIZE>();
 
-    discard_buffer.reset(new cl::Buffer(*context, CL_MEM_READ_WRITE, sizeof(cl_float) * FOP_PRE_DISCARD_SZ, nullptr, &status));
+    templates_buffer.reset(new cl::Buffer(*context, CL_MEM_READ_ONLY, sizeof(cl_float2) * FDF_TEMPLATES_SZ, nullptr, &status));
     if (status != CL_SUCCESS) {
-        log << "[ERROR] Allocating buffer 'fop' failed with status: " << status << endl;
+        log << "[ERROR] Allocating buffer 'templates' failed with status: " << status << endl;
         return false;
     }
-    total_allocated += discard_buffer->getInfo<CL_MEM_SIZE>();
+    total_allocated += templates_buffer->getInfo<CL_MEM_SIZE>();
+
+    for (int i = 0; i < 2; ++i) {
+        discard_buffers[i].reset(new cl::Buffer(*context, CL_MEM_READ_WRITE, sizeof(cl_float) * FDF_PRE_DISCARD_SZ, nullptr, &status));
+        if (status != CL_SUCCESS) {
+            log << "[ERROR] Allocating buffer 'discard_'" << i << " failed with status: " << status << endl;
+            return false;
+        }
+        total_allocated += discard_buffers[i]->getInfo<CL_MEM_SIZE>();
+    }
 
     fop_buffer.reset(new cl::Buffer(*context, CL_MEM_READ_WRITE, sizeof(cl_float) * FOP_SZ, nullptr, &status));
     if (status != CL_SUCCESS) {
@@ -208,13 +218,118 @@ bool FDAS::initialise_accelerator(std::string bitstream_file_name,
         << setprecision(2) << (100.f * total_allocated / default_device.getInfo<CL_DEVICE_GLOBAL_MEM_SIZE>())
         << " %)" << endl;
 
-    // Queues
-    input_queue.reset(new cl::CommandQueue(*context, default_device));
-    fft_queue.reset(new cl::CommandQueue(*context, default_device));
-    fop_queue.reset(new cl::CommandQueue(*context, default_device));
-    detection_queue.reset(new cl::CommandQueue(*context, default_device));
+    return true;
 }
 
-void FDAS::run(const FDAS::FreqDomainType &input, FDAS::DetectionType &detection, FDAS::FOPType *fop) {
+bool FDAS::check_dimensions(const FDAS::ShapeType &input_shape, const FDAS::ShapeType &templates_shape) {
+#define check_dim(cond, msg) do { if (!(cond)) {log << "[ERROR] " #msg << endl; return false; } } while (0)
+    check_dim(input_shape.size() == 2, "Expected pre-tiled input");
+    check_dim(input_shape[0] == FDF_N_TILES, "Wrong number of tiles in input");
+    check_dim(input_shape[1] == FDF_TILE_SZ, "Tile size is wrong");
 
+    check_dim(templates_shape.size() == 2, "Expected filter coefficient matrix");
+    check_dim(templates_shape[0] == N_FILTERS, "Wrong number of filters");
+    check_dim(templates_shape[1] == FDF_TILE_SZ, "Tile size is wrong");
+#undef check_dim
+
+    return true;
 }
+
+#define cl_checked(cmd) \
+    do { \
+        status = cmd; \
+        if (status != CL_SUCCESS) { \
+            log << "[ERROR] OpenCL command failed with status " << status << ":\n" \
+                << "          " #cmd " [" __FILE__ ":" << __LINE__ << "]" << endl; \
+            return false; \
+        } \
+    } while (0)
+
+bool FDAS::run(const FDAS::InputType &input, const FDAS::ShapeType &input_shape,
+               const FDAS::TemplatesType &templates, const FDAS::ShapeType &template_shape,
+               FDAS::DetLocType &detection_location, FDAS::DetAmplType &detection_amplitude) {
+    // Fail early if dimensions do not match the hardware architecture
+    if (!check_dimensions(input_shape, template_shape)) {
+        return false;
+    }
+
+    cl_int status;
+
+    // Instantiate command queues, one per kernel, plus one for I/O operations. Multi-device support is NYI
+    cl::CommandQueue buffer_q(*context, default_device);
+    cl::CommandQueue fetch_q(*context, default_device);
+    cl::CommandQueue fdfir_q(*context, default_device);
+    cl::CommandQueue reversed_q(*context, default_device);
+    cl::CommandQueue discard_q(*context, default_device);
+
+    // NDRange configuration
+    cl::NDRange local(NDR_WORK_GROUP_SZ);
+    cl::NDRange global(NDR_NDRANGE_SZ);
+
+    // Set static kernel arguments
+    cl_checked(fetch_kernel->setArg<cl::Buffer>(0, *input_buffer));
+    cl_checked(fetch_kernel->setArg<cl::Buffer>(1, *templates_buffer));
+
+    cl_checked(fdfir_kernel->setArg<cl_int>(0, FDF_N_TILES));
+    cl_checked(fdfir_kernel->setArg<cl_int>(1, /* inverse FFT */ 1));
+
+    cl_checked(reversed_kernel->setArg<cl::Buffer>(0, *discard_buffers[0]));
+    cl_checked(reversed_kernel->setArg<cl::Buffer>(1, *discard_buffers[1]));
+
+    cl_checked(discard_kernel->setArg<cl::Buffer>(0, *discard_buffers[0]));
+    cl_checked(discard_kernel->setArg<cl::Buffer>(1, *discard_buffers[1]));
+    cl_checked(discard_kernel->setArg<cl::Buffer>(2, *fop_buffer));
+
+    // Copy input to device
+    cl_checked(buffer_q.enqueueWriteBuffer(*input_buffer, true, 0, sizeof(cl_float2) * FDF_INTERMEDIATE_SZ, input.data())); // change this to FDF_INPUT_SZ once input FFT is implemented
+    cl_checked(buffer_q.enqueueWriteBuffer(*templates_buffer, true, 0, sizeof(cl_float2) * (FDF_TEMPLATES_SZ - FDF_TILE_SZ), templates.data()));
+    cl_checked(buffer_q.finish());
+
+    // Enqueue *all* FDFIR kernels at once; the channels will ensure that the data dependencies are respected
+    cl::Event fetch_evs[FILTER_GROUP_SZ + 1];
+    cl::Event fdfir_evs[FILTER_GROUP_SZ + 1];
+    cl::Event reversed_evs[FILTER_GROUP_SZ + 1];
+    for (int f = 0; f < FILTER_GROUP_SZ + 1; ++f) {
+        cl_checked(fetch_kernel->setArg<cl_int>(2, f));
+        cl_checked(fetch_q.enqueueNDRangeKernel(*fetch_kernel, cl::NullRange, global, local, nullptr, &fetch_evs[f]));
+
+        cl_checked(fdfir_q.enqueueTask(*fdfir_kernel, nullptr, &fdfir_evs[f]));
+
+        cl_checked(reversed_kernel->setArg<cl_int>(2, f));
+        cl_checked(reversed_q.enqueueNDRangeKernel(*reversed_kernel, cl::NullRange, global, local, nullptr, &reversed_evs[f]));
+    }
+
+    // Wait for the FDFIR part of the pipeline to finish
+    cl_checked(fetch_q.finish());
+    cl_checked(fdfir_q.finish());
+    cl_checked(reversed_q.finish());
+
+    unsigned long fdfir_duration_ms = (reversed_evs[FILTER_GROUP_SZ].getProfilingInfo<CL_PROFILING_COMMAND_END>()
+                                       - fetch_evs[0].getProfilingInfo<CL_PROFILING_COMMAND_START>()) / 1000 / 1000;
+    log << "[INFO] FDFIR took " << fdfir_duration_ms << " ms" << endl;
+
+    cl::Event discard_ev;
+    cl_checked(discard_q.enqueueTask(*discard_kernel, nullptr, &discard_ev));
+    cl_checked(discard_q.finish());
+
+    unsigned long discard_duration_ms = (discard_ev.getProfilingInfo<CL_PROFILING_COMMAND_END>()
+                                         - discard_ev.getProfilingInfo<CL_PROFILING_COMMAND_START>()) / 1000 / 1000;
+    log << "[INFO] Discard took " << discard_duration_ms << " ms" << endl;
+
+    log << "[INFO] Harmonic summing NYI" << endl;
+
+    return true;
+}
+
+bool FDAS::retrieveFOP(FDAS::FOPType &fop, FDAS::ShapeType &fop_shape) {
+    cl_int status;
+
+    fop.reserve(FOP_SZ);
+    cl::CommandQueue buffer_q(*context, default_device);
+    cl_checked(buffer_q.enqueueReadBuffer(*fop_buffer, true, 0, sizeof(cl_float) * FOP_SZ, fop.data()));
+    cl_checked(buffer_q.finish());
+    fop_shape.push_back(N_FILTERS);
+    fop_shape.push_back(FDF_OUTPUT_SZ);
+}
+
+#undef cl_checked

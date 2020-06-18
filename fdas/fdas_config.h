@@ -7,8 +7,10 @@
 
 // === Inputs ==========================================================================================================
 
+#if defined(FDAS_PRODUCTION)
+
 // Number of channels in the input spectrum
-#define N_CHANNELS                     (1 << 21)
+#define N_CHANNELS                     (1 << 22)
 
 // The filter templates correspond to different accelerations to test for. There are two equally-sized groups of
 // templates which only differ in the sign of the acceleration. Additionally, one filter, located between the groups,
@@ -18,6 +20,19 @@
 
 // Maximum number of filter taps
 #define N_TAPS                         (421)
+
+#elif defined(FDAS_TESTING)
+
+#define N_CHANNELS                     (62176)
+#define FILTER_GROUP_SZ                (10)
+#define N_FILTERS                      (FILTER_GROUP_SZ + 1 + FILTER_GROUP_SZ)
+#define N_TAPS                         (106)
+
+#else
+
+#error("FDAS mode undefined")
+
+#endif
 
 // === FFT engine configuration ========================================================================================
 
@@ -58,6 +73,14 @@
 // Result size after applying one filter to all input tiles and discarding the overlapping elements
 #define FDF_OUTPUT_SZ                  (FDF_INPUT_SZ)
 
+// Buffer size to hold all filter coefficients, plus one dummy template to balance the architecture
+#define FDF_TEMPLATES_SZ               ((N_FILTERS + 1) * FDF_TILE_SZ)
+
+// Intermediate result size after applying half the filters to all input tiles, but before discarding overlapping
+// elements. The first half corresponds to the filters for the negative and zero accelerations. The second half belongs
+// to the filters for the positive accelerations and the balance-ensuring bogus template.
+#define FDF_PRE_DISCARD_SZ             ((N_FILTERS + 1) / 2 * FDF_INTERMEDIATE_SZ)
+
 // === NDRange kernel configuration ====================================================================================
 
 // Number of tiles (and inputs) handled in each work group
@@ -69,13 +92,11 @@
 #define NDR_N_POINTS_PER_WORK_ITEM     (FFT_N_PARALLEL)
 #define NDR_N_WORK_ITEMS_PER_TILE      (FDF_TILE_SZ / NDR_N_POINTS_PER_WORK_ITEM)
 
-// The work group size follows from the parameters above
+// The work group and total NDRange sizes follow from the parameters above
 #define NDR_WORK_GROUP_SZ              (NDR_N_TILES_PER_WORK_GROUP * NDR_N_WORK_ITEMS_PER_TILE)
+#define NDR_NDRANGE_SZ                 (FDF_N_TILES * NDR_N_WORK_ITEMS_PER_TILE)
 
 // === Filter-output plane =============================================================================================
-
-// Intermediate result size after applying all filters to all input tiles, but before discarding overlapping elements
-#define FOP_PRE_DISCARD_SZ             (N_FILTERS * FDF_INTERMEDIATE_SZ)
 
 // Size of the filter-output plane (and of the harmonic planes as well)
 #define FOP_SZ                         (N_FILTERS * FDF_OUTPUT_SZ)
