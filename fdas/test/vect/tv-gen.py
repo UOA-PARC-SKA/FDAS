@@ -131,22 +131,18 @@ def main():
             print(f"[INFO] Input tiling will discard the upper {n_chan - n_tile * tile_pld} channels")
         tiles = np.empty((n_tile, tile_sz), dtype=np.complex64)
         for i in range(n_tile):
-            tile = np.empty(tile_sz, dtype=np.complex64)
-
             if i == 0:
                 # first tile is padded with zeros
-                tile[:tile_olap] = np.zeros(tile_olap, dtype=np.complex64)
+                tiles[i][:tile_olap] = np.zeros(tile_olap, dtype=np.complex64)
             else:
                 # all other tiles overlap with previous one
-                tile[:tile_olap] = tiles[i - 1][-tile_olap:]
+                tiles[i][:tile_olap] = tiles[i - 1][-tile_olap:]
 
             # fill the rest of tile with input data
-            tile[tile_olap:] = ft[i * tile_pld:(i + 1) * tile_pld]
+            tiles[i][tile_olap:] = ft[i * tile_pld:(i + 1) * tile_pld]
 
-            # perform Fourier transformation
-            tiles[i][:] = scipy.fft.fft(tile)
-
-        # save tiles
+        # perform tile-wise Fourier transformation and save result
+        tiles = scipy.fft.fft(tiles)
         np.save(f"{od}/input_tiled.npy", tiles)
 
     # compute and save filter-output plane
