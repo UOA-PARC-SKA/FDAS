@@ -330,6 +330,8 @@ bool FDAS::retrieveFOP(FDAS::FOPType &fop, FDAS::ShapeType &fop_shape) {
     cl_checked(buffer_q.finish());
     fop_shape.push_back(N_FILTERS);
     fop_shape.push_back(FDF_OUTPUT_SZ);
+
+    return true;
 }
 
 #undef cl_checked
