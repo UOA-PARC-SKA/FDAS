@@ -270,8 +270,7 @@ bool FDAS::run(const FDAS::InputType &input, const FDAS::ShapeType &input_shape,
     cl_checked(fetch_kernel->setArg<cl::Buffer>(0, *input_buffer));
     cl_checked(fetch_kernel->setArg<cl::Buffer>(1, *templates_buffer));
 
-    cl_checked(fdfir_kernel->setArg<cl_int>(0, FDF_N_TILES));
-    cl_checked(fdfir_kernel->setArg<cl_int>(1, /* inverse FFT */ 1));
+    cl_checked(fdfir_kernel->setArg<cl_int>(0, /* inverse FFT */ 1));
 
     cl_checked(reversed_kernel->setArg<cl::Buffer>(0, *discard_buffers[0]));
     cl_checked(reversed_kernel->setArg<cl::Buffer>(1, *discard_buffers[1]));
@@ -289,14 +288,18 @@ bool FDAS::run(const FDAS::InputType &input, const FDAS::ShapeType &input_shape,
     cl::Event fetch_evs[FILTER_GROUP_SZ + 1];
     cl::Event fdfir_evs[FILTER_GROUP_SZ + 1];
     cl::Event reversed_evs[FILTER_GROUP_SZ + 1];
-    for (int f = 0; f < FILTER_GROUP_SZ + 1; ++f) {
-        cl_checked(fetch_kernel->setArg<cl_int>(2, f));
-        cl_checked(fetch_q.enqueueNDRangeKernel(*fetch_kernel, cl::NullRange, global, local, nullptr, &fetch_evs[f]));
+    for (int i = 0; i < FILTER_GROUP_SZ + 1; ++i) {
+        int tmpl_idx_0 = i;
+        int tmpl_idx_1 = i + FILTER_GROUP_SZ + 1;
+        cl_checked(fetch_kernel->setArg<cl_int>(2, tmpl_idx_0));
+        cl_checked(fetch_kernel->setArg<cl_int>(3, tmpl_idx_1));
+        cl_checked(fetch_q.enqueueNDRangeKernel(*fetch_kernel, cl::NullRange, global, local, nullptr, &fetch_evs[i]));
 
-        cl_checked(fdfir_q.enqueueTask(*fdfir_kernel, nullptr, &fdfir_evs[f]));
+        cl_checked(fdfir_q.enqueueTask(*fdfir_kernel, nullptr, &fdfir_evs[i]));
 
-        cl_checked(reversed_kernel->setArg<cl_int>(2, f));
-        cl_checked(reversed_q.enqueueNDRangeKernel(*reversed_kernel, cl::NullRange, global, local, nullptr, &reversed_evs[f]));
+        cl_checked(reversed_kernel->setArg<cl_int>(2, i));
+        cl_checked(reversed_kernel->setArg<cl_int>(3, i)); // not a typo, the two streams are written to two separate buffers (using the same offsets)
+        cl_checked(reversed_q.enqueueNDRangeKernel(*reversed_kernel, cl::NullRange, global, local, nullptr, &reversed_evs[i]));
     }
 
     // Wait for the FDFIR part of the pipeline to finish

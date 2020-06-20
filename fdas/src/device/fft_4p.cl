@@ -53,11 +53,14 @@
 
 // Convenience struct representing the 4 data points processed each step
 // Each member is a float2 representing a complex number
-typedef struct {
-    float2 i0;
-    float2 i1;
-    float2 i2;
-    float2 i3;
+typedef union {
+    struct {
+        float2 i0;
+        float2 i1;
+        float2 i2;
+        float2 i3;
+    };
+    float2 i[4];
 } float2x4;
 
 // FFT butterfly building block

@@ -20,27 +20,25 @@
  * Channels to and from the FFT engine(s). Currently, this implementation instantiates two FFT engines, and therefore
  * supports two independent streams (_0 and _1) of data through the kernels.
  */
-channel float2 fft_input_0_0 __attribute__((depth(0)));
-channel float2 fft_input_0_1 __attribute__((depth(0)));
-channel float2 fft_input_0_2 __attribute__((depth(0)));
-channel float2 fft_input_0_3 __attribute__((depth(0)));
+channel float2 fft_input_0[FFT_N_PARALLEL] __attribute__((depth(0)));
+channel float2 fft_input_1[FFT_N_PARALLEL] __attribute__((depth(0)));
 
-channel float2 fft_input_1_0 __attribute__((depth(0)));
-channel float2 fft_input_1_1 __attribute__((depth(0)));
-channel float2 fft_input_1_2 __attribute__((depth(0)));
-channel float2 fft_input_1_3 __attribute__((depth(0)));
+channel float fft_output_0[FFT_N_PARALLEL] __attribute__((depth(0)));
+channel float fft_output_1[FFT_N_PARALLEL] __attribute__((depth(0)));
 
-channel float fft_output_0_0 __attribute__((depth(0)));
-channel float fft_output_0_1 __attribute__((depth(0)));
-channel float fft_output_0_2 __attribute__((depth(0)));
-channel float fft_output_0_3 __attribute__((depth(0)));
-
-channel float fft_output_1_0 __attribute__((depth(0)));
-channel float fft_output_1_1 __attribute__((depth(0)));
-channel float fft_output_1_2 __attribute__((depth(0)));
-channel float fft_output_1_3 __attribute__((depth(0)));
-
-int bit_reversed(int x, int bits);
+/*
+ * Helper to perform the FFT-typical bit-reversal.
+ */
+inline int bit_reversed(int x, int bits) {
+    int y = 0;
+    #pragma unroll
+    for (int i = 0; i < bits; i++) {
+        y <<= 1;
+        y |= x & 1;
+        x >>= 1;
+    }
+    return y;
+}
 
 /*
  * NDRange kernel 'fetch':
@@ -65,66 +63,58 @@ int bit_reversed(int x, int bits);
  *     ◀──512 WI──▶ ◀──512 WI──▶ ◀──512 WI──▶ ◀──512 WI──▶
  */
 __attribute__((reqd_work_group_size(NDR_WORK_GROUP_SZ, 1, 1)))
-kernel void fetch(global float *restrict src,
-                  global float *restrict coef_0,
-                  const int filter_index) {
+kernel void fetch(global float2 *restrict src,
+                  global float2 *restrict tmpl,
+                  const int tmpl_idx_0,
+                  const int tmpl_idx_1) {
 
     // One buffer per filter template, sized to hold the work group's multiplication result
     local float2 buf_0[NDR_N_POINTS_PER_WORK_GROUP];
     local float2 buf_1[NDR_N_POINTS_PER_WORK_GROUP];
 
     // Work item's base index in 'src' is its global id scaled by 4 (because each WI handles 4 values)
-    unsigned where_global = get_global_id(0) * NDR_N_POINTS_PER_WORK_ITEM;
+    int src_base = get_global_id(0) * NDR_N_POINTS_PER_WORK_ITEM;
 
-    // Work item's base index in the local buffers is the global base index modulo 8192
-    unsigned where_local = where_global % NDR_N_POINTS_PER_WORK_GROUP;
+    // Work item's base index in the local buffers its local id scaled by 4 (because each WI handles 4 values)
+    int item_base = get_local_id(0) * NDR_N_POINTS_PER_WORK_ITEM;
 
     // The base indices in 'coef_0': 'filter_index' (resp. 'filter_index'+43) selects a particular filter template.
     // Then, the work item's local id, modulo 512, is scaled by 4 to refer to a 4-pack of coefficients.
     // Note: The device buffer behind 'coef_0' holds 86 templates. The bogus 86th filter output is discarded later
-    unsigned i_local = get_local_id(0);
-    unsigned ifilter_0 = (filter_index)                       * FDF_TILE_SZ + NDR_N_POINTS_PER_WORK_ITEM * (i_local % NDR_N_WORK_ITEMS_PER_TILE);
-    unsigned ifilter_1 = (filter_index + FILTER_GROUP_SZ + 1) * FDF_TILE_SZ + NDR_N_POINTS_PER_WORK_ITEM * (i_local % NDR_N_WORK_ITEMS_PER_TILE);
+    int tmpl_base_0 = tmpl_idx_0 * FDF_TILE_SZ + NDR_N_POINTS_PER_WORK_ITEM * (get_local_id(0) % NDR_N_WORK_ITEMS_PER_TILE);
+    int tmpl_base_1 = tmpl_idx_1 * FDF_TILE_SZ + NDR_N_POINTS_PER_WORK_ITEM * (get_local_id(0) % NDR_N_WORK_ITEMS_PER_TILE);
 
     // Complex multiplications. The base indices compute above are scaled again by 2 in order to address the individual,
     // i.e. real and imaginary, floating point values in 'src' and 'coef_0'
-    buf_0[where_local + 0].x = src[2 * (where_global + 0)    ] * coef_0[2 * (ifilter_0 + 0)] - src[2 * (where_global + 0) + 1] * coef_0[2 * (ifilter_0 + 0) + 1];
-    buf_0[where_local + 0].y = src[2 * (where_global + 0) + 1] * coef_0[2 * (ifilter_0 + 0)] + src[2 * (where_global + 0)    ] * coef_0[2 * (ifilter_0 + 0) + 1];
-    buf_0[where_local + 1].x = src[2 * (where_global + 1)    ] * coef_0[2 * (ifilter_0 + 1)] - src[2 * (where_global + 1) + 1] * coef_0[2 * (ifilter_0 + 1) + 1];
-    buf_0[where_local + 1].y = src[2 * (where_global + 1) + 1] * coef_0[2 * (ifilter_0 + 1)] + src[2 * (where_global + 1)    ] * coef_0[2 * (ifilter_0 + 1) + 1];
-    buf_0[where_local + 2].x = src[2 * (where_global + 2)    ] * coef_0[2 * (ifilter_0 + 2)] - src[2 * (where_global + 2) + 1] * coef_0[2 * (ifilter_0 + 2) + 1];
-    buf_0[where_local + 2].y = src[2 * (where_global + 2) + 1] * coef_0[2 * (ifilter_0 + 2)] + src[2 * (where_global + 2)    ] * coef_0[2 * (ifilter_0 + 2) + 1];
-    buf_0[where_local + 3].x = src[2 * (where_global + 3)    ] * coef_0[2 * (ifilter_0 + 3)] - src[2 * (where_global + 3) + 1] * coef_0[2 * (ifilter_0 + 3) + 1];
-    buf_0[where_local + 3].y = src[2 * (where_global + 3) + 1] * coef_0[2 * (ifilter_0 + 3)] + src[2 * (where_global + 3)    ] * coef_0[2 * (ifilter_0 + 3) + 1];
+    #pragma unroll
+    for (int p = 0; p < NDR_N_POINTS_PER_WORK_ITEM; ++p) {
+        buf_0[item_base + p].x = src[src_base + p].x * tmpl[tmpl_base_0 + p].x - src[src_base + p].y * tmpl[tmpl_base_0 + p].y;
+        buf_0[item_base + p].y = src[src_base + p].y * tmpl[tmpl_base_0 + p].x + src[src_base + p].x * tmpl[tmpl_base_0 + p].y;
+    }
 
-    buf_1[where_local + 0].x = src[2 * (where_global + 0)    ] * coef_0[2 * (ifilter_1 + 0)] - src[2 * (where_global + 0) + 1] * coef_0[2 * (ifilter_1 + 0) + 1];
-    buf_1[where_local + 0].y = src[2 * (where_global + 0) + 1] * coef_0[2 * (ifilter_1 + 0)] + src[2 * (where_global + 0)    ] * coef_0[2 * (ifilter_1 + 0) + 1];
-    buf_1[where_local + 1].x = src[2 * (where_global + 1)    ] * coef_0[2 * (ifilter_1 + 1)] - src[2 * (where_global + 1) + 1] * coef_0[2 * (ifilter_1 + 1) + 1];
-    buf_1[where_local + 1].y = src[2 * (where_global + 1) + 1] * coef_0[2 * (ifilter_1 + 1)] + src[2 * (where_global + 1)    ] * coef_0[2 * (ifilter_1 + 1) + 1];
-    buf_1[where_local + 2].x = src[2 * (where_global + 2)    ] * coef_0[2 * (ifilter_1 + 2)] - src[2 * (where_global + 2) + 1] * coef_0[2 * (ifilter_1 + 2) + 1];
-    buf_1[where_local + 2].y = src[2 * (where_global + 2) + 1] * coef_0[2 * (ifilter_1 + 2)] + src[2 * (where_global + 2)    ] * coef_0[2 * (ifilter_1 + 2) + 1];
-    buf_1[where_local + 3].x = src[2 * (where_global + 3)    ] * coef_0[2 * (ifilter_1 + 3)] - src[2 * (where_global + 3) + 1] * coef_0[2 * (ifilter_1 + 3) + 1];
-    buf_1[where_local + 3].y = src[2 * (where_global + 3) + 1] * coef_0[2 * (ifilter_1 + 3)] + src[2 * (where_global + 3)    ] * coef_0[2 * (ifilter_1 + 3) + 1];
+    #pragma unroll
+    for (int p = 0; p < NDR_N_POINTS_PER_WORK_ITEM; ++p) {
+        buf_1[item_base + p].x = src[src_base + p].x * tmpl[tmpl_base_1 + p].x - src[src_base + p].y * tmpl[tmpl_base_1 + p].y;
+        buf_1[item_base + p].y = src[src_base + p].y * tmpl[tmpl_base_1 + p].x + src[src_base + p].x * tmpl[tmpl_base_1 + p].y;
+    }
 
     // Synchronise work items, and ensure coherent view of the local buffers
     barrier(CLK_LOCAL_MEM_FENCE);
 
     // 'base' refers to one of the 4 tiles handled by this work group
-    int base = get_local_id(0) / NDR_N_WORK_ITEMS_PER_TILE;
+    int tile_base = get_local_id(0) / NDR_N_WORK_ITEMS_PER_TILE * FDF_TILE_SZ;
     // 'offset' is the work item's local id modulo 512
     int offset = get_local_id(0) % NDR_N_WORK_ITEMS_PER_TILE;
 
     // Write multiplication result to channels. The particular order of elements is mandated by the FFT engine, see
     // also kernel 'fdfir'
-    WRITE_CHANNEL(fft_input_0_0, buf_0[base * FDF_TILE_SZ + 0 * (FFT_N_POINTS / FFT_N_PARALLEL) + offset]);
-    WRITE_CHANNEL(fft_input_0_1, buf_0[base * FDF_TILE_SZ + 2 * (FFT_N_POINTS / FFT_N_PARALLEL) + offset]);
-    WRITE_CHANNEL(fft_input_0_2, buf_0[base * FDF_TILE_SZ + 1 * (FFT_N_POINTS / FFT_N_PARALLEL) + offset]);
-    WRITE_CHANNEL(fft_input_0_3, buf_0[base * FDF_TILE_SZ + 3 * (FFT_N_POINTS / FFT_N_PARALLEL) + offset]);
+    #pragma unroll
+    for (int p = 0; p < FFT_N_PARALLEL; ++p)
+        WRITE_CHANNEL(fft_input_0[p], buf_0[tile_base + bit_reversed(p, FFT_N_PARALLEL_LOG) * (FFT_N_POINTS / FFT_N_PARALLEL) + offset]);
 
-    WRITE_CHANNEL(fft_input_1_0, buf_1[base * FDF_TILE_SZ + 0 * (FFT_N_POINTS / FFT_N_PARALLEL) + offset]);
-    WRITE_CHANNEL(fft_input_1_1, buf_1[base * FDF_TILE_SZ + 2 * (FFT_N_POINTS / FFT_N_PARALLEL) + offset]);
-    WRITE_CHANNEL(fft_input_1_2, buf_1[base * FDF_TILE_SZ + 1 * (FFT_N_POINTS / FFT_N_PARALLEL) + offset]);
-    WRITE_CHANNEL(fft_input_1_3, buf_1[base * FDF_TILE_SZ + 3 * (FFT_N_POINTS / FFT_N_PARALLEL) + offset]);
+    #pragma unroll
+    for (int p = 0; p < FFT_N_PARALLEL; ++p)
+        WRITE_CHANNEL(fft_input_1[p], buf_1[tile_base + bit_reversed(p, FFT_N_PARALLEL_LOG) * (FFT_N_POINTS / FFT_N_PARALLEL) + offset]);
 }
 
 /*
@@ -164,15 +154,14 @@ kernel void fetch(global float *restrict src,
  * parallel.
  */
 __attribute__((task))
-kernel void fdfir(int const count,
-                  int const inverse) {
+kernel void fdfir(int const inverse) {
 
     // Sliding window arrays, used internally by the FFT engine for data reordering
     float2 fft_delay_elements_0[FFT_N_POINTS + FFT_N_PARALLEL * (FFT_N_POINTS_LOG - 3)];
     float2 fft_delay_elements_1[FFT_N_POINTS + FFT_N_PARALLEL * (FFT_N_POINTS_LOG - 3)];
 
     // Process 'count' tiles and flush the engine's pipeline
-    for (unsigned i = 0; i < count * FFT_N_STEPS + FFT_LATENCY; i++) {
+    for (int s = 0; s < FDF_N_TILES * FFT_N_STEPS + FFT_LATENCY; ++s) {
         // Buffers to hold engine's input/output in each iteration
         float2x4 data_0;
         float2x4 data_1;
@@ -182,48 +171,42 @@ kernel void fdfir(int const count,
         float power_1[FFT_N_PARALLEL];
 
         // Read actual input from the channels, respectively inject zeroes to flush the pipeline
-        if (i < count * FFT_N_STEPS) {
-            data_0.i0 = READ_CHANNEL(fft_input_0_0);
-            data_0.i1 = READ_CHANNEL(fft_input_0_1);
-            data_0.i2 = READ_CHANNEL(fft_input_0_2);
-            data_0.i3 = READ_CHANNEL(fft_input_0_3);
+        if (s < FDF_N_TILES * FFT_N_STEPS) {
+            #pragma unroll
+            for (int p = 0; p < FFT_N_PARALLEL; ++p)
+                data_0.i[p] = READ_CHANNEL(fft_input_0[p]);
 
-            data_1.i0 = READ_CHANNEL(fft_input_1_0);
-            data_1.i1 = READ_CHANNEL(fft_input_1_1);
-            data_1.i2 = READ_CHANNEL(fft_input_1_2);
-            data_1.i3 = READ_CHANNEL(fft_input_1_3);
+            #pragma unroll
+            for (int p = 0; p < FFT_N_PARALLEL; ++p)
+                data_1.i[p] = READ_CHANNEL(fft_input_1[p]);
         } else {
             data_0.i0 = data_0.i1 = data_0.i2 = data_0.i3 = 0;
             data_1.i0 = data_1.i1 = data_1.i2 = data_1.i3 = 0;
         }
 
         // Perform one step of the FFT engines
-        data_0 = fft_step(data_0, i % FFT_N_STEPS, fft_delay_elements_0, inverse, FFT_N_POINTS_LOG);
-        data_1 = fft_step(data_1, i % FFT_N_STEPS, fft_delay_elements_1, inverse, FFT_N_POINTS_LOG);
+        data_0 = fft_step(data_0, s % FFT_N_STEPS, fft_delay_elements_0, inverse, FFT_N_POINTS_LOG);
+        data_1 = fft_step(data_1, s % FFT_N_STEPS, fft_delay_elements_1, inverse, FFT_N_POINTS_LOG);
 
         // Compute spectral power
-        power_0[0] = data_0.i0.x * data_0.i0.x + data_0.i0.y * data_0.i0.y;
-        power_0[1] = data_0.i1.x * data_0.i1.x + data_0.i1.y * data_0.i1.y;
-        power_0[2] = data_0.i2.x * data_0.i2.x + data_0.i2.y * data_0.i2.y;
-        power_0[3] = data_0.i3.x * data_0.i3.x + data_0.i3.y * data_0.i3.y;
+        #pragma unroll
+        for (int p = 0; p < FFT_N_PARALLEL; ++p)
+            power_0[p] = data_0.i[p].x * data_0.i[p].x + data_0.i[p].y * data_0.i[p].y;
 
-        power_1[0] = data_1.i0.x * data_1.i0.x + data_1.i0.y * data_1.i0.y;
-        power_1[1] = data_1.i1.x * data_1.i1.x + data_1.i1.y * data_1.i1.y;
-        power_1[2] = data_1.i2.x * data_1.i2.x + data_1.i2.y * data_1.i2.y;
-        power_1[3] = data_1.i3.x * data_1.i3.x + data_1.i3.y * data_1.i3.y;
+        #pragma unroll
+        for (int p = 0; p < FFT_N_PARALLEL; ++p)
+            power_1[p] = data_1.i[p].x * data_1.i[p].x + data_1.i[p].y * data_1.i[p].y;
 
         // Pass output to the 'reversed' kernel. Recall that FFT engine outputs are delayed by N / 4 - 1 steps, hence
         // gate channel writes accordingly.
-        if (i >= FFT_LATENCY) {
-            WRITE_CHANNEL(fft_output_0_0, power_0[0]);
-            WRITE_CHANNEL(fft_output_0_1, power_0[1]);
-            WRITE_CHANNEL(fft_output_0_2, power_0[2]);
-            WRITE_CHANNEL(fft_output_0_3, power_0[3]);
+        if (s >= FFT_LATENCY) {
+            #pragma unroll
+            for (int p = 0; p < FFT_N_PARALLEL; ++p)
+                WRITE_CHANNEL(fft_output_0[p], power_0[p]);
 
-            WRITE_CHANNEL(fft_output_1_0, power_1[0]);
-            WRITE_CHANNEL(fft_output_1_1, power_1[1]);
-            WRITE_CHANNEL(fft_output_1_2, power_1[2]);
-            WRITE_CHANNEL(fft_output_1_3, power_1[3]);
+            #pragma unroll
+            for (int p = 0; p < FFT_N_PARALLEL; ++p)
+                WRITE_CHANNEL(fft_output_1[p], power_1[p]);
         }
     }
 }
@@ -238,7 +221,8 @@ kernel void fdfir(int const count,
 __attribute__((reqd_work_group_size(NDR_WORK_GROUP_SZ, 1, 1)))
 kernel void reversed(global float *restrict dest_0,
                      global float *restrict dest_1,
-                     int const filter_index) {
+                     int const tmpl_idx_0,
+                     int const tmpl_idx_1) {
 
     // Reordering buffers, sized to hold the 8192 real values covered by the current work group
     local float buf_0[NDR_N_POINTS_PER_WORK_GROUP];
@@ -246,55 +230,40 @@ kernel void reversed(global float *restrict dest_0,
 
     // Fill buffers linearly from the channels. The base index is the work item's local id, scaled by 4 as each WI
     // handles 4 values
-    buf_0[NDR_N_POINTS_PER_WORK_ITEM * get_local_id(0) + 0] = READ_CHANNEL(fft_output_0_0);
-    buf_0[NDR_N_POINTS_PER_WORK_ITEM * get_local_id(0) + 1] = READ_CHANNEL(fft_output_0_1);
-    buf_0[NDR_N_POINTS_PER_WORK_ITEM * get_local_id(0) + 2] = READ_CHANNEL(fft_output_0_2);
-    buf_0[NDR_N_POINTS_PER_WORK_ITEM * get_local_id(0) + 3] = READ_CHANNEL(fft_output_0_3);
+    int item_base = get_local_id(0) * NDR_N_POINTS_PER_WORK_ITEM;
 
-    buf_1[NDR_N_POINTS_PER_WORK_ITEM * get_local_id(0) + 0] = READ_CHANNEL(fft_output_1_0);
-    buf_1[NDR_N_POINTS_PER_WORK_ITEM * get_local_id(0) + 1] = READ_CHANNEL(fft_output_1_1);
-    buf_1[NDR_N_POINTS_PER_WORK_ITEM * get_local_id(0) + 2] = READ_CHANNEL(fft_output_1_2);
-    buf_1[NDR_N_POINTS_PER_WORK_ITEM * get_local_id(0) + 3] = READ_CHANNEL(fft_output_1_3);
+    #pragma unroll
+    for (int p = 0; p < FFT_N_PARALLEL; ++p)
+        buf_0[item_base + p] = READ_CHANNEL(fft_output_0[p]);
+
+    #pragma unroll
+    for (int p = 0; p < FFT_N_PARALLEL; ++p)
+        buf_1[item_base + p] = READ_CHANNEL(fft_output_1[p]);
 
     // Synchronise work items, and ensure coherent view of the local buffers
     barrier(CLK_LOCAL_MEM_FENCE);
 
     // Address calculation to map the work group's local buffers to the right place (indexed by work group id and
     // filter id) in a preliminary FOP-like structure (e.g. float[43][1288*2048]) in memory.
-    int colt = get_local_id(0);
-    int group = get_group_id(0);
-    int revcolt = bit_reversed(colt, FFT_N_POINTS_LOG);
-    int where = colt + (group * NDR_N_POINTS_PER_WORK_GROUP) + filter_index * FDF_INTERMEDIATE_SZ;
+    int dest_0_base = tmpl_idx_0 * FDF_INTERMEDIATE_SZ + get_group_id(0) * NDR_N_POINTS_PER_WORK_GROUP;
+    int dest_1_base = tmpl_idx_1 * FDF_INTERMEDIATE_SZ + get_group_id(0) * NDR_N_POINTS_PER_WORK_GROUP;
+
+    int lid = get_local_id(0);
+    int rev_lid = bit_reversed(lid, FFT_N_POINTS_LOG);
 
     // Assign (work item id)'th element in each of the 4 tiles handled by the current work group, and handle
     // peculiarities of this particular FFT engine:
     //   - results are still in bit-reversed order -> use bit-reversed index when accessing local buffers.
     //   - results are not normalised with the usual 1/N factor -> divide the previously squared values by N^2.
-    // TODO: Make sure that the synthesis tool does not instantiate actual dividers here
     const int NN = FFT_N_POINTS * FFT_N_POINTS;
-    dest_0[0 * FDF_TILE_SZ + where] = buf_0[0 * FFT_N_POINTS + revcolt] / NN;
-    dest_0[1 * FDF_TILE_SZ + where] = buf_0[1 * FFT_N_POINTS + revcolt] / NN;
-    dest_0[2 * FDF_TILE_SZ + where] = buf_0[2 * FFT_N_POINTS + revcolt] / NN;
-    dest_0[3 * FDF_TILE_SZ + where] = buf_0[3 * FFT_N_POINTS + revcolt] / NN;
 
-    dest_1[0 * FDF_TILE_SZ + where] = buf_1[0 * FFT_N_POINTS + revcolt] / NN;
-    dest_1[1 * FDF_TILE_SZ + where] = buf_1[1 * FFT_N_POINTS + revcolt] / NN;
-    dest_1[2 * FDF_TILE_SZ + where] = buf_1[2 * FFT_N_POINTS + revcolt] / NN;
-    dest_1[3 * FDF_TILE_SZ + where] = buf_1[3 * FFT_N_POINTS + revcolt] / NN;
-}
-
-/*
- * Helper to perform the FFT-typical bit-reversal.
- */
-int bit_reversed(int x, int bits) {
-    int y = 0;
     #pragma unroll
-    for (int i = 0; i < bits; i++) {
-        y <<= 1;
-        y |= x & 1;
-        x >>= 1;
-    }
-    return y;
+    for (int p = 0; p < NDR_N_POINTS_PER_WORK_ITEM; ++p)
+        dest_0[dest_0_base + p * FDF_TILE_SZ + lid] = buf_0[p * FFT_N_POINTS + rev_lid] / NN;
+
+    #pragma unroll
+    for (int p = 0; p < NDR_N_POINTS_PER_WORK_ITEM; ++p)
+        dest_1[dest_1_base + p * FDF_TILE_SZ + lid] = buf_1[p * FFT_N_POINTS + rev_lid] / NN;
 }
 
 /*
@@ -302,27 +271,32 @@ int bit_reversed(int x, int bits) {
  *   Concatenates the valid parts from two buffer (one per filter group) into the final filter output plane (FOP).
  *
  * The first #taps-1 elements in each tile of the intermediate result need to be discarded (cf. overlap-save algorithm).
- *
- * TODO: There might be an off-by-one error here -- the code discards #taps elements.
  */
 __attribute__((task))
-kernel void discard(global float *restrict dataPtr_0,    //2048 x GROUP_N x ceil(FILTER_N / 2)
-                    global float *restrict dataPtr_1,    //2048 x GROUP_N x ceil(FILTER_N / 2)
-                    global float *restrict outputPtr) {  //1627 x GROUP_N x FILTER_N
+kernel void discard(global float *restrict pre_discard_0,
+                    global float *restrict pre_discard_1,
+                    global float *restrict fop) {
     // Copy values in bursts of 8 values to the first half of the FOP (filters 0...42)
-    for (unsigned iload = 0; iload < (FILTER_GROUP_SZ + 1) * FDF_N_TILES; iload++) {
+    for (int t = 0; t < (FILTER_GROUP_SZ + 1) * FDF_N_TILES; ++t) {
+        int fop_base = t * FDF_TILE_PAYLOAD;
+        int pre_discard_base = t * FDF_TILE_SZ + FDF_TILE_OVERLAP;
+
         #pragma unroll 8
-        for (unsigned i = 0; i < FDF_TILE_PAYLOAD; i++) {
-            outputPtr[iload * FDF_TILE_PAYLOAD + i] = dataPtr_0[iload * FDF_TILE_SZ + FDF_TILE_OVERLAP + i];
+        for (unsigned i = 0; i < FDF_TILE_PAYLOAD; ++i) {
+            fop[fop_base + i] = pre_discard_0[pre_discard_base + i];
         }
     }
+
     // Copy values to the second half of the FOP (filters 43...85). As the 86th filter template was introduced for the
     // sole purpose of balancing the pipeline, discard its results here: iterating for totalGroup-1288 iterations
     // practically means that we handle only 42 filters in this loop
-    for (unsigned iload = 0; iload < FILTER_GROUP_SZ * FDF_N_TILES; iload++) {
+    for (int t = 0; t < FILTER_GROUP_SZ * FDF_N_TILES; ++t) {
+        int fop_base = (FILTER_GROUP_SZ + 1) * FDF_OUTPUT_SZ + t * FDF_TILE_PAYLOAD;
+        int pre_discard_base = t * FDF_TILE_SZ + FDF_TILE_OVERLAP;
+
         #pragma unroll 8
         for (unsigned i = 0; i < FDF_TILE_PAYLOAD; i++) {
-            outputPtr[iload * FDF_TILE_PAYLOAD + i + (FILTER_GROUP_SZ + 1) * FDF_OUTPUT_SZ] = dataPtr_1[iload * FDF_TILE_SZ + FDF_TILE_OVERLAP + i];
+            fop[fop_base + i] = pre_discard_1[pre_discard_base + i];
         }
     }
 }

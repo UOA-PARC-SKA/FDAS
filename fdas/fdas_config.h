@@ -43,7 +43,8 @@
 
 // The engine is __hard-wired__ to processes 4 points in parallel. DO NOT CHANGE unless you also provide a suitable,
 // alternative engine implementation. This requires structural modifications that go beyond the scope of a few #defines.
-#define FFT_N_PARALLEL                 (4)
+#define FFT_N_PARALLEL_LOG             (2)
+#define FFT_N_PARALLEL                 (1 << FFT_N_PARALLEL_LOG)
 
 // Number of steps required to transform the entire input
 #define FFT_N_STEPS                    (FFT_N_POINTS / FFT_N_PARALLEL)
