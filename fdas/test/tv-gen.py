@@ -4,6 +4,7 @@ import sys
 import argparse
 import struct
 import pathlib
+import multiprocessing
 import numpy as np
 import scipy.fft
 import scipy.signal
@@ -51,10 +52,12 @@ def main():
     parser = argparse.ArgumentParser(description="Generate test vectors for FDAS module.")
 
     parser.add_argument(dest='input', metavar='tim-file', nargs='+', help="SIGPROC *.tim file(s) containing time-series samples")
-    parser.add_argument("-t", "--templates", dest='tmpls', metavar='path', default="tvgen_templates.npy",
-                        help="NumPy *.npy file containing the filter templates (default: 'tvgen_templates.npy")
+    parser.add_argument("-t", "--templates", dest='tmpls', metavar='path', required=True,
+                        help="NumPy *.npy file containing the filter templates")
     parser.add_argument("-B", "--base-directory", dest='base_dir', metavar='path',
                         help="set base directory (default: $PWD)")
+    parser.add_argument("-J", "--num-procs", dest='n_proc', metavar='n', type=int, default=1,
+                        help="set number of processors to use")
 
     test_args = parser.add_argument_group("test data")
     test_args.add_argument("--num-channels", dest='test_data_n_chan', type=int, metavar='n', default=2 ** 22,
@@ -70,8 +73,8 @@ def main():
 
     args = parser.parse_args()
 
-    for tf in args.input:
-        generate_test_data(tf, args)
+    with multiprocessing.Pool(args.n_proc) as pool:
+        pool.starmap(generate_test_data, [(tf, args) for tf in args.input])
 
 def generate_test_data(tim_file, args):
     # determine output directory

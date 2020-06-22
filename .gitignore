@@ -1,2 +1,8 @@
+# Python
 __pycache__
 .ipynb_checkpoints
+
+# Artefacts of test vector generation in SIGPROC file formats
+*.tim
+*.fil
+*.asc

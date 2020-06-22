@@ -8,16 +8,17 @@
 #include "FDAS.h"
 
 int main(int argc, char **argv) {
-    if (argc < 5 || argc > 6) {
-        std::cerr << "usage: fdas <input>.npy <templates>.npy <det_loc>.npy <det_ampl>.npy [<fop>.npy]" << std::endl;
+    if (argc < 6 || argc > 7) {
+        std::cerr << "usage: fdas <bitstream>.aocx <input>.npy <templates>.npy <det_loc>.npy <det_ampl>.npy [<fop>.npy]" << std::endl;
         exit(1);
     }
 
-    std::string input_file_name = argv[1];
-    std::string templates_file_name = argv[2];
-    std::string det_loc_file_name = argv[3];
-    std::string det_ampl_file_name = argv[4];
-    std::string fop_file_name = argc == 6 ? argv[5] : "";
+    std::string bitstream_file_name = argv[1];
+    std::string input_file_name = argv[2];
+    std::string templates_file_name = argv[3];
+    std::string det_loc_file_name = argv[4];
+    std::string det_ampl_file_name = argv[5];
+    std::string fop_file_name = argc == 7 ? argv[6] : "";
 
     FDAS::InputType input;
     FDAS::ShapeType input_shape;
@@ -40,7 +41,7 @@ int main(int argc, char **argv) {
     FDAS pipeline(std::cout);
     pipeline.print_configuration();
 
-    if (!pipeline.initialise_accelerator("bin/fdas.aocx", FDAS::chooseFirstPlatform, FDAS::chooseAcceleratorDevices))
+    if (!pipeline.initialise_accelerator(bitstream_file_name, FDAS::chooseFirstPlatform, FDAS::chooseAcceleratorDevices))
         return 1;
 
     if (!pipeline.run(input, input_shape, templates, templates_shape, detection_location, detection_amplitude))
