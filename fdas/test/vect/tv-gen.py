@@ -7,7 +7,6 @@ import pathlib
 import numpy as np
 import scipy.fft
 import scipy.signal
-import tqdm
 
 
 def get_tim_header_field(tag, fmt, buf):
@@ -51,7 +50,7 @@ def read_tim_file(tim_file):
 def main():
     parser = argparse.ArgumentParser(description="Generate test vectors for FDAS module.")
 
-    parser.add_argument(dest='input', metavar='tim-file', help="SIGPROC *.tim file containing time-series samples")
+    parser.add_argument(dest='input', metavar='tim-file', nargs='+', help="SIGPROC *.tim file(s) containing time-series samples")
     parser.add_argument("-t", "--templates", dest='tmpls', metavar='path', default="tvgen_templates.npy",
                         help="NumPy *.npy file containing the filter templates (default: 'tvgen_templates.npy")
     parser.add_argument("-B", "--base-directory", dest='base_dir', metavar='path',
@@ -71,15 +70,16 @@ def main():
 
     args = parser.parse_args()
 
+    for tf in args.input:
+        generate_test_data(tf, args)
+
+def generate_test_data(tim_file, args):
     # determine output directory
-    od = pathlib.Path(args.base_dir or '.').joinpath(pathlib.Path(args.input).stem)
+    od = pathlib.Path(args.base_dir or '.').joinpath(pathlib.Path(tim_file).stem)
     pathlib.Path(od).mkdir(parents=True, exist_ok=True)
 
     # read samples from time series
-    if not args.input:
-        parser.error("No input file given")
-
-    samples, t_samp = read_tim_file(args.input)
+    samples, t_samp = read_tim_file(tim_file)
     t_samp = t_samp or args.t_samp  # take sampling time from (in this order): 1) file, 2) command line, 3) default
     if t_samp != args.t_samp:
         print(f"[WARN] Sampling time mismatch. Expected {args.t_samp} s, but input file uses {t_samp} s")
@@ -149,7 +149,7 @@ def main():
     print(f"[INFO] Computing filter-output plane")
     fop_like = {'shape': (n_tmpl, n_chan), 'dtype': np.float32}
     fop = np.empty(**fop_like)
-    for i in tqdm.tqdm(range(n_tmpl)):
+    for i in range(n_tmpl):
         tmpl = templates[i][np.nonzero(templates[i])]
         conv = scipy.signal.convolve(ft, tmpl)[:n_chan]  # convolve, and trim to input length
         fop[i][:] = np.real(conv * np.conj(conv))
@@ -164,7 +164,7 @@ def main():
         print(f"[INFO] Computing harmonic plane {k}")
         hp = np.empty(**fop_like)
         it = np.nditer(prev_hp, op_flags=['readonly'], flags=['multi_index'])
-        for _ in tqdm.tqdm(it, total=hp.size):
+        for _ in it:
             # compute indices to simulate access to the k'th stretch plane
 
             # 'i' and 'j' are the indices into the NumPy arrays
