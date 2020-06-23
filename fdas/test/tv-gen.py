@@ -84,8 +84,6 @@ def generate_test_data(tim_file, args):
     # read samples from time series
     samples, t_samp = read_tim_file(tim_file)
     t_samp = t_samp or args.t_samp  # take sampling time from (in this order): 1) file, 2) command line, 3) default
-    if t_samp != args.t_samp:
-        print(f"[WARN] Sampling time mismatch. Expected {args.t_samp} s, but input file uses {t_samp} s")
 
     # we need twice as many samples as the requested number of channels for the test data, as we will discard the
     # negative frequencies in the spectrum
