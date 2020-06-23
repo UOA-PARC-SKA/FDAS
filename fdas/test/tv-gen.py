@@ -91,7 +91,7 @@ def generate_test_data(tim_file, args):
     n_chan = args.test_data_n_chan
     if n_samp < 2 * n_chan:
         print(f"[ERROR] Input file does not contain enough samples. Got {n_samp}, but need at least {2 * n_chan}")
-        sys.exit(-1)
+        return
     if n_samp > 2 * n_chan:
         print(f"[INFO] Discarding {n_samp - 2 * n_chan} samples (= {t_samp * (n_samp - 2 * n_chan):.3f} seconds) to "
               f"match requested number of channels in spectrum")
@@ -119,7 +119,7 @@ def generate_test_data(tim_file, args):
     templates = np.load(args.tmpls)
     if templates.ndim != 2 or templates.dtype != np.complex64:
         print(f"[ERROR] Template file does not contain a two-dimensional np.complex64 array")
-        sys.exit(-1)
+        return
     n_tmpl, max_tmpl_len = templates.shape
 
     # produce tiled and Fourier transformed input data, if requested
