@@ -90,7 +90,7 @@
 // === NDRange kernel configuration ====================================================================================
 
 // Number of tiles (and inputs) handled in each work group
-#define NDR_N_TILES_PER_WORK_GROUP     (4)
+#define NDR_N_TILES_PER_WORK_GROUP     (1)
 #define NDR_N_POINTS_PER_WORK_GROUP    (FDF_TILE_SZ * NDR_N_TILES_PER_WORK_GROUP)
 
 // The FFT engine's inputs must arrive at the same time, and therefore should be processed by a single work item. This
