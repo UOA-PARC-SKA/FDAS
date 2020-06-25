@@ -44,12 +44,16 @@ __attribute__((reqd_work_group_size(FFT_N_POINTS_PER_TERMINAL, 1, 1)))
 kernel void fwd_fetch(global float2 *input) {
     local float2 __attribute__((bank_bits(10,9))) buf[FFT_N_PARALLEL][FFT_N_POINTS_PER_TERMINAL];
 
-    int input_base = get_group_id(0) * FDF_TILE_PAYLOAD;
     int lid = get_local_id(0);
+
+    int chunk_off = lid % (FFT_N_POINTS_PER_TERMINAL / FFT_N_PARALLEL);
+    int chunk_idx = lid / (FFT_N_POINTS_PER_TERMINAL / FFT_N_PARALLEL);
+    int chunk_rev = bit_reversed(chunk_idx, FFT_N_PARALLEL_LOG);
+    int input_base = get_group_id(0) * FDF_TILE_PAYLOAD + chunk_idx * FFT_N_POINTS_PER_TERMINAL + chunk_off * FFT_N_PARALLEL;
 
     #pragma unroll
     for (int p = 0; p < FFT_N_PARALLEL; ++p)
-        buf[p][lid] = input[input_base + bit_reversed(p, FFT_N_PARALLEL_LOG) * FFT_N_POINTS_PER_TERMINAL + lid];
+        buf[chunk_rev][chunk_off * FFT_N_PARALLEL + p] = input[input_base + p];
 
     barrier(CLK_LOCAL_MEM_FENCE);
 
@@ -60,32 +64,41 @@ kernel void fwd_fetch(global float2 *input) {
 
 __attribute__((task))
 kernel void fwd_fft() {
+    // (Double) buffers used for result re-ordering
+    float2 __attribute__((bank_bits(11))) buf[2][FFT_N_POINTS_PER_TERMINAL][FFT_N_PARALLEL];
+
     // Sliding window arrays, used internally by the FFT engine for data reordering
     float2 fft_delay_elements[FFT_N_POINTS + FFT_N_PARALLEL * (FFT_N_POINTS_LOG - 3)];
 
-    // Process 'count' tiles and flush the engine's pipeline
-    for (int s = 0; s < FDF_N_TILES * FFT_N_STEPS + FFT_LATENCY; ++s) {
-        // Buffers to hold engine's input/output in each iteration
-        float2x4 data;
+    // Buffers to hold engine's input/output in each iteration
+    float2x4 data;
 
-        // Read actual input from the channels, respectively inject zeroes to flush the pipeline
-        if (s < FDF_N_TILES * FFT_N_STEPS) {
-            #pragma unroll
-            for (int p = 0; p < FFT_N_PARALLEL; ++p)
-                data.i[p] = READ_CHANNEL(fwd_fft_input[p]);
-        } else {
-            data.i0 = data.i1 = data.i2 = data.i3 = 0;
-        }
+    // Process FDF_N_TILES tiles and flush the engine's pipeline
+    #pragma loop_coalesce
+    for (int t = 0; t < FDF_N_TILES + 2; ++t) {
+        for (int s = 0; s < FFT_N_POINTS_PER_TERMINAL; ++s) {
+            if (t >= 1) {
+                #pragma unroll
+                for (int p = 0; p < FFT_N_PARALLEL; ++p)
+                    buf[1 - (t & 1)][bit_reversed(s, FFT_N_POINTS_PER_TERMINAL_LOG)][p] = data.i[p];
+            }
+            if (t >= 2) {
+                #pragma unroll
+                for (int p = 0; p < FFT_N_PARALLEL; ++p)
+                    WRITE_CHANNEL(fwd_fft_output[p], buf[t & 1][s][p]);
+            }
 
-        // Perform one step of the FFT engine
-        data = fft_step(data, s % FFT_N_STEPS, fft_delay_elements, 0, FFT_N_POINTS_LOG);
+            // Read actual input from the channels, respectively inject zeroes to flush the pipeline
+            if (t < FDF_N_TILES) {
+                #pragma unroll
+                for (int p = 0; p < FFT_N_PARALLEL; ++p)
+                    data.i[p] = READ_CHANNEL(fwd_fft_input[p]);
+            } else {
+                data.i0 = data.i1 = data.i2 = data.i3 = 0;
+            }
 
-        // Pass output to the 'reversed' kernel. Recall that FFT engine outputs are delayed by N / 4 - 1 steps, hence
-        // gate channel writes accordingly.
-        if (s >= FFT_LATENCY) {
-            #pragma unroll
-            for (int p = 0; p < FFT_N_PARALLEL; ++p)
-                WRITE_CHANNEL(fwd_fft_output[p], data.i[p]);
+            // Perform one step of the FFT engine
+            data = fft_step(data, s, fft_delay_elements, 0, FFT_N_POINTS_LOG);
         }
     }
 }
@@ -102,12 +115,14 @@ kernel void fwd_reversed(global float2 *tiles) {
 
     barrier(CLK_LOCAL_MEM_FENCE);
 
-    int tiles_base = get_group_id(0) * FDF_TILE_SZ;
-    int rev_lid = bit_reversed(lid, FFT_N_POINTS_PER_TERMINAL_LOG);
+    int chunk_off = lid % (FFT_N_POINTS_PER_TERMINAL / FFT_N_PARALLEL);
+    int chunk_idx = lid / (FFT_N_POINTS_PER_TERMINAL / FFT_N_PARALLEL);
+    int chunk_rev = bit_reversed(chunk_idx, FFT_N_PARALLEL_LOG);
+    int tiles_base = get_group_id(0) * FDF_TILE_SZ + chunk_idx * FFT_N_POINTS_PER_TERMINAL + chunk_off * FFT_N_PARALLEL;
 
     #pragma unroll
     for (int p = 0; p < FFT_N_PARALLEL; ++p)
-       tiles[tiles_base + bit_reversed(p, FFT_N_PARALLEL_LOG) * FFT_N_POINTS_PER_TERMINAL + rev_lid] = buf[p][lid];
+       tiles[tiles_base + p] = buf[chunk_rev][chunk_off * FFT_N_PARALLEL + p];
 }
 
 /*
