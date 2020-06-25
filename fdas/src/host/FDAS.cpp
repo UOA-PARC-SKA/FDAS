@@ -49,14 +49,34 @@ void FDAS::print_configuration() {
 #undef print_config
 }
 
+#define cl_chk(cmd) \
+    do { \
+        cl_int status = cmd; \
+        if (status != CL_SUCCESS) { \
+            log << "[ERROR] OpenCL command failed with status " << status << ":\n" \
+                << "          " #cmd " [" __FILE__ ":" << __LINE__ << "]" << endl; \
+            return false; \
+        } \
+    } while (0)
+
+#define cl_chkref(cmd) \
+    do { \
+        cmd; \
+        if (status != CL_SUCCESS) { \
+            log << "[ERROR] OpenCL command failed with status " << status << ":\n" \
+                << "          " #cmd " [" __FILE__ ":" << __LINE__ << "]" << endl; \
+            return false; \
+        } \
+    } while (0)
+
 bool FDAS::initialise_accelerator(std::string bitstream_file_name,
                                   const std::function<bool(const std::string &, const std::string &)> &platform_selector,
                                   const std::function<bool(int, int, const std::string &)> &device_selector) {
     cl_int status;
 
     std::vector<cl::Platform> all_platforms;
-    status = cl::Platform::get(&all_platforms);
-    if (status != CL_SUCCESS || all_platforms.empty()) {
+    cl_chk(cl::Platform::get(&all_platforms));
+    if (all_platforms.empty()) {
         log << "[ERROR] No OpenCL platforms found" << endl;
         return false;
     }
@@ -79,8 +99,8 @@ bool FDAS::initialise_accelerator(std::string bitstream_file_name,
     }
 
     std::vector<cl::Device> all_devices;
-    status = platform.getDevices(CL_DEVICE_TYPE_ALL, &all_devices);
-    if (status != CL_SUCCESS || all_devices.empty()) {
+    cl_chk(platform.getDevices(CL_DEVICE_TYPE_ALL, &all_devices));
+    if (all_devices.empty()) {
         log << "[ERROR] No OpenCL devices found" << endl;
         return false;
     }
@@ -124,18 +144,8 @@ bool FDAS::initialise_accelerator(std::string bitstream_file_name,
     for (int i = 0; i < devices.size(); ++i)
         binaries.push_back(std::make_pair(bitstream.data(), bitstream.size()));
 
-    std::vector<cl_int> binary_status;
-    program.reset(new cl::Program(*context, devices, binaries, &binary_status, &status));
-    if (status != CL_SUCCESS) {
-        log << "[ERROR] Loading program failed with status: " << status << endl;
-        return false;
-    }
-
-    status = program->build(devices);
-    if (status != CL_SUCCESS) {
-        log << "[ERROR] Building program failed with status: " << status << endl;
-        exit(status);
-    }
+    cl_chkref(program.reset(new cl::Program(*context, devices, binaries, nullptr, &status)));
+    cl_chk(program->build(devices));
 
     log << "[INFO] Program construction from '" << bitstream_file_name << "' (" << bitstream.size() << " bytes) successful" << endl;
 
@@ -144,99 +154,39 @@ bool FDAS::initialise_accelerator(std::string bitstream_file_name,
     bitstream.shrink_to_fit();
 
     // Kernels
-    fwd_fetch_kernel.reset(new cl::Kernel(*program, "fwd_fetch", &status));
-    if (status != CL_SUCCESS) {
-        log << "[ERROR] Loading kernel 'fwd_fetch' failed with status: " << status << endl;
-        return false;
-    }
-    fwd_fft_kernel.reset(new cl::Kernel(*program, "fwd_fft", &status));
-    if (status != CL_SUCCESS) {
-        log << "[ERROR] Loading kernel 'fwd_fft' failed with status: " << status << endl;
-        return false;
-    }
-    fwd_reversed_kernel.reset(new cl::Kernel(*program, "fwd_reversed", &status));
-    if (status != CL_SUCCESS) {
-        log << "[ERROR] Loading kernel 'fwd_fft' failed with status: " << status << endl;
-        return false;
-    }
-    fetch_kernel.reset(new cl::Kernel(*program, "fetch", &status));
-    if (status != CL_SUCCESS) {
-        log << "[ERROR] Loading kernel 'fetch' failed with status: " << status << endl;
-        return false;
-    }
-    fdfir_kernel.reset(new cl::Kernel(*program, "fdfir", &status));
-    if (status != CL_SUCCESS) {
-        log << "[ERROR] Loading kernel 'fdfir' failed with status: " << status << endl;
-        return false;
-    }
-    reversed_kernel.reset(new cl::Kernel(*program, "reversed", &status));
-    if (status != CL_SUCCESS) {
-        log << "[ERROR] Loading kernel 'reversed failed with status: " << status << endl;
-        return false;
-    }
-    discard_kernel.reset(new cl::Kernel(*program, "discard", &status));
-    if (status != CL_SUCCESS) {
-        log << "[ERROR] Loading kernel 'discard' failed with status: " << status << endl;
-        return false;
-    }
-    harmonic_kernel.reset(new cl::Kernel(*program, "harmonic_summing", &status));
-    if (status != CL_SUCCESS) {
-        log << "[ERROR] Loading kernel 'fdfir' failed with status: " << status << endl;
-        return false;
-    }
+    cl_chkref(fwd_fetch_kernel.reset(new cl::Kernel(*program, "fwd_fetch", &status)));
+    cl_chkref(fwd_fft_kernel.reset(new cl::Kernel(*program, "fwd_fft", &status)));
+    cl_chkref(fwd_reversed_kernel.reset(new cl::Kernel(*program, "fwd_reversed", &status)));
+    cl_chkref(fetch_kernel.reset(new cl::Kernel(*program, "fetch", &status)));
+    cl_chkref(fdfir_kernel.reset(new cl::Kernel(*program, "fdfir", &status)));
+    cl_chkref(reversed_kernel.reset(new cl::Kernel(*program, "reversed", &status)));
+    cl_chkref(discard_kernel.reset(new cl::Kernel(*program, "discard", &status)));
+    cl_chkref(harmonic_kernel.reset(new cl::Kernel(*program, "harmonic_summing", &status)));
 
     // Buffers
     size_t total_allocated = 0;
 
-    input_buffer.reset(new cl::Buffer(*context, CL_MEM_READ_ONLY, sizeof(cl_float2) * FDF_PADDED_INPUT_SZ, nullptr, &status));
-    if (status != CL_SUCCESS) {
-        log << "[ERROR] Allocating buffer 'input' failed with status: " << status << endl;
-        return false;
-    }
+    cl_chkref(input_buffer.reset(new cl::Buffer(*context, CL_MEM_READ_ONLY, sizeof(cl_float2) * FDF_PADDED_INPUT_SZ, nullptr, &status)));
     total_allocated += input_buffer->getInfo<CL_MEM_SIZE>();
 
-    tiles_buffer.reset(new cl::Buffer(*context, CL_MEM_READ_WRITE, sizeof(cl_float2) * FDF_INTERMEDIATE_SZ, nullptr, &status));
-    if (status != CL_SUCCESS) {
-        log << "[ERROR] Allocating buffer 'tiles' failed with status: " << status << endl;
-        return false;
-    }
+    cl_chkref(tiles_buffer.reset(new cl::Buffer(*context, CL_MEM_READ_WRITE, sizeof(cl_float2) * FDF_INTERMEDIATE_SZ, nullptr, &status)));
     total_allocated += tiles_buffer->getInfo<CL_MEM_SIZE>();
 
-    templates_buffer.reset(new cl::Buffer(*context, CL_MEM_READ_ONLY, sizeof(cl_float2) * FDF_TEMPLATES_SZ, nullptr, &status));
-    if (status != CL_SUCCESS) {
-        log << "[ERROR] Allocating buffer 'templates' failed with status: " << status << endl;
-        return false;
-    }
+    cl_chkref(templates_buffer.reset(new cl::Buffer(*context, CL_MEM_READ_ONLY, sizeof(cl_float2) * FDF_TEMPLATES_SZ, nullptr, &status)));
     total_allocated += templates_buffer->getInfo<CL_MEM_SIZE>();
 
     for (int i = 0; i < 2; ++i) {
-        discard_buffers[i].reset(new cl::Buffer(*context, CL_MEM_READ_WRITE, sizeof(cl_float) * FDF_PRE_DISCARD_SZ, nullptr, &status));
-        if (status != CL_SUCCESS) {
-            log << "[ERROR] Allocating buffer 'discard_'" << i << " failed with status: " << status << endl;
-            return false;
-        }
+        cl_chkref(discard_buffers[i].reset(new cl::Buffer(*context, CL_MEM_READ_WRITE, sizeof(cl_float) * FDF_PRE_DISCARD_SZ, nullptr, &status)));
         total_allocated += discard_buffers[i]->getInfo<CL_MEM_SIZE>();
     }
 
-    fop_buffer.reset(new cl::Buffer(*context, CL_MEM_READ_WRITE, sizeof(cl_float) * FOP_SZ, nullptr, &status));
-    if (status != CL_SUCCESS) {
-        log << "[ERROR] Allocating buffer 'fop' failed with status: " << status << endl;
-        return false;
-    }
+    cl_chkref(fop_buffer.reset(new cl::Buffer(*context, CL_MEM_READ_WRITE, sizeof(cl_float) * FOP_SZ, nullptr, &status)));
     total_allocated += fop_buffer->getInfo<CL_MEM_SIZE>();
 
-    detection_location_buffer.reset(new cl::Buffer(*context, CL_MEM_WRITE_ONLY, sizeof(cl_uint) * N_CANDIDATES, nullptr, &status));
-    if (status != CL_SUCCESS) {
-        log << "[ERROR] Allocating buffer 'detection_location' failed with status: " << status << endl;
-        return false;
-    }
+    cl_chkref(detection_location_buffer.reset(new cl::Buffer(*context, CL_MEM_WRITE_ONLY, sizeof(cl_uint) * N_CANDIDATES, nullptr, &status)));
     total_allocated += detection_location_buffer->getInfo<CL_MEM_SIZE>();
 
-    detection_amplitude_buffer.reset(new cl::Buffer(*context, CL_MEM_WRITE_ONLY, sizeof(cl_float) * N_CANDIDATES, nullptr, &status));
-    if (status != CL_SUCCESS) {
-        log << "[ERROR] Allocating buffer 'detection_amplitude' failed with status: " << status << endl;
-        return false;
-    }
+    cl_chkref(detection_amplitude_buffer.reset(new cl::Buffer(*context, CL_MEM_WRITE_ONLY, sizeof(cl_float) * N_CANDIDATES, nullptr, &status)));
     total_allocated += detection_amplitude_buffer->getInfo<CL_MEM_SIZE>();
 
     log << "[INFO] Allocated "
@@ -267,24 +217,15 @@ bool FDAS::check_dimensions(const FDAS::ShapeType &input_shape, const FDAS::Shap
     return true;
 }
 
-#define cl_checked(cmd) \
-    do { \
-        status = cmd; \
-        if (status != CL_SUCCESS) { \
-            log << "[ERROR] OpenCL command failed with status " << status << ":\n" \
-                << "          " #cmd " [" __FILE__ ":" << __LINE__ << "]" << endl; \
-            return false; \
-        } \
-    } while (0)
-
 bool FDAS::run(const FDAS::InputType &input, const FDAS::ShapeType &input_shape,
                const FDAS::TemplatesType &templates, const FDAS::ShapeType &template_shape,
                FDAS::DetLocType &detection_location, FDAS::DetAmplType &detection_amplitude) {
-    // Fail early if dimensions do not match the hardware architecture
-    if (!check_dimensions(input_shape, template_shape))
-        return false;
-
     cl_int status;
+
+    // Fail early if dimensions do not match the hardware architecture
+    if (!check_dimensions(input_shape, template_shape)) {
+        return false;
+    }
 
     // Instantiate command queues, one per kernel, plus one for I/O operations. Multi-device support is NYI
     cl::CommandQueue buffer_q(*context, default_device);
@@ -303,38 +244,38 @@ bool FDAS::run(const FDAS::InputType &input, const FDAS::ShapeType &input_shape,
     cl::NDRange global(NDR_NDRANGE_SZ);
 
     // Set static kernel arguments
-    cl_checked(fwd_fetch_kernel->setArg<cl::Buffer>(0, *input_buffer));
-    cl_checked(fwd_reversed_kernel->setArg<cl::Buffer>(0, *tiles_buffer));
+    cl_chk(fwd_fetch_kernel->setArg<cl::Buffer>(0, *input_buffer));
+    cl_chk(fwd_reversed_kernel->setArg<cl::Buffer>(0, *tiles_buffer));
 
-    cl_checked(fetch_kernel->setArg<cl::Buffer>(0, *tiles_buffer));
-    cl_checked(fetch_kernel->setArg<cl::Buffer>(1, *templates_buffer));
+    cl_chk(fetch_kernel->setArg<cl::Buffer>(0, *tiles_buffer));
+    cl_chk(fetch_kernel->setArg<cl::Buffer>(1, *templates_buffer));
 
-    cl_checked(fdfir_kernel->setArg<cl_int>(0, /* inverse FFT */ 1));
+    cl_chk(fdfir_kernel->setArg<cl_int>(0, /* inverse FFT */ 1));
 
-    cl_checked(reversed_kernel->setArg<cl::Buffer>(0, *discard_buffers[0]));
-    cl_checked(reversed_kernel->setArg<cl::Buffer>(1, *discard_buffers[1]));
+    cl_chk(reversed_kernel->setArg<cl::Buffer>(0, *discard_buffers[0]));
+    cl_chk(reversed_kernel->setArg<cl::Buffer>(1, *discard_buffers[1]));
 
-    cl_checked(discard_kernel->setArg<cl::Buffer>(0, *discard_buffers[0]));
-    cl_checked(discard_kernel->setArg<cl::Buffer>(1, *discard_buffers[1]));
-    cl_checked(discard_kernel->setArg<cl::Buffer>(2, *fop_buffer));
+    cl_chk(discard_kernel->setArg<cl::Buffer>(0, *discard_buffers[0]));
+    cl_chk(discard_kernel->setArg<cl::Buffer>(1, *discard_buffers[1]));
+    cl_chk(discard_kernel->setArg<cl::Buffer>(2, *fop_buffer));
 
     // Copy input to device
     cl_float2 zeros[FDF_TILE_OVERLAP];
     memset(zeros, 0x0, sizeof(cl_float2) * FDF_TILE_OVERLAP);
-    cl_checked(buffer_q.enqueueWriteBuffer(*input_buffer, true, 0, sizeof(cl_float2) * FDF_TILE_OVERLAP, zeros));
-    cl_checked(buffer_q.enqueueWriteBuffer(*input_buffer, true, sizeof(cl_float2) * FDF_TILE_OVERLAP, sizeof(cl_float2) * FDF_INPUT_SZ, input.data()));
-    cl_checked(buffer_q.enqueueWriteBuffer(*templates_buffer, true, 0, sizeof(cl_float2) * (FDF_TEMPLATES_SZ - FDF_TILE_SZ), templates.data()));
-    cl_checked(buffer_q.finish());
+    cl_chk(buffer_q.enqueueWriteBuffer(*input_buffer, true, 0, sizeof(cl_float2) * FDF_TILE_OVERLAP, zeros));
+    cl_chk(buffer_q.enqueueWriteBuffer(*input_buffer, true, sizeof(cl_float2) * FDF_TILE_OVERLAP, sizeof(cl_float2) * FDF_INPUT_SZ, input.data()));
+    cl_chk(buffer_q.enqueueWriteBuffer(*templates_buffer, true, 0, sizeof(cl_float2) * (FDF_TEMPLATES_SZ - FDF_TILE_SZ), templates.data()));
+    cl_chk(buffer_q.finish());
 
     // Perform forward FT
     cl::Event fwd_fetch_ev, fwd_fft_ev, fwd_reversed_ev;
-    cl_checked(fwd_fetch_q.enqueueNDRangeKernel(*fwd_fetch_kernel, cl::NullRange, fwd_global, fwd_local, nullptr, &fwd_fetch_ev));
-    cl_checked(fwd_fft_q.enqueueTask(*fwd_fft_kernel, nullptr, &fwd_fft_ev));
-    cl_checked(fwd_reversed_q.enqueueNDRangeKernel(*fwd_reversed_kernel, cl::NullRange, fwd_global, fwd_local, nullptr, &fwd_reversed_ev));
+    cl_chk(fwd_fetch_q.enqueueNDRangeKernel(*fwd_fetch_kernel, cl::NullRange, fwd_global, fwd_local, nullptr, &fwd_fetch_ev));
+    cl_chk(fwd_fft_q.enqueueTask(*fwd_fft_kernel, nullptr, &fwd_fft_ev));
+    cl_chk(fwd_reversed_q.enqueueNDRangeKernel(*fwd_reversed_kernel, cl::NullRange, fwd_global, fwd_local, nullptr, &fwd_reversed_ev));
 
-    cl_checked(fwd_fetch_q.finish());
-    cl_checked(fwd_fft_q.finish());
-    cl_checked(fwd_reversed_q.finish());
+    cl_chk(fwd_fetch_q.finish());
+    cl_chk(fwd_fft_q.finish());
+    cl_chk(fwd_reversed_q.finish());
 
     unsigned long fwd_duraration_Ms = (fwd_reversed_ev.getProfilingInfo<CL_PROFILING_COMMAND_END>()
                                        - fwd_fetch_ev.getProfilingInfo<CL_PROFILING_COMMAND_START>()) / 1000 / 1000;
@@ -347,29 +288,29 @@ bool FDAS::run(const FDAS::InputType &input, const FDAS::ShapeType &input_shape,
     for (int i = 0; i < FILTER_GROUP_SZ + 1; ++i) {
         int tmpl_idx_0 = i;
         int tmpl_idx_1 = i + FILTER_GROUP_SZ + 1;
-        cl_checked(fetch_kernel->setArg<cl_int>(2, tmpl_idx_0));
-        cl_checked(fetch_kernel->setArg<cl_int>(3, tmpl_idx_1));
-        cl_checked(fetch_q.enqueueNDRangeKernel(*fetch_kernel, cl::NullRange, global, local, nullptr, &fetch_evs[i]));
+        cl_chk(fetch_kernel->setArg<cl_int>(2, tmpl_idx_0));
+        cl_chk(fetch_kernel->setArg<cl_int>(3, tmpl_idx_1));
+        cl_chk(fetch_q.enqueueNDRangeKernel(*fetch_kernel, cl::NullRange, global, local, nullptr, &fetch_evs[i]));
 
-        cl_checked(fdfir_q.enqueueTask(*fdfir_kernel, nullptr, &fdfir_evs[i]));
+        cl_chk(fdfir_q.enqueueTask(*fdfir_kernel, nullptr, &fdfir_evs[i]));
 
-        cl_checked(reversed_kernel->setArg<cl_int>(2, i));
-        cl_checked(reversed_kernel->setArg<cl_int>(3, i)); // not a typo, the two streams are written to two separate buffers (using the same offsets)
-        cl_checked(reversed_q.enqueueNDRangeKernel(*reversed_kernel, cl::NullRange, global, local, nullptr, &reversed_evs[i]));
+        cl_chk(reversed_kernel->setArg<cl_int>(2, i));
+        cl_chk(reversed_kernel->setArg<cl_int>(3, i)); // not a typo, the two streams are written to two separate buffers (using the same offsets)
+        cl_chk(reversed_q.enqueueNDRangeKernel(*reversed_kernel, cl::NullRange, global, local, nullptr, &reversed_evs[i]));
     }
 
     // Wait for the FDFIR part of the pipeline to finish
-    cl_checked(fetch_q.finish());
-    cl_checked(fdfir_q.finish());
-    cl_checked(reversed_q.finish());
+    cl_chk(fetch_q.finish());
+    cl_chk(fdfir_q.finish());
+    cl_chk(reversed_q.finish());
 
     unsigned long fdfir_duration_ms = (reversed_evs[FILTER_GROUP_SZ].getProfilingInfo<CL_PROFILING_COMMAND_END>()
                                        - fetch_evs[0].getProfilingInfo<CL_PROFILING_COMMAND_START>()) / 1000 / 1000;
     log << "[INFO] FDFIR took " << fdfir_duration_ms << " ms" << endl;
 
     cl::Event discard_ev;
-    cl_checked(discard_q.enqueueTask(*discard_kernel, nullptr, &discard_ev));
-    cl_checked(discard_q.finish());
+    cl_chk(discard_q.enqueueTask(*discard_kernel, nullptr, &discard_ev));
+    cl_chk(discard_q.finish());
 
     unsigned long discard_duration_ms = (discard_ev.getProfilingInfo<CL_PROFILING_COMMAND_END>()
                                          - discard_ev.getProfilingInfo<CL_PROFILING_COMMAND_START>()) / 1000 / 1000;
@@ -385,8 +326,8 @@ bool FDAS::retrieve_tiles(FDAS::TilesType &tiles, FDAS::ShapeType &tiles_shape) 
 
     tiles.reserve(FDF_INTERMEDIATE_SZ);
     cl::CommandQueue buffer_q(*context, default_device);
-    cl_checked(buffer_q.enqueueReadBuffer(*tiles_buffer, true, 0, sizeof(cl_float2) * FDF_INTERMEDIATE_SZ, tiles.data()));
-    cl_checked(buffer_q.finish());
+    cl_chk(buffer_q.enqueueReadBuffer(*tiles_buffer, true, 0, sizeof(cl_float2) * FDF_INTERMEDIATE_SZ, tiles.data()));
+    cl_chk(buffer_q.finish());
     tiles_shape.push_back(FDF_N_TILES);
     tiles_shape.push_back(FDF_TILE_SZ);
 
@@ -398,12 +339,13 @@ bool FDAS::retrieveFOP(FDAS::FOPType &fop, FDAS::ShapeType &fop_shape) {
 
     fop.reserve(FOP_SZ);
     cl::CommandQueue buffer_q(*context, default_device);
-    cl_checked(buffer_q.enqueueReadBuffer(*fop_buffer, true, 0, sizeof(cl_float) * FOP_SZ, fop.data()));
-    cl_checked(buffer_q.finish());
+    cl_chk(buffer_q.enqueueReadBuffer(*fop_buffer, true, 0, sizeof(cl_float) * FOP_SZ, fop.data()));
+    cl_chk(buffer_q.finish());
     fop_shape.push_back(N_FILTERS);
     fop_shape.push_back(FDF_OUTPUT_SZ);
 
     return true;
 }
 
-#undef cl_checked
+#undef cl_chk
+#undef cl_chkref
