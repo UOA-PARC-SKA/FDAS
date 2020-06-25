@@ -14,6 +14,7 @@
 class FDAS {
 public:
     using InputType = std::vector<std::complex<float>>;
+    using TilesType = std::vector<std::complex<float>>;
     using TemplatesType = std::vector<std::complex<float>>;
     using FOPType = std::vector<float>;
     using DetLocType = std::vector<uint32_t>;
@@ -31,6 +32,8 @@ public:
              const TemplatesType &templates, const ShapeType &template_shape,
              DetLocType &detection_location, DetAmplType &detection_amplitude);
 
+    bool retrieve_tiles(TilesType &tiles, ShapeType &tiles_shape);
+
     bool retrieveFOP(FOPType &fop, ShapeType &fop_shape);
 
     static bool chooseFirstPlatform(const std::string &platform_name, const std::string &platform_version) { return true; }
@@ -45,6 +48,9 @@ private:
     std::unique_ptr<cl::Context> context;
     std::unique_ptr<cl::Program> program;
 
+    std::unique_ptr<cl::Kernel> fwd_fetch_kernel;
+    std::unique_ptr<cl::Kernel> fwd_fft_kernel;
+    std::unique_ptr<cl::Kernel> fwd_reversed_kernel;
     std::unique_ptr<cl::Kernel> fetch_kernel;
     std::unique_ptr<cl::Kernel> fdfir_kernel;
     std::unique_ptr<cl::Kernel> reversed_kernel;
@@ -52,6 +58,7 @@ private:
     std::unique_ptr<cl::Kernel> harmonic_kernel;
 
     std::unique_ptr<cl::Buffer> input_buffer;
+    std::unique_ptr<cl::Buffer> tiles_buffer;
     std::unique_ptr<cl::Buffer> templates_buffer;
     std::unique_ptr<cl::Buffer> discard_buffers[2];
     std::unique_ptr<cl::Buffer> fop_buffer;

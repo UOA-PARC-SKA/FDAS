@@ -46,10 +46,12 @@
 #define FFT_N_PARALLEL_LOG             (2)
 #define FFT_N_PARALLEL                 (1 << FFT_N_PARALLEL_LOG)
 
-// Number of steps required to transform the entire input
-#define FFT_N_STEPS                    (FFT_N_POINTS / FFT_N_PARALLEL)
+// Number of points that arrive at each input terminal
+#define FFT_N_POINTS_PER_TERMINAL_LOG  (FFT_N_POINTS_LOG - FFT_N_PARALLEL_LOG)
+#define FFT_N_POINTS_PER_TERMINAL      (1 << FFT_N_POINTS_PER_TERMINAL_LOG)
 
-// The engine is pipelined and accepts new inputs in each step (II=1), but has the following latency:
+// The engine is pipelined and accepts a new tuple of inputs in each step (II=1)
+#define FFT_N_STEPS                    (FFT_N_POINTS_PER_TERMINAL)
 #define FFT_LATENCY                    (FFT_N_STEPS - 1)
 
 // === Frequency-domain FIR filter implementation with overlap-save algorithm ==========================================
@@ -67,6 +69,9 @@
 
 // Number of channels that will actually be processed (some of high-frequency channels will be discarded)
 #define FDF_INPUT_SZ                   (FDF_N_TILES * FDF_TILE_PAYLOAD)
+
+// Buffer size required to store zero-padded input
+#define FDF_PADDED_INPUT_SZ            (FDF_TILE_OVERLAP + FDF_INPUT_SZ)
 
 // Temporary storage required to apply one filter to all input tiles (element-wise multiplication in frequency domain)
 #define FDF_INTERMEDIATE_SZ            (FDF_N_TILES * FDF_TILE_SZ)

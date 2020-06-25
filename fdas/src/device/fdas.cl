@@ -2,9 +2,6 @@
 #include "fft_4p.cl"
 #include "fdas_config.h"
 
-#define FFT  0
-#define IFFT 1
-
 // Enable channels, portable across Altera's and Intel's `aoc` versions
 #if defined(INTELFPGA_CL)
 #pragma OPENCL EXTENSION cl_intel_channels : enable
@@ -20,6 +17,9 @@
  * Channels to and from the FFT engine(s). Currently, this implementation instantiates two FFT engines, and therefore
  * supports two independent streams (_0 and _1) of data through the kernels.
  */
+channel float2 fwd_fft_input[FFT_N_PARALLEL] __attribute__((depth(0)));
+channel float2 fwd_fft_output[FFT_N_PARALLEL] __attribute__((depth(0)));
+
 channel float2 fft_input_0[FFT_N_PARALLEL] __attribute__((depth(0)));
 channel float2 fft_input_1[FFT_N_PARALLEL] __attribute__((depth(0)));
 
@@ -38,6 +38,76 @@ inline int bit_reversed(int x, int bits) {
         x >>= 1;
     }
     return y;
+}
+
+__attribute__((reqd_work_group_size(FFT_N_POINTS_PER_TERMINAL, 1, 1)))
+kernel void fwd_fetch(global float2 *input) {
+    local float2 __attribute__((bank_bits(10,9))) buf[FFT_N_PARALLEL][FFT_N_POINTS_PER_TERMINAL];
+
+    int input_base = get_group_id(0) * FDF_TILE_PAYLOAD;
+    int lid = get_local_id(0);
+
+    #pragma unroll
+    for (int p = 0; p < FFT_N_PARALLEL; ++p)
+        buf[p][lid] = input[input_base + bit_reversed(p, FFT_N_PARALLEL_LOG) * FFT_N_POINTS_PER_TERMINAL + lid];
+
+    barrier(CLK_LOCAL_MEM_FENCE);
+
+    #pragma unroll
+    for (int p = 0; p < FFT_N_PARALLEL; ++p)
+        WRITE_CHANNEL(fwd_fft_input[p], buf[p][lid]);
+}
+
+__attribute__((task))
+kernel void fwd_fft() {
+    // Sliding window arrays, used internally by the FFT engine for data reordering
+    float2 fft_delay_elements[FFT_N_POINTS + FFT_N_PARALLEL * (FFT_N_POINTS_LOG - 3)];
+
+    // Process 'count' tiles and flush the engine's pipeline
+    for (int s = 0; s < FDF_N_TILES * FFT_N_STEPS + FFT_LATENCY; ++s) {
+        // Buffers to hold engine's input/output in each iteration
+        float2x4 data;
+
+        // Read actual input from the channels, respectively inject zeroes to flush the pipeline
+        if (s < FDF_N_TILES * FFT_N_STEPS) {
+            #pragma unroll
+            for (int p = 0; p < FFT_N_PARALLEL; ++p)
+                data.i[p] = READ_CHANNEL(fwd_fft_input[p]);
+        } else {
+            data.i0 = data.i1 = data.i2 = data.i3 = 0;
+        }
+
+        // Perform one step of the FFT engine
+        data = fft_step(data, s % FFT_N_STEPS, fft_delay_elements, 0, FFT_N_POINTS_LOG);
+
+        // Pass output to the 'reversed' kernel. Recall that FFT engine outputs are delayed by N / 4 - 1 steps, hence
+        // gate channel writes accordingly.
+        if (s >= FFT_LATENCY) {
+            #pragma unroll
+            for (int p = 0; p < FFT_N_PARALLEL; ++p)
+                WRITE_CHANNEL(fwd_fft_output[p], data.i[p]);
+        }
+    }
+}
+
+__attribute__((reqd_work_group_size(FFT_N_POINTS_PER_TERMINAL, 1, 1)))
+kernel void fwd_reversed(global float2 *tiles) {
+    local float2 __attribute__((bank_bits(10,9))) buf[FFT_N_PARALLEL][FFT_N_POINTS_PER_TERMINAL];
+
+    int lid = get_local_id(0);
+
+    #pragma unroll
+    for (int p = 0; p < FFT_N_PARALLEL; ++p)
+        buf[p][lid] = READ_CHANNEL(fwd_fft_output[p]);
+
+    barrier(CLK_LOCAL_MEM_FENCE);
+
+    int tiles_base = get_group_id(0) * FDF_TILE_SZ;
+    int rev_lid = bit_reversed(lid, FFT_N_POINTS_PER_TERMINAL_LOG);
+
+    #pragma unroll
+    for (int p = 0; p < FFT_N_PARALLEL; ++p)
+       tiles[tiles_base + bit_reversed(p, FFT_N_PARALLEL_LOG) * FFT_N_POINTS_PER_TERMINAL + rev_lid] = buf[p][lid];
 }
 
 /*

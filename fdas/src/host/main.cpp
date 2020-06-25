@@ -7,18 +7,25 @@
 
 #include "FDAS.h"
 
+enum FDAS_STATUS {
+    SUCCESS = 0,
+    LOAD_INPUT_ERROR, INIT_ERROR, RUN_PIPELINE_ERROR, SAVE_OUTPUT_ERROR,
+    RETR_TILES_ERROR, SAVE_TILES_ERROR, RETR_FOP_ERROR, SAVE_FOP_ERROR
+};
+
 int main(int argc, char **argv) {
-    if (argc < 6 || argc > 7) {
-        std::cerr << "usage: fdas <bitstream>.aocx <input>.npy <templates>.npy <det_loc>.npy <det_ampl>.npy [<fop>.npy]" << std::endl;
+    if (argc != 8) {
+        std::cerr << "usage: fdas <bitstream>.aocx <input>.npy <templates>.npy <tiles.npy> <fop.npy> <det_loc>.npy <det_ampl>.npy" << std::endl;
         exit(1);
     }
 
     std::string bitstream_file_name = argv[1];
     std::string input_file_name = argv[2];
     std::string templates_file_name = argv[3];
-    std::string det_loc_file_name = argv[4];
-    std::string det_ampl_file_name = argv[5];
-    std::string fop_file_name = argc == 7 ? argv[6] : "";
+    std::string tiles_file_name = argv[4];
+    std::string fop_file_name = argv[5];
+    std::string det_loc_file_name = argv[6];
+    std::string det_ampl_file_name = argv[7];
 
     FDAS::InputType input;
     FDAS::ShapeType input_shape;
@@ -35,26 +42,41 @@ int main(int argc, char **argv) {
         npy::LoadArrayFromNumpy(templates_file_name, templates_shape, fortran_order, templates);
     } catch (std::runtime_error &e) {
         std::cerr << "Loading input/filter templates failed: " << e.what() << std::endl;
-        return 1;
+        return LOAD_INPUT_ERROR;
     }
 
     FDAS pipeline(std::cout);
     pipeline.print_configuration();
 
     if (!pipeline.initialise_accelerator(bitstream_file_name, FDAS::chooseFirstPlatform, FDAS::chooseAcceleratorDevices))
-        return 1;
+        return INIT_ERROR;
 
     if (!pipeline.run(input, input_shape, templates, templates_shape, detection_location, detection_amplitude))
-        return 1;
+        return RUN_PIPELINE_ERROR;
 
     try {
         FDAS::ShapeType detection_location_shape = {detection_location.size()};
         FDAS::ShapeType detection_amplitude_shape = {detection_amplitude.size()};
-        npy::SaveArrayAsNumpy(det_loc_file_name, false, 1, detection_location_shape.data(), detection_location);
-        npy::SaveArrayAsNumpy(det_ampl_file_name, false, 1, detection_amplitude_shape.data(), detection_amplitude);
+        npy::SaveArrayAsNumpy(det_loc_file_name, false, detection_location_shape.size(), detection_location_shape.data(), detection_location);
+        npy::SaveArrayAsNumpy(det_ampl_file_name, false, detection_amplitude_shape.size(), detection_amplitude_shape.data(), detection_amplitude);
     } catch (std::runtime_error &e) {
         std::cerr << "Saving detection result failed: " << e.what() << std::endl;
-        return 1;
+        return SAVE_OUTPUT_ERROR;
+    }
+
+    if (!tiles_file_name.empty()) {
+        FDAS::ShapeType tiles_shape;
+        FDAS::TilesType tiles;
+
+        if (!pipeline.retrieve_tiles(tiles, tiles_shape))
+            return RETR_TILES_ERROR;
+
+        try {
+            npy::SaveArrayAsNumpy(tiles_file_name, false, tiles_shape.size(), tiles_shape.data(), tiles);
+        } catch (std::runtime_error &e) {
+            std::cerr << "Saving tiled input data plane failed: " << e.what() << std::endl;
+            return SAVE_TILES_ERROR;
+        }
     }
 
     if (!fop_file_name.empty()) {
@@ -62,13 +84,13 @@ int main(int argc, char **argv) {
         FDAS::FOPType fop;
 
         if (!pipeline.retrieveFOP(fop, fop_shape))
-            return 1;
+            return RETR_FOP_ERROR;
 
         try {
             npy::SaveArrayAsNumpy(fop_file_name, false, fop_shape.size(), fop_shape.data(), fop);
         } catch (std::runtime_error &e) {
             std::cerr << "Saving filter-output plane failed: " << e.what() << std::endl;
-            return 1;
+            return SAVE_FOP_ERROR;
         }
     }
 

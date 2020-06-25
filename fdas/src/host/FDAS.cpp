@@ -13,14 +13,17 @@ using std::setprecision;
 using std::fixed;
 
 void FDAS::print_configuration() {
-#define print_config(X) log << setw(27) << #X << setw(12) << X << endl
+#define print_config(X) log << setw(29) << #X << setw(12) << X << endl
     print_config(N_CHANNELS);
     print_config(FILTER_GROUP_SZ);
     print_config(N_FILTERS);
     print_config(N_TAPS);
     print_config(FFT_N_POINTS_LOG);
     print_config(FFT_N_POINTS);
+    print_config(FFT_N_PARALLEL_LOG);
     print_config(FFT_N_PARALLEL);
+    print_config(FFT_N_POINTS_PER_TERMINAL_LOG);
+    print_config(FFT_N_POINTS_PER_TERMINAL);
     print_config(FFT_N_STEPS);
     print_config(FFT_LATENCY);
     print_config(FDF_TILE_SZ);
@@ -28,6 +31,7 @@ void FDAS::print_configuration() {
     print_config(FDF_TILE_PAYLOAD);
     print_config(FDF_N_TILES);
     print_config(FDF_INPUT_SZ);
+    print_config(FDF_PADDED_INPUT_SZ);
     print_config(FDF_INTERMEDIATE_SZ);
     print_config(FDF_OUTPUT_SZ);
     print_config(FDF_TEMPLATES_SZ);
@@ -140,6 +144,21 @@ bool FDAS::initialise_accelerator(std::string bitstream_file_name,
     bitstream.shrink_to_fit();
 
     // Kernels
+    fwd_fetch_kernel.reset(new cl::Kernel(*program, "fwd_fetch", &status));
+    if (status != CL_SUCCESS) {
+        log << "[ERROR] Loading kernel 'fwd_fetch' failed with status: " << status << endl;
+        return false;
+    }
+    fwd_fft_kernel.reset(new cl::Kernel(*program, "fwd_fft", &status));
+    if (status != CL_SUCCESS) {
+        log << "[ERROR] Loading kernel 'fwd_fft' failed with status: " << status << endl;
+        return false;
+    }
+    fwd_reversed_kernel.reset(new cl::Kernel(*program, "fwd_reversed", &status));
+    if (status != CL_SUCCESS) {
+        log << "[ERROR] Loading kernel 'fwd_fft' failed with status: " << status << endl;
+        return false;
+    }
     fetch_kernel.reset(new cl::Kernel(*program, "fetch", &status));
     if (status != CL_SUCCESS) {
         log << "[ERROR] Loading kernel 'fetch' failed with status: " << status << endl;
@@ -168,12 +187,20 @@ bool FDAS::initialise_accelerator(std::string bitstream_file_name,
 
     // Buffers
     size_t total_allocated = 0;
-    input_buffer.reset(new cl::Buffer(*context, CL_MEM_READ_ONLY, sizeof(cl_float2) * FDF_INTERMEDIATE_SZ, nullptr, &status)); // change this to FDF_INPUT_SZ once input FFT is implemented
+
+    input_buffer.reset(new cl::Buffer(*context, CL_MEM_READ_ONLY, sizeof(cl_float2) * FDF_PADDED_INPUT_SZ, nullptr, &status));
     if (status != CL_SUCCESS) {
         log << "[ERROR] Allocating buffer 'input' failed with status: " << status << endl;
         return false;
     }
     total_allocated += input_buffer->getInfo<CL_MEM_SIZE>();
+
+    tiles_buffer.reset(new cl::Buffer(*context, CL_MEM_READ_WRITE, sizeof(cl_float2) * FDF_INTERMEDIATE_SZ, nullptr, &status));
+    if (status != CL_SUCCESS) {
+        log << "[ERROR] Allocating buffer 'tiles' failed with status: " << status << endl;
+        return false;
+    }
+    total_allocated += tiles_buffer->getInfo<CL_MEM_SIZE>();
 
     templates_buffer.reset(new cl::Buffer(*context, CL_MEM_READ_ONLY, sizeof(cl_float2) * FDF_TEMPLATES_SZ, nullptr, &status));
     if (status != CL_SUCCESS) {
@@ -222,15 +249,20 @@ bool FDAS::initialise_accelerator(std::string bitstream_file_name,
 }
 
 bool FDAS::check_dimensions(const FDAS::ShapeType &input_shape, const FDAS::ShapeType &templates_shape) {
-#define check_dim(cond, msg) do { if (!(cond)) {log << "[ERROR] " #msg << endl; return false; } } while (0)
-    check_dim(input_shape.size() == 2, "Expected pre-tiled input");
-    check_dim(input_shape[0] == FDF_N_TILES, "Wrong number of tiles in input");
-    check_dim(input_shape[1] == FDF_TILE_SZ, "Tile size is wrong");
+    if (input_shape.size() != 1) {
+        log << "[ERROR] Malformed input" << endl;
+        return false;
+    }
 
-    check_dim(templates_shape.size() == 2, "Expected filter coefficient matrix");
-    check_dim(templates_shape[0] == N_FILTERS, "Wrong number of filters");
-    check_dim(templates_shape[1] == FDF_TILE_SZ, "Tile size is wrong");
-#undef check_dim
+    if (input_shape[0] < FDF_INPUT_SZ) {
+        log << "[ERROR] Not enough input points" << endl;
+        return false;
+    }
+
+    if (templates_shape.size() != 2 || templates_shape[0] != N_FILTERS || templates_shape[1] != FDF_TILE_SZ) {
+        log << "[ERROR] Malformed filter templates" << endl;
+        return false;
+    }
 
     return true;
 }
@@ -249,25 +281,32 @@ bool FDAS::run(const FDAS::InputType &input, const FDAS::ShapeType &input_shape,
                const FDAS::TemplatesType &templates, const FDAS::ShapeType &template_shape,
                FDAS::DetLocType &detection_location, FDAS::DetAmplType &detection_amplitude) {
     // Fail early if dimensions do not match the hardware architecture
-    if (!check_dimensions(input_shape, template_shape)) {
+    if (!check_dimensions(input_shape, template_shape))
         return false;
-    }
 
     cl_int status;
 
     // Instantiate command queues, one per kernel, plus one for I/O operations. Multi-device support is NYI
     cl::CommandQueue buffer_q(*context, default_device);
+    cl::CommandQueue fwd_fetch_q(*context, default_device);
+    cl::CommandQueue fwd_fft_q(*context, default_device);
+    cl::CommandQueue fwd_reversed_q(*context, default_device);
     cl::CommandQueue fetch_q(*context, default_device);
     cl::CommandQueue fdfir_q(*context, default_device);
     cl::CommandQueue reversed_q(*context, default_device);
     cl::CommandQueue discard_q(*context, default_device);
 
     // NDRange configuration
+    cl::NDRange fwd_local(FFT_N_POINTS_PER_TERMINAL);
+    cl::NDRange fwd_global(FFT_N_POINTS_PER_TERMINAL * FDF_N_TILES);
     cl::NDRange local(NDR_WORK_GROUP_SZ);
     cl::NDRange global(NDR_NDRANGE_SZ);
 
     // Set static kernel arguments
-    cl_checked(fetch_kernel->setArg<cl::Buffer>(0, *input_buffer));
+    cl_checked(fwd_fetch_kernel->setArg<cl::Buffer>(0, *input_buffer));
+    cl_checked(fwd_reversed_kernel->setArg<cl::Buffer>(0, *tiles_buffer));
+
+    cl_checked(fetch_kernel->setArg<cl::Buffer>(0, *tiles_buffer));
     cl_checked(fetch_kernel->setArg<cl::Buffer>(1, *templates_buffer));
 
     cl_checked(fdfir_kernel->setArg<cl_int>(0, /* inverse FFT */ 1));
@@ -280,9 +319,26 @@ bool FDAS::run(const FDAS::InputType &input, const FDAS::ShapeType &input_shape,
     cl_checked(discard_kernel->setArg<cl::Buffer>(2, *fop_buffer));
 
     // Copy input to device
-    cl_checked(buffer_q.enqueueWriteBuffer(*input_buffer, true, 0, sizeof(cl_float2) * FDF_INTERMEDIATE_SZ, input.data())); // change this to FDF_INPUT_SZ once input FFT is implemented
+    cl_float2 zeros[FDF_TILE_OVERLAP];
+    memset(zeros, 0x0, sizeof(cl_float2) * FDF_TILE_OVERLAP);
+    cl_checked(buffer_q.enqueueWriteBuffer(*input_buffer, true, 0, sizeof(cl_float2) * FDF_TILE_OVERLAP, zeros));
+    cl_checked(buffer_q.enqueueWriteBuffer(*input_buffer, true, sizeof(cl_float2) * FDF_TILE_OVERLAP, sizeof(cl_float2) * FDF_INPUT_SZ, input.data()));
     cl_checked(buffer_q.enqueueWriteBuffer(*templates_buffer, true, 0, sizeof(cl_float2) * (FDF_TEMPLATES_SZ - FDF_TILE_SZ), templates.data()));
     cl_checked(buffer_q.finish());
+
+    // Perform forward FT
+    cl::Event fwd_fetch_ev, fwd_fft_ev, fwd_reversed_ev;
+    cl_checked(fwd_fetch_q.enqueueNDRangeKernel(*fwd_fetch_kernel, cl::NullRange, fwd_global, fwd_local, nullptr, &fwd_fetch_ev));
+    cl_checked(fwd_fft_q.enqueueTask(*fwd_fft_kernel, nullptr, &fwd_fft_ev));
+    cl_checked(fwd_reversed_q.enqueueNDRangeKernel(*fwd_reversed_kernel, cl::NullRange, fwd_global, fwd_local, nullptr, &fwd_reversed_ev));
+
+    cl_checked(fwd_fetch_q.finish());
+    cl_checked(fwd_fft_q.finish());
+    cl_checked(fwd_reversed_q.finish());
+
+    unsigned long fwd_duraration_Ms = (fwd_reversed_ev.getProfilingInfo<CL_PROFILING_COMMAND_END>()
+                                       - fwd_fetch_ev.getProfilingInfo<CL_PROFILING_COMMAND_START>()) / 1000 / 1000;
+    log << "[INFO] Forward FFT took " << fwd_duraration_Ms << " ms" << endl;
 
     // Enqueue *all* FDFIR kernels at once; the channels will ensure that the data dependencies are respected
     cl::Event fetch_evs[FILTER_GROUP_SZ + 1];
@@ -320,6 +376,19 @@ bool FDAS::run(const FDAS::InputType &input, const FDAS::ShapeType &input_shape,
     log << "[INFO] Discard took " << discard_duration_ms << " ms" << endl;
 
     log << "[INFO] Harmonic summing NYI" << endl;
+
+    return true;
+}
+
+bool FDAS::retrieve_tiles(FDAS::TilesType &tiles, FDAS::ShapeType &tiles_shape) {
+    cl_int status;
+
+    tiles.reserve(FDF_INTERMEDIATE_SZ);
+    cl::CommandQueue buffer_q(*context, default_device);
+    cl_checked(buffer_q.enqueueReadBuffer(*tiles_buffer, true, 0, sizeof(cl_float2) * FDF_INTERMEDIATE_SZ, tiles.data()));
+    cl_checked(buffer_q.finish());
+    tiles_shape.push_back(FDF_N_TILES);
+    tiles_shape.push_back(FDF_TILE_SZ);
 
     return true;
 }
