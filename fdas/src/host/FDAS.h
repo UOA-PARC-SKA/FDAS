@@ -17,8 +17,9 @@ public:
     using TilesType = std::vector<std::complex<float>>;
     using TemplatesType = std::vector<std::complex<float>>;
     using FOPType = std::vector<float>;
-    using DetLocType = std::vector<uint32_t>;
-    using DetAmplType = std::vector<float>;
+//    using DetLocType = std::vector<uint32_t>;
+//    using DetAmplType = std::vector<float>;
+
     using ShapeType = std::vector<unsigned long>;
 
 public:
@@ -28,13 +29,12 @@ public:
 
     bool initialise_accelerator(std::string bitstream_file_name, const std::function<bool(const std::string &, const std::string &)> &platform_selector, const std::function<bool(int, int, const std::string &)> &device_selector);
 
-    bool run(const InputType &input, const ShapeType &input_shape,
-             const TemplatesType &templates, const ShapeType &template_shape,
-             DetLocType &detection_location, DetAmplType &detection_amplitude);
+    bool perform_ft_convolution(const InputType &input, const ShapeType &input_shape,
+                                const TemplatesType &templates, const ShapeType &template_shape);
 
     bool retrieve_tiles(TilesType &tiles, ShapeType &tiles_shape);
 
-    bool retrieveFOP(FOPType &fop, ShapeType &fop_shape);
+    bool retrieve_FOP(FOPType &fop, ShapeType &fop_shape);
 
     static bool chooseFirstPlatform(const std::string &platform_name, const std::string &platform_version) { return true; }
 
@@ -55,15 +55,15 @@ private:
     std::unique_ptr<cl::Kernel> fdfir_kernel;
     std::unique_ptr<cl::Kernel> reversed_kernel;
     std::unique_ptr<cl::Kernel> discard_kernel;
-    std::unique_ptr<cl::Kernel> harmonic_kernel;
+//    std::unique_ptr<cl::Kernel> harmonic_kernel;
 
     std::unique_ptr<cl::Buffer> input_buffer;
     std::unique_ptr<cl::Buffer> tiles_buffer;
     std::unique_ptr<cl::Buffer> templates_buffer;
     std::unique_ptr<cl::Buffer> discard_buffers[2];
     std::unique_ptr<cl::Buffer> fop_buffer;
-    std::unique_ptr<cl::Buffer> detection_location_buffer;
-    std::unique_ptr<cl::Buffer> detection_amplitude_buffer;
+//    std::unique_ptr<cl::Buffer> detection_location_buffer;
+//    std::unique_ptr<cl::Buffer> detection_amplitude_buffer;
 
     std::ostream &log;
 

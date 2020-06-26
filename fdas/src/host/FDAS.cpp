@@ -43,9 +43,9 @@ void FDAS::print_configuration() {
     print_config(NDR_WORK_GROUP_SZ);
     print_config(NDR_NDRANGE_SZ);
     print_config(FOP_SZ);
-    print_config(HMS_N_PLANES);
-    print_config(HMS_DETECTION_SZ);
-    print_config(N_CANDIDATES);
+//    print_config(HMS_N_PLANES);
+//    print_config(HMS_DETECTION_SZ);
+//    print_config(N_CANDIDATES);
 #undef print_config
 }
 
@@ -161,7 +161,7 @@ bool FDAS::initialise_accelerator(std::string bitstream_file_name,
     cl_chkref(fdfir_kernel.reset(new cl::Kernel(*program, "fdfir", &status)));
     cl_chkref(reversed_kernel.reset(new cl::Kernel(*program, "reversed", &status)));
     cl_chkref(discard_kernel.reset(new cl::Kernel(*program, "discard", &status)));
-    cl_chkref(harmonic_kernel.reset(new cl::Kernel(*program, "harmonic_summing", &status)));
+//    cl_chkref(harmonic_kernel.reset(new cl::Kernel(*program, "harmonic_summing", &status)));
 
     // Buffers
     size_t total_allocated = 0;
@@ -183,11 +183,11 @@ bool FDAS::initialise_accelerator(std::string bitstream_file_name,
     cl_chkref(fop_buffer.reset(new cl::Buffer(*context, CL_MEM_READ_WRITE, sizeof(cl_float) * FOP_SZ, nullptr, &status)));
     total_allocated += fop_buffer->getInfo<CL_MEM_SIZE>();
 
-    cl_chkref(detection_location_buffer.reset(new cl::Buffer(*context, CL_MEM_WRITE_ONLY, sizeof(cl_uint) * N_CANDIDATES, nullptr, &status)));
-    total_allocated += detection_location_buffer->getInfo<CL_MEM_SIZE>();
+//    cl_chkref(detection_location_buffer.reset(new cl::Buffer(*context, CL_MEM_WRITE_ONLY, sizeof(cl_uint) * N_CANDIDATES, nullptr, &status)));
+//    total_allocated += detection_location_buffer->getInfo<CL_MEM_SIZE>();
 
-    cl_chkref(detection_amplitude_buffer.reset(new cl::Buffer(*context, CL_MEM_WRITE_ONLY, sizeof(cl_float) * N_CANDIDATES, nullptr, &status)));
-    total_allocated += detection_amplitude_buffer->getInfo<CL_MEM_SIZE>();
+//    cl_chkref(detection_amplitude_buffer.reset(new cl::Buffer(*context, CL_MEM_WRITE_ONLY, sizeof(cl_float) * N_CANDIDATES, nullptr, &status)));
+//    total_allocated += detection_amplitude_buffer->getInfo<CL_MEM_SIZE>();
 
     log << "[INFO] Allocated "
         << fixed << setprecision(2) << (total_allocated / (1.f * (1 << 20)))
@@ -217,9 +217,8 @@ bool FDAS::check_dimensions(const FDAS::ShapeType &input_shape, const FDAS::Shap
     return true;
 }
 
-bool FDAS::run(const FDAS::InputType &input, const FDAS::ShapeType &input_shape,
-               const FDAS::TemplatesType &templates, const FDAS::ShapeType &template_shape,
-               FDAS::DetLocType &detection_location, FDAS::DetAmplType &detection_amplitude) {
+bool FDAS::perform_ft_convolution(const FDAS::InputType &input, const FDAS::ShapeType &input_shape,
+                                  const FDAS::TemplatesType &templates, const FDAS::ShapeType &template_shape) {
     cl_int status;
 
     // Fail early if dimensions do not match the hardware architecture
@@ -316,8 +315,6 @@ bool FDAS::run(const FDAS::InputType &input, const FDAS::ShapeType &input_shape,
                                          - discard_ev.getProfilingInfo<CL_PROFILING_COMMAND_START>()) / 1000 / 1000;
     log << "[INFO] Discard took " << discard_duration_ms << " ms" << endl;
 
-    log << "[INFO] Harmonic summing NYI" << endl;
-
     return true;
 }
 
@@ -334,7 +331,7 @@ bool FDAS::retrieve_tiles(FDAS::TilesType &tiles, FDAS::ShapeType &tiles_shape) 
     return true;
 }
 
-bool FDAS::retrieveFOP(FDAS::FOPType &fop, FDAS::ShapeType &fop_shape) {
+bool FDAS::retrieve_FOP(FDAS::FOPType &fop, FDAS::ShapeType &fop_shape) {
     cl_int status;
 
     fop.reserve(FOP_SZ);
