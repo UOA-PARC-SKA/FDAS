@@ -48,19 +48,15 @@ private:
     std::unique_ptr<cl::Context> context;
     std::unique_ptr<cl::Program> program;
 
-    std::unique_ptr<cl::Kernel> fwd_fetch_kernel;
-    std::unique_ptr<cl::Kernel> fwd_fft_kernel;
-    std::unique_ptr<cl::Kernel> fwd_reversed_kernel;
-    std::unique_ptr<cl::Kernel> fetch_kernel;
-    std::unique_ptr<cl::Kernel> fdfir_kernel;
-    std::unique_ptr<cl::Kernel> reversed_kernel;
-    std::unique_ptr<cl::Kernel> discard_kernel;
+    std::unique_ptr<cl::Kernel> tile_input_kernel;
+    std::unique_ptr<cl::Kernel> store_tiles_kernel;
+    std::unique_ptr<cl::Kernel> mux_and_mult_kernel;
+    std::unique_ptr<cl::Kernel> square_and_discard_kernel;
 //    std::unique_ptr<cl::Kernel> harmonic_kernel;
 
     std::unique_ptr<cl::Buffer> input_buffer;
     std::unique_ptr<cl::Buffer> tiles_buffer;
     std::unique_ptr<cl::Buffer> templates_buffer;
-    std::unique_ptr<cl::Buffer> discard_buffers[2];
     std::unique_ptr<cl::Buffer> fop_buffer;
 //    std::unique_ptr<cl::Buffer> detection_location_buffer;
 //    std::unique_ptr<cl::Buffer> detection_amplitude_buffer;
@@ -69,6 +65,8 @@ private:
 
 private:
     bool check_dimensions(const ShapeType &input_shape, const ShapeType &templates_shape);
+
+    void print_duration(const std::string &phase, const cl::Event &from, const cl::Event &to);
 
 };
 

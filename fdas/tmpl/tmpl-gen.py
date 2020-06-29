@@ -59,6 +59,15 @@ def generate_templates(numTemplates, maxAccel, unAccelFreq, obsLength, speedOfLi
     return templates
 
 
+def bit_rev(x, bits):
+    y = 0
+    for i in range(bits):
+        y <<= 1
+        y |= x & 1
+        x >>= 1
+    return y
+
+
 def main():
     parser = argparse.ArgumentParser(description="Generate filter templates for FDAS module.")
 
@@ -74,11 +83,13 @@ def main():
     gen_args.add_argument("--speed-of-light", dest='t_c', metavar='c', type=float, default=299792458,
                           help="set speed of light in m/s (default: 299792458 m/s)")
 
-    parser.add_argument("-p", "--precision", dest='precision', choices=['single', 'double'], default='single',
+    parser.add_argument("-w", "--precision", dest='precision', choices=['single', 'double'], default='single',
                         help="select output floating point precision (default: single")
     parser.add_argument("-f", "--fourier-transform", dest='ft_sz', type=int, metavar='n', nargs='?', const=2 ** 11,
                         help="request (individual) Fourier transform of the templates with the specified size "
                              "(default: 2048 = 2K)")
+    parser.add_argument("-p", "--order-for-parallel-fft", dest='n_fft_par', type=int, metavar='n', nargs='?', const=4,
+                        help="TODO")
     parser.add_argument("-o", "--output", dest='output', metavar='path', required=True, help="set output file")
 
     args = parser.parse_args()
@@ -89,6 +100,9 @@ def main():
     #  + N//2 filters that correspond  to positive accelerations
     if args.n_tmpl % 2 == 0:
         parser.error("Number of templates must be odd")
+
+    if args.n_fft_par and not args.ft_sz:
+        parser.error("Cannot apply FFT order to non-FT output")
 
     templates = generate_templates(
         numTemplates=args.n_tmpl - 1,  # in the Matlab code, only the non-zero acceleration templates are counted
@@ -103,9 +117,20 @@ def main():
 
     out_dtype = np.complex64 if args.precision == 'single' else np.complex128
     if args.ft_sz:
-        out = np.empty((n_tmpl, args.ft_sz), dtype=out_dtype)
+        n = args.ft_sz
+        out = np.empty((n_tmpl, n), dtype=out_dtype)
         for i in range(n_tmpl):
-            out[i][:] = scipy.fft.fft(templates[i], args.ft_sz)
+            out[i][:] = scipy.fft.fft(templates[i], n)
+
+        if args.n_fft_par:
+            p = args.n_fft_par
+            for i in range(n_tmpl):
+                tile = np.zeros(n, dtype=out_dtype)
+                for j in range(p):
+                    chunk_begin = bit_rev(j, int(np.log2(p))) * n // p
+                    chunk_end = chunk_begin + n // p
+                    tile[j::p] = out[i][chunk_begin:chunk_end]
+                out[i][:] = tile
     else:
         max_size = max(t.size for t in templates)
         out = np.zeros((n_tmpl, max_size), dtype=out_dtype)
@@ -115,9 +140,10 @@ def main():
 
     np.save(args.output, out)
     print(f"[INFO] Wrote '{args.output if args.output.endswith('.npy') else (args.output + '.npy')}':")
-    print(f"         shape:               {out.shape}")
-    print(f"         type:                {out.dtype}")
-    print(f"         Fourier-transformed? {'yes' if args.ft_sz else 'no'}")
+    print(f"         shape:                    {out.shape}")
+    print(f"         type:                     {out.dtype}")
+    print(f"         Fourier-transformed?      {'yes' if args.ft_sz else 'no'}")
+    print(f"         Ordered for parallel FFT? {str(args.n_fft_par) if args.n_fft_par else 'no'}")
 
 
 if __name__ == '__main__':

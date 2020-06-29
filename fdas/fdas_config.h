@@ -15,18 +15,25 @@
 // The filter templates correspond to different accelerations to test for. There are two equally-sized groups of
 // templates which only differ in the sign of the acceleration. Additionally, one filter, located between the groups,
 // just forwards the input signal.
-#define FILTER_GROUP_SZ                (42)
-#define N_FILTERS                      (FILTER_GROUP_SZ + 1 + FILTER_GROUP_SZ)
+#define N_FILTERS_PER_ACCEL_SIGN       (42)
+#define N_FILTERS                      (N_FILTERS_PER_ACCEL_SIGN + 1 + N_FILTERS_PER_ACCEL_SIGN)
 
 // Maximum number of filter taps
 #define N_TAPS                         (421)
 
+// Set how many filters are processed in parallel, and in consequence, how many batches are needed to apply all filters.
+// Currently, the batch size must evenly divide the total number of filters
+#define N_FILTERS_PARALLEL             (5)
+#define N_FILTER_BATCHES               (N_FILTERS / N_FILTERS_PARALLEL)
+
 #elif defined(FDAS_TESTING)
 
 #define N_CHANNELS                     (62176)
-#define FILTER_GROUP_SZ                (10)
-#define N_FILTERS                      (FILTER_GROUP_SZ + 1 + FILTER_GROUP_SZ)
+#define N_FILTERS_PER_ACCEL_SIGN       (10)
+#define N_FILTERS                      (N_FILTERS_PER_ACCEL_SIGN + 1 + N_FILTERS_PER_ACCEL_SIGN)
 #define N_TAPS                         (106)
+#define N_FILTERS_PARALLEL             (3)
+#define N_FILTER_BATCHES               (N_FILTERS / N_FILTERS_PARALLEL)
 
 #else
 
@@ -50,10 +57,6 @@
 #define FFT_N_POINTS_PER_TERMINAL_LOG  (FFT_N_POINTS_LOG - FFT_N_PARALLEL_LOG)
 #define FFT_N_POINTS_PER_TERMINAL      (1 << FFT_N_POINTS_PER_TERMINAL_LOG)
 
-// The engine is pipelined and accepts a new tuple of inputs in each step (II=1)
-#define FFT_N_STEPS                    (FFT_N_POINTS_PER_TERMINAL)
-#define FFT_LATENCY                    (FFT_N_STEPS - 1)
-
 // === Frequency-domain FIR filter implementation with overlap-save algorithm ==========================================
 
 // The tile size for the overlap-save algorithm must match the FFT size
@@ -73,34 +76,14 @@
 // Buffer size required to store zero-padded input
 #define FDF_PADDED_INPUT_SZ            (FDF_TILE_OVERLAP + FDF_INPUT_SZ)
 
-// Temporary storage required to apply one filter to all input tiles (element-wise multiplication in frequency domain)
-#define FDF_INTERMEDIATE_SZ            (FDF_N_TILES * FDF_TILE_SZ)
+// Buffer size required to store zero-padded/partially overlapped and tiled input
+#define FDF_TILED_INPUT_SZ             (FDF_N_TILES * FDF_TILE_SZ)
 
 // Result size after applying one filter to all input tiles and discarding the overlapping elements
 #define FDF_OUTPUT_SZ                  (FDF_INPUT_SZ)
 
-// Buffer size to hold all filter coefficients, plus one dummy template to balance the architecture
-#define FDF_TEMPLATES_SZ               ((N_FILTERS + 1) * FDF_TILE_SZ)
-
-// Intermediate result size after applying half the filters to all input tiles, but before discarding overlapping
-// elements. The first half corresponds to the filters for the negative and zero accelerations. The second half belongs
-// to the filters for the positive accelerations and the balance-ensuring bogus template.
-#define FDF_PRE_DISCARD_SZ             ((N_FILTERS + 1) / 2 * FDF_INTERMEDIATE_SZ)
-
-// === NDRange kernel configuration ====================================================================================
-
-// Number of tiles (and inputs) handled in each work group
-#define NDR_N_TILES_PER_WORK_GROUP     (4)
-#define NDR_N_POINTS_PER_WORK_GROUP    (FDF_TILE_SZ * NDR_N_TILES_PER_WORK_GROUP)
-
-// The FFT engine's inputs must arrive at the same time, and therefore should be processed by a single work item. This
-// determines how many work items are required to process one tile.
-#define NDR_N_POINTS_PER_WORK_ITEM     (FFT_N_PARALLEL)
-#define NDR_N_WORK_ITEMS_PER_TILE      (FDF_TILE_SZ / NDR_N_POINTS_PER_WORK_ITEM)
-
-// The work group and total NDRange sizes follow from the parameters above
-#define NDR_WORK_GROUP_SZ              (NDR_N_TILES_PER_WORK_GROUP * NDR_N_WORK_ITEMS_PER_TILE)
-#define NDR_NDRANGE_SZ                 (FDF_N_TILES * NDR_N_WORK_ITEMS_PER_TILE)
+// Buffer size to hold all filter coefficients
+#define FDF_TEMPLATES_SZ               (N_FILTERS * FDF_TILE_SZ)
 
 // === Filter-output plane =============================================================================================
 

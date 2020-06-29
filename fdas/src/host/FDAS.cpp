@@ -15,33 +15,26 @@ using std::fixed;
 void FDAS::print_configuration() {
 #define print_config(X) log << setw(29) << #X << setw(12) << X << endl
     print_config(N_CHANNELS);
-    print_config(FILTER_GROUP_SZ);
+    print_config(N_FILTERS_PER_ACCEL_SIGN);
     print_config(N_FILTERS);
     print_config(N_TAPS);
+    print_config(N_FILTERS_PARALLEL);
+    print_config(N_FILTER_BATCHES);
     print_config(FFT_N_POINTS_LOG);
     print_config(FFT_N_POINTS);
     print_config(FFT_N_PARALLEL_LOG);
     print_config(FFT_N_PARALLEL);
     print_config(FFT_N_POINTS_PER_TERMINAL_LOG);
     print_config(FFT_N_POINTS_PER_TERMINAL);
-    print_config(FFT_N_STEPS);
-    print_config(FFT_LATENCY);
     print_config(FDF_TILE_SZ);
     print_config(FDF_TILE_OVERLAP);
     print_config(FDF_TILE_PAYLOAD);
     print_config(FDF_N_TILES);
     print_config(FDF_INPUT_SZ);
     print_config(FDF_PADDED_INPUT_SZ);
-    print_config(FDF_INTERMEDIATE_SZ);
+    print_config(FDF_TILED_INPUT_SZ);
     print_config(FDF_OUTPUT_SZ);
     print_config(FDF_TEMPLATES_SZ);
-    print_config(FDF_PRE_DISCARD_SZ);
-    print_config(NDR_N_TILES_PER_WORK_GROUP);
-    print_config(NDR_N_POINTS_PER_WORK_GROUP);
-    print_config(NDR_N_POINTS_PER_WORK_ITEM);
-    print_config(NDR_N_WORK_ITEMS_PER_TILE);
-    print_config(NDR_WORK_GROUP_SZ);
-    print_config(NDR_NDRANGE_SZ);
     print_config(FOP_SZ);
 //    print_config(HMS_N_PLANES);
 //    print_config(HMS_DETECTION_SZ);
@@ -154,13 +147,10 @@ bool FDAS::initialise_accelerator(std::string bitstream_file_name,
     bitstream.shrink_to_fit();
 
     // Kernels
-    cl_chkref(fwd_fetch_kernel.reset(new cl::Kernel(*program, "fwd_fetch", &status)));
-    cl_chkref(fwd_fft_kernel.reset(new cl::Kernel(*program, "fwd_fft", &status)));
-    cl_chkref(fwd_reversed_kernel.reset(new cl::Kernel(*program, "fwd_reversed", &status)));
-    cl_chkref(fetch_kernel.reset(new cl::Kernel(*program, "fetch", &status)));
-    cl_chkref(fdfir_kernel.reset(new cl::Kernel(*program, "fdfir", &status)));
-    cl_chkref(reversed_kernel.reset(new cl::Kernel(*program, "reversed", &status)));
-    cl_chkref(discard_kernel.reset(new cl::Kernel(*program, "discard", &status)));
+    cl_chkref(tile_input_kernel.reset(new cl::Kernel(*program, "tile_input", &status)));
+    cl_chkref(store_tiles_kernel.reset(new cl::Kernel(*program, "store_tiles", &status)));
+    cl_chkref(mux_and_mult_kernel.reset(new cl::Kernel(*program, "mux_and_mult", &status)));
+    cl_chkref(square_and_discard_kernel.reset(new cl::Kernel(*program, "square_and_discard", &status)));
 //    cl_chkref(harmonic_kernel.reset(new cl::Kernel(*program, "harmonic_summing", &status)));
 
     // Buffers
@@ -169,16 +159,11 @@ bool FDAS::initialise_accelerator(std::string bitstream_file_name,
     cl_chkref(input_buffer.reset(new cl::Buffer(*context, CL_MEM_READ_ONLY, sizeof(cl_float2) * FDF_PADDED_INPUT_SZ, nullptr, &status)));
     total_allocated += input_buffer->getInfo<CL_MEM_SIZE>();
 
-    cl_chkref(tiles_buffer.reset(new cl::Buffer(*context, CL_MEM_READ_WRITE, sizeof(cl_float2) * FDF_INTERMEDIATE_SZ, nullptr, &status)));
+    cl_chkref(tiles_buffer.reset(new cl::Buffer(*context, CL_MEM_READ_WRITE, sizeof(cl_float2) * FDF_TILED_INPUT_SZ, nullptr, &status)));
     total_allocated += tiles_buffer->getInfo<CL_MEM_SIZE>();
 
     cl_chkref(templates_buffer.reset(new cl::Buffer(*context, CL_MEM_READ_ONLY, sizeof(cl_float2) * FDF_TEMPLATES_SZ, nullptr, &status)));
     total_allocated += templates_buffer->getInfo<CL_MEM_SIZE>();
-
-    for (int i = 0; i < 2; ++i) {
-        cl_chkref(discard_buffers[i].reset(new cl::Buffer(*context, CL_MEM_READ_WRITE, sizeof(cl_float) * FDF_PRE_DISCARD_SZ, nullptr, &status)));
-        total_allocated += discard_buffers[i]->getInfo<CL_MEM_SIZE>();
-    }
 
     cl_chkref(fop_buffer.reset(new cl::Buffer(*context, CL_MEM_READ_WRITE, sizeof(cl_float) * FOP_SZ, nullptr, &status)));
     total_allocated += fop_buffer->getInfo<CL_MEM_SIZE>();
@@ -228,92 +213,50 @@ bool FDAS::perform_ft_convolution(const FDAS::InputType &input, const FDAS::Shap
 
     // Instantiate command queues, one per kernel, plus one for I/O operations. Multi-device support is NYI
     cl::CommandQueue buffer_q(*context, default_device);
-    cl::CommandQueue fwd_fetch_q(*context, default_device);
-    cl::CommandQueue fwd_fft_q(*context, default_device);
-    cl::CommandQueue fwd_reversed_q(*context, default_device);
-    cl::CommandQueue fetch_q(*context, default_device);
-    cl::CommandQueue fdfir_q(*context, default_device);
-    cl::CommandQueue reversed_q(*context, default_device);
-    cl::CommandQueue discard_q(*context, default_device);
+
+    cl::CommandQueue tile_input_q(*context, default_device);
+    cl::CommandQueue store_tiles_q(*context, default_device);
+    cl::CommandQueue mux_and_mult_q(*context, default_device);
+    cl::CommandQueue square_and_discard_q(*context, default_device);
 
     // NDRange configuration
-    cl::NDRange fwd_local(FFT_N_POINTS_PER_TERMINAL);
-    cl::NDRange fwd_global(FFT_N_POINTS_PER_TERMINAL * FDF_N_TILES);
-    cl::NDRange local(NDR_WORK_GROUP_SZ);
-    cl::NDRange global(NDR_NDRANGE_SZ);
+    cl::NDRange prep_local(FFT_N_POINTS_PER_TERMINAL);
+    cl::NDRange prep_global(FFT_N_POINTS_PER_TERMINAL * FDF_N_TILES);
+
+    cl::NDRange conv_local(FFT_N_POINTS_PER_TERMINAL, 1);
+    cl::NDRange conv_global(FFT_N_POINTS_PER_TERMINAL * FDF_N_TILES, N_FILTER_BATCHES);
 
     // Set static kernel arguments
-    cl_chk(fwd_fetch_kernel->setArg<cl::Buffer>(0, *input_buffer));
-    cl_chk(fwd_reversed_kernel->setArg<cl::Buffer>(0, *tiles_buffer));
+    cl_chk(tile_input_kernel->setArg<cl::Buffer>(0, *input_buffer));
+    cl_chk(store_tiles_kernel->setArg<cl::Buffer>(0, *tiles_buffer));
 
-    cl_chk(fetch_kernel->setArg<cl::Buffer>(0, *tiles_buffer));
-    cl_chk(fetch_kernel->setArg<cl::Buffer>(1, *templates_buffer));
+    cl_chk(mux_and_mult_kernel->setArg<cl::Buffer>(0, *tiles_buffer));
+    cl_chk(mux_and_mult_kernel->setArg<cl::Buffer>(1, *templates_buffer));
 
-    cl_chk(fdfir_kernel->setArg<cl_int>(0, /* inverse FFT */ 1));
-
-    cl_chk(reversed_kernel->setArg<cl::Buffer>(0, *discard_buffers[0]));
-    cl_chk(reversed_kernel->setArg<cl::Buffer>(1, *discard_buffers[1]));
-
-    cl_chk(discard_kernel->setArg<cl::Buffer>(0, *discard_buffers[0]));
-    cl_chk(discard_kernel->setArg<cl::Buffer>(1, *discard_buffers[1]));
-    cl_chk(discard_kernel->setArg<cl::Buffer>(2, *fop_buffer));
+    cl_chk(square_and_discard_kernel->setArg<cl::Buffer>(0, *fop_buffer));
 
     // Copy input to device
     cl_float2 zeros[FDF_TILE_OVERLAP];
     memset(zeros, 0x0, sizeof(cl_float2) * FDF_TILE_OVERLAP);
     cl_chk(buffer_q.enqueueWriteBuffer(*input_buffer, true, 0, sizeof(cl_float2) * FDF_TILE_OVERLAP, zeros));
     cl_chk(buffer_q.enqueueWriteBuffer(*input_buffer, true, sizeof(cl_float2) * FDF_TILE_OVERLAP, sizeof(cl_float2) * FDF_INPUT_SZ, input.data()));
-    cl_chk(buffer_q.enqueueWriteBuffer(*templates_buffer, true, 0, sizeof(cl_float2) * (FDF_TEMPLATES_SZ - FDF_TILE_SZ), templates.data()));
+    cl_chk(buffer_q.enqueueWriteBuffer(*templates_buffer, true, 0, sizeof(cl_float2) * FDF_TEMPLATES_SZ, templates.data()));
     cl_chk(buffer_q.finish());
 
-    // Perform forward FT
-    cl::Event fwd_fetch_ev, fwd_fft_ev, fwd_reversed_ev;
-    cl_chk(fwd_fetch_q.enqueueNDRangeKernel(*fwd_fetch_kernel, cl::NullRange, fwd_global, fwd_local, nullptr, &fwd_fetch_ev));
-    cl_chk(fwd_fft_q.enqueueTask(*fwd_fft_kernel, nullptr, &fwd_fft_ev));
-    cl_chk(fwd_reversed_q.enqueueNDRangeKernel(*fwd_reversed_kernel, cl::NullRange, fwd_global, fwd_local, nullptr, &fwd_reversed_ev));
+    cl::Event tile_input_ev, store_tiles_ev, mux_and_mult_ev, square_and_discard_ev;
+    cl_chk(tile_input_q.enqueueNDRangeKernel(*tile_input_kernel, cl::NullRange, prep_global, prep_local, nullptr, &tile_input_ev));
+    cl_chk(store_tiles_q.enqueueNDRangeKernel(*store_tiles_kernel, cl::NullRange, prep_global, prep_local, nullptr, &store_tiles_ev));
+    tile_input_q.finish();
+    store_tiles_q.finish();
+    print_duration("Preparation", tile_input_ev, store_tiles_ev);
 
-    cl_chk(fwd_fetch_q.finish());
-    cl_chk(fwd_fft_q.finish());
-    cl_chk(fwd_reversed_q.finish());
+    cl_chk(mux_and_mult_q.enqueueNDRangeKernel(*mux_and_mult_kernel, cl::NullRange, conv_global, conv_local, nullptr, &mux_and_mult_ev));
+    cl_chk(square_and_discard_q.enqueueNDRangeKernel(*square_and_discard_kernel, cl::NullRange, conv_global, conv_local, nullptr, &square_and_discard_ev));
+    mux_and_mult_q.finish();
+    square_and_discard_q.finish();
 
-    unsigned long fwd_duraration_Ms = (fwd_reversed_ev.getProfilingInfo<CL_PROFILING_COMMAND_END>()
-                                       - fwd_fetch_ev.getProfilingInfo<CL_PROFILING_COMMAND_START>()) / 1000 / 1000;
-    log << "[INFO] Forward FFT took " << fwd_duraration_Ms << " ms" << endl;
-
-    // Enqueue *all* FDFIR kernels at once; the channels will ensure that the data dependencies are respected
-    cl::Event fetch_evs[FILTER_GROUP_SZ + 1];
-    cl::Event fdfir_evs[FILTER_GROUP_SZ + 1];
-    cl::Event reversed_evs[FILTER_GROUP_SZ + 1];
-    for (int i = 0; i < FILTER_GROUP_SZ + 1; ++i) {
-        int tmpl_idx_0 = i;
-        int tmpl_idx_1 = i + FILTER_GROUP_SZ + 1;
-        cl_chk(fetch_kernel->setArg<cl_int>(2, tmpl_idx_0));
-        cl_chk(fetch_kernel->setArg<cl_int>(3, tmpl_idx_1));
-        cl_chk(fetch_q.enqueueNDRangeKernel(*fetch_kernel, cl::NullRange, global, local, nullptr, &fetch_evs[i]));
-
-        cl_chk(fdfir_q.enqueueTask(*fdfir_kernel, nullptr, &fdfir_evs[i]));
-
-        cl_chk(reversed_kernel->setArg<cl_int>(2, i));
-        cl_chk(reversed_kernel->setArg<cl_int>(3, i)); // not a typo, the two streams are written to two separate buffers (using the same offsets)
-        cl_chk(reversed_q.enqueueNDRangeKernel(*reversed_kernel, cl::NullRange, global, local, nullptr, &reversed_evs[i]));
-    }
-
-    // Wait for the FDFIR part of the pipeline to finish
-    cl_chk(fetch_q.finish());
-    cl_chk(fdfir_q.finish());
-    cl_chk(reversed_q.finish());
-
-    unsigned long fdfir_duration_ms = (reversed_evs[FILTER_GROUP_SZ].getProfilingInfo<CL_PROFILING_COMMAND_END>()
-                                       - fetch_evs[0].getProfilingInfo<CL_PROFILING_COMMAND_START>()) / 1000 / 1000;
-    log << "[INFO] FDFIR took " << fdfir_duration_ms << " ms" << endl;
-
-    cl::Event discard_ev;
-    cl_chk(discard_q.enqueueTask(*discard_kernel, nullptr, &discard_ev));
-    cl_chk(discard_q.finish());
-
-    unsigned long discard_duration_ms = (discard_ev.getProfilingInfo<CL_PROFILING_COMMAND_END>()
-                                         - discard_ev.getProfilingInfo<CL_PROFILING_COMMAND_START>()) / 1000 / 1000;
-    log << "[INFO] Discard took " << discard_duration_ms << " ms" << endl;
+    print_duration("FT convolution and IFFT", mux_and_mult_ev, square_and_discard_ev);
+    print_duration("Everything", tile_input_ev, square_and_discard_ev);
 
     return true;
 }
@@ -321,9 +264,9 @@ bool FDAS::perform_ft_convolution(const FDAS::InputType &input, const FDAS::Shap
 bool FDAS::retrieve_tiles(FDAS::TilesType &tiles, FDAS::ShapeType &tiles_shape) {
     cl_int status;
 
-    tiles.reserve(FDF_INTERMEDIATE_SZ);
+    tiles.reserve(FDF_TILED_INPUT_SZ);
     cl::CommandQueue buffer_q(*context, default_device);
-    cl_chk(buffer_q.enqueueReadBuffer(*tiles_buffer, true, 0, sizeof(cl_float2) * FDF_INTERMEDIATE_SZ, tiles.data()));
+    cl_chk(buffer_q.enqueueReadBuffer(*tiles_buffer, true, 0, sizeof(cl_float2) * FDF_TILED_INPUT_SZ, tiles.data()));
     cl_chk(buffer_q.finish());
     tiles_shape.push_back(FDF_N_TILES);
     tiles_shape.push_back(FDF_TILE_SZ);
@@ -342,6 +285,12 @@ bool FDAS::retrieve_FOP(FDAS::FOPType &fop, FDAS::ShapeType &fop_shape) {
     fop_shape.push_back(FDF_OUTPUT_SZ);
 
     return true;
+}
+
+void FDAS::print_duration(const std::string &phase, const cl::Event &from, const cl::Event &to) {
+    unsigned long duration = (to.getProfilingInfo<CL_PROFILING_COMMAND_END>()
+                              - from.getProfilingInfo<CL_PROFILING_COMMAND_START>()) / 1000 / 1000;
+    log << "[INFO] " << phase << " duration: " << duration << " ms" << endl;
 }
 
 #undef cl_chk
