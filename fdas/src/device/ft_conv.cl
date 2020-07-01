@@ -47,6 +47,30 @@ inline float power_norm(float2 a)
     return (a.x * a.x + a.y * a.y) / (FFT_N_POINTS * FFT_N_POINTS);
 }
 
+__attribute__((reqd_work_group_size(FFT_N_POINTS_PER_TERMINAL, 1, 1)))
+kernel void tile_input(global float2 * restrict input)
+{
+    local float2 __attribute__((bank_bits(10,9))) buf[FFT_N_PARALLEL][FFT_N_POINTS_PER_TERMINAL];
+
+    int tile = get_group_id(0);
+    int step = get_local_id(0);
+    int chunk = step / (FFT_N_POINTS_PER_TERMINAL / FFT_N_PARALLEL);
+    int chunk_rev = bit_reversed(chunk, FFT_N_PARALLEL_LOG);
+    int bundle = step % (FFT_N_POINTS_PER_TERMINAL / FFT_N_PARALLEL);
+
+    #pragma unroll
+    for (int p = 0; p < FFT_N_PARALLEL; ++p)
+        buf[chunk_rev][bundle * FFT_N_PARALLEL + p] = input[tile   * FDF_TILE_PAYLOAD +
+                                                            chunk  * FFT_N_POINTS_PER_TERMINAL +
+                                                            bundle * FFT_N_PARALLEL + p];
+
+    barrier(CLK_LOCAL_MEM_FENCE);
+
+    #pragma unroll
+    for (int p = 0; p < FFT_N_PARALLEL; ++p)
+        WRITE_CHANNEL(fft_in[p], buf[p][step]);
+}
+
 __attribute__((autorun))
 __attribute__((max_global_work_dim(0)))
 __attribute__((num_compute_units(1)))
@@ -87,6 +111,36 @@ kernel void fft()
 
             // Perform one step of the FFT engine
             data = fft_step(data, s, fft_delay_elements, 0 /* = forward FFT */, FFT_N_POINTS_LOG);
+        }
+    }
+}
+
+__attribute__((reqd_work_group_size(FFT_N_POINTS_PER_TERMINAL, 1, 1)))
+kernel void store_tiles(global float2 * restrict tiles)
+{
+    int tile = get_group_id(0);
+    int step = get_local_id(0);
+
+    #pragma unroll
+    for (int p = 0; p < FFT_N_PARALLEL; ++p)
+       tiles[tile * FDF_TILE_SZ + step * FFT_N_PARALLEL + p] = READ_CHANNEL(fft_out[p]);
+}
+
+__attribute__((reqd_work_group_size(FFT_N_POINTS_PER_TERMINAL, 1, 1)))
+kernel void mux_and_mult(global float2 * restrict tiles,
+                         global float2 * restrict templates)
+{
+    int batch = get_group_id(1) * N_FILTERS_PARALLEL;
+    int tile = get_group_id(0);
+    int step = get_local_id(0);
+
+    #pragma unroll
+    for (int f = 0; f < N_FILTERS_PARALLEL; ++f) {
+        #pragma unroll
+        for (int p = 0; p < FFT_N_PARALLEL; ++p) {
+            float2 prod = complex_mult(tiles    [tile        * FDF_TILE_SZ + step * FFT_N_PARALLEL + p],
+                                       templates[(batch + f) * FDF_TILE_SZ + step * FFT_N_PARALLEL + p]);
+            WRITE_CHANNEL(ifft_in[f][p], prod);
         }
     }
 }
@@ -133,61 +187,6 @@ kernel void ifft()
 
             // Perform one step of the FFT engine
             data = fft_step(data, s, fft_delay_elements, 1 /* = inverse FFT */, FFT_N_POINTS_LOG);
-        }
-    }
-}
-
-__attribute__((reqd_work_group_size(FFT_N_POINTS_PER_TERMINAL, 1, 1)))
-kernel void tile_input(global float2 * restrict input)
-{
-    local float2 __attribute__((bank_bits(10,9))) buf[FFT_N_PARALLEL][FFT_N_POINTS_PER_TERMINAL];
-
-    int tile = get_group_id(0);
-    int step = get_local_id(0);
-    int chunk = step / (FFT_N_POINTS_PER_TERMINAL / FFT_N_PARALLEL);
-    int chunk_rev = bit_reversed(chunk, FFT_N_PARALLEL_LOG);
-    int bundle = step % (FFT_N_POINTS_PER_TERMINAL / FFT_N_PARALLEL);
-
-    #pragma unroll
-    for (int p = 0; p < FFT_N_PARALLEL; ++p)
-        buf[chunk_rev][bundle * FFT_N_PARALLEL + p] = input[tile   * FDF_TILE_PAYLOAD +
-                                                            chunk  * FFT_N_POINTS_PER_TERMINAL +
-                                                            bundle * FFT_N_PARALLEL + p];
-
-    barrier(CLK_LOCAL_MEM_FENCE);
-
-    #pragma unroll
-    for (int p = 0; p < FFT_N_PARALLEL; ++p)
-        WRITE_CHANNEL(fft_in[p], buf[p][step]);
-}
-
-
-__attribute__((reqd_work_group_size(FFT_N_POINTS_PER_TERMINAL, 1, 1)))
-kernel void store_tiles(global float2 * restrict tiles)
-{
-    int tile = get_group_id(0);
-    int step = get_local_id(0);
-
-    #pragma unroll
-    for (int p = 0; p < FFT_N_PARALLEL; ++p)
-       tiles[tile * FDF_TILE_SZ + step * FFT_N_PARALLEL + p] = READ_CHANNEL(fft_out[p]);
-}
-
-__attribute__((reqd_work_group_size(FFT_N_POINTS_PER_TERMINAL, 1, 1)))
-kernel void mux_and_mult(global float2 * restrict tiles,
-                         global float2 * restrict templates)
-{
-    int batch = get_group_id(1) * N_FILTERS_PARALLEL;
-    int tile = get_group_id(0);
-    int step = get_local_id(0);
-
-    #pragma unroll
-    for (int f = 0; f < N_FILTERS_PARALLEL; ++f) {
-        #pragma unroll
-        for (int p = 0; p < FFT_N_PARALLEL; ++p) {
-            float2 prod = complex_mult(tiles    [tile        * FDF_TILE_SZ + step * FFT_N_PARALLEL + p],
-                                       templates[(batch + f) * FDF_TILE_SZ + step * FFT_N_PARALLEL + p]);
-            WRITE_CHANNEL(ifft_in[f][p], prod);
         }
     }
 }
