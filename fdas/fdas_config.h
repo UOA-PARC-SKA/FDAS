@@ -7,7 +7,7 @@
 
 // === Inputs ==========================================================================================================
 
-#if defined(FDAS_PRODUCTION)
+#if defined(FDAS_FPGA)
 
 // Number of channels in the input spectrum
 #define N_CHANNELS                     (1 << 22)
@@ -26,7 +26,7 @@
 #define N_FILTERS_PARALLEL             (5)
 #define N_FILTER_BATCHES               (N_FILTERS / N_FILTERS_PARALLEL)
 
-#elif defined(FDAS_TESTING)
+#elif defined(FDAS_EMU)
 
 #define N_CHANNELS                     (62176)
 #define N_FILTERS_PER_ACCEL_SIGN       (10)

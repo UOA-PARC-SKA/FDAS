@@ -1,7 +1,12 @@
 include_directories(.)
 include_directories(src)
 
-set(FDAS_MODE "TESTING" CACHE STRING "Set either to TESTING or PRODUCTION. TESTING mode operates on smaller datasets and stores intermediate results.")
+set(FDAS_MODE "FPGA" CACHE STRING "Set either to EMU or FPGA. The EMU mode uses reduced datasets to make software emulation of the OpenCL kernels tractable.")
+
+if (NOT FDAS_MODE)
+    # default to FPGA mode
+    set(FDAS_MODE "FPGA" CACHE STRING "" FORCE)
+endif()
 
 add_definitions(-DFDAS_${FDAS_MODE})
 add_executable(fdas
@@ -9,16 +14,29 @@ add_executable(fdas
         src/host/FDAS.cpp)
 target_link_libraries(fdas npy alteracl OpenCL elf)
 
-add_custom_target(fdas-emu
-        COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/src/device device
-        COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_SOURCE_DIR}/fdas_config.h device
-        COMMAND ${CMAKE_COMMAND} -E make_directory bin
-        COMMAND aoc -march=emulator -g -no-interleaving=default -D FDAS_${FDAS_MODE} -o bin/fdas.aocx device/fdas.cl
-        COMMENT "Compiling OpenCL code for emulation")
+set(AOC_FLAGS -v -report -g -profile -D FDAS_${FDAS_MODE})
 
-add_custom_target(fdas-report
+if (FDAS_MODE STREQUAL "EMU")
+add_custom_target(fdas_emu
         COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/src/device device
         COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_SOURCE_DIR}/fdas_config.h device
         COMMAND ${CMAKE_COMMAND} -E make_directory bin
-        COMMAND aoc -report -c -g -no-interleaving=default -D FDAS_${FDAS_MODE} -o bin/fdas.aoco device/fdas.cl
+        COMMAND aoc -march=emulator ${AOC_FLAGS} -o bin/fdas_emu.aocx device/fdas.cl
+        COMMENT "Generating emulator image")
+endif()
+
+add_custom_target(fdas_report
+        COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/src/device device
+        COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_SOURCE_DIR}/fdas_config.h device
+        COMMAND ${CMAKE_COMMAND} -E make_directory bin
+        COMMAND aoc -c ${AOC_FLAGS} -o bin/fdas_rpt.aoco device/fdas.cl
         COMMENT "Generating HLS report")
+
+if (FDAS_MODE STREQUAL "FPGA")
+add_custom_target(fdas_synth
+        COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/src/device device
+        COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_SOURCE_DIR}/fdas_config.h device
+        COMMAND ${CMAKE_COMMAND} -E make_directory bin
+        COMMAND aoc ${AOC_FLAGS} -o bin/fdas.aocx device/fdas.cl
+        COMMENT "Generating bitstream")
+endif()
