@@ -264,7 +264,7 @@ bool FDAS::perform_ft_convolution(const FDAS::InputType &input, const FDAS::Shap
 bool FDAS::retrieve_tiles(FDAS::TilesType &tiles, FDAS::ShapeType &tiles_shape) {
     cl_int status;
 
-    tiles.reserve(FDF_TILED_INPUT_SZ);
+    tiles.resize(FDF_TILED_INPUT_SZ);
     cl::CommandQueue buffer_q(*context, default_device);
     cl_chk(buffer_q.enqueueReadBuffer(*tiles_buffer, true, 0, sizeof(cl_float2) * FDF_TILED_INPUT_SZ, tiles.data()));
     cl_chk(buffer_q.finish());
@@ -277,7 +277,7 @@ bool FDAS::retrieve_tiles(FDAS::TilesType &tiles, FDAS::ShapeType &tiles_shape) 
 bool FDAS::retrieve_FOP(FDAS::FOPType &fop, FDAS::ShapeType &fop_shape) {
     cl_int status;
 
-    fop.reserve(FOP_SZ);
+    fop.resize(FOP_SZ);
     cl::CommandQueue buffer_q(*context, default_device);
     cl_chk(buffer_q.enqueueReadBuffer(*fop_buffer, true, 0, sizeof(cl_float) * FOP_SZ, fop.data()));
     cl_chk(buffer_q.finish());
