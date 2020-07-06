@@ -48,7 +48,7 @@ int main(int argc, char **argv) {
     FDAS pipeline(std::cout);
     pipeline.print_configuration();
 
-    if (!pipeline.initialise_accelerator(bitstream_file_name, FDAS::chooseFirstPlatform, FDAS::chooseAcceleratorDevices))
+    if (!pipeline.initialise_accelerator(bitstream_file_name, FDAS::choose_first_platform, FDAS::choose_accelerator_devices))
         return INIT_ERROR;
 
     if (!pipeline.perform_ft_convolution(input, input_shape, templates, templates_shape))

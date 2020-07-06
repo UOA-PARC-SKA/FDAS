@@ -36,9 +36,9 @@ public:
 
     bool retrieve_FOP(FOPType &fop, ShapeType &fop_shape);
 
-    static bool chooseFirstPlatform(const std::string &platform_name, const std::string &platform_version) { return true; }
+    static bool choose_first_platform(const std::string &platform_name, const std::string &platform_version) { return true; }
 
-    static bool chooseAcceleratorDevices(int device_num, int device_type, const std::string &device_name) { return device_type == CL_DEVICE_TYPE_ACCELERATOR; }
+    static bool choose_accelerator_devices(int device_num, int device_type, const std::string &device_name) { return device_type == CL_DEVICE_TYPE_ACCELERATOR; }
 
 private:
     cl::Platform platform;
