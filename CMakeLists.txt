@@ -8,4 +8,5 @@ link_directories($ENV{AOCL_BOARD_PACKAGE_ROOT}/linux64/lib $ENV{INTELFPGAOCLSDKR
 
 add_subdirectory(thirdparty/aoclutils)
 add_subdirectory(thirdparty/libnpy)
+add_subdirectory(thirdparty/googletest)
 add_subdirectory(fdas)

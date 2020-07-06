@@ -14,6 +14,11 @@ add_executable(fdas
         src/host/FDAS.cpp)
 target_link_libraries(fdas npy alteracl OpenCL elf)
 
+add_executable(fdas_gtest
+        src/host/main_gtest.cpp
+        src/host/FDAS.cpp)
+target_link_libraries(fdas_gtest npy alteracl OpenCL elf gtest)
+
 set(AOC_FLAGS -v -report -g -profile -D FDAS_${FDAS_MODE})
 
 if (FDAS_MODE STREQUAL "EMU")

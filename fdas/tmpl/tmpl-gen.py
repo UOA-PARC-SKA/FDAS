@@ -88,8 +88,9 @@ def main():
     parser.add_argument("-f", "--fourier-transform", dest='ft_sz', type=int, metavar='n', nargs='?', const=2 ** 11,
                         help="request (individual) Fourier transform of the templates with the specified size "
                              "(default: 2048 = 2K)")
-    parser.add_argument("-p", "--order-for-parallel-fft", dest='n_fft_par', type=int, metavar='n', nargs='?', const=4,
-                        help="TODO")
+    parser.add_argument("-p", "--fft-order", dest='n_fft_par', type=int, metavar='n', nargs='?', const=4,
+                        help="write templates in FFT-order (cf. `ft_conv.cl`). Optionally, specify the FFT engine's "
+                             "number of parallel inputs (default: 4)")
     parser.add_argument("-o", "--output", dest='output', metavar='path', required=True, help="set output file")
 
     args = parser.parse_args()
@@ -125,7 +126,7 @@ def main():
         if args.n_fft_par:
             p = args.n_fft_par
             for i in range(n_tmpl):
-                tile = np.zeros(n, dtype=out_dtype)
+                tile = np.empty(n, dtype=out_dtype)
                 for j in range(p):
                     chunk_begin = bit_rev(j, int(np.log2(p))) * n // p
                     chunk_end = chunk_begin + n // p
@@ -140,10 +141,10 @@ def main():
 
     np.save(args.output, out)
     print(f"[INFO] Wrote '{args.output if args.output.endswith('.npy') else (args.output + '.npy')}':")
-    print(f"         shape:                    {out.shape}")
-    print(f"         type:                     {out.dtype}")
-    print(f"         Fourier-transformed?      {'yes' if args.ft_sz else 'no'}")
-    print(f"         Ordered for parallel FFT? {str(args.n_fft_par) if args.n_fft_par else 'no'}")
+    print(f"         shape:               {out.shape}")
+    print(f"         type:                {out.dtype}")
+    print(f"         Fourier-transformed? {'yes' if args.ft_sz else 'no'}")
+    print(f"         FFT-order?           {(str(args.n_fft_par) + '-parallel') if args.n_fft_par else 'no'}")
 
 
 if __name__ == '__main__':

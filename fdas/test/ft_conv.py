@@ -48,6 +48,15 @@ def read_tim_file(tim_file):
     return samples, t_samp
 
 
+def bit_rev(x, bits):
+    y = 0
+    for i in range(bits):
+        y <<= 1
+        y |= x & 1
+        x >>= 1
+    return y
+
+
 def main():
     parser = argparse.ArgumentParser(description="Computes golden input/output data for the FT convolution module.")
 
@@ -66,6 +75,9 @@ def main():
     test_args.add_argument("--tile-and-transform", dest='test_data_tile_sz', type=int, metavar='n', nargs='?',
                            const=2 ** 11, help="prepare input for overlap-save FDFIR algorithm with the given tile size"
                                                " (default: 2048 = 2K)")
+    test_args.add_argument("--fft-order", dest='test_data_fft_n_par', type=int, metavar='n', nargs='?', const=4,
+                           help="write tiled input data in FFT-order (cf. `ft_conv.cl`). Optionally, specify the FFT"
+                                " engine's number of parallel inputs (default: 4)")
     test_args.add_argument("--sampling-time", dest='t_samp', metavar='t', type=float, default=0.000064,
                            help="set sampling time in seconds for _headerless_ input files, ignored otherwise"
                                 " (default: 6.4e-5 s)")
@@ -142,9 +154,22 @@ def compute_test_data(tim_file, args):
             # fill the rest of tile with input data
             tiles[i][tile_olap:] = ft[i * tile_pld:(i + 1) * tile_pld]
 
-        # perform tile-wise Fourier transformation and save result
+        # perform tile-wise Fourier transformation
         tiles = scipy.fft.fft(tiles)
-        np.save(f"{od}/input_tiled.npy", tiles)
+
+        # save result (in FFT-order, if requested)
+        if args.test_data_fft_n_par:
+            fft_n_par = args.test_data_fft_n_par
+            for i in range(n_tile):
+                tile = np.empty(tile_sz, dtype=np.complex64)
+                for j in range(fft_n_par):
+                    chunk_begin = bit_rev(j, int(np.log2(fft_n_par))) * tile_sz // fft_n_par
+                    chunk_end = chunk_begin + tile_sz // fft_n_par
+                    tile[j::fft_n_par] = tiles[i][chunk_begin:chunk_end]
+                tiles[i][:] = tile
+            np.save(f"{od}/input_tiled_p{fft_n_par}.npy", tiles)
+        else:
+            np.save(f"{od}/input_tiled.npy", tiles)
 
     # compute and save filter-output plane
     print(f"[INFO] Computing filter-output plane")
