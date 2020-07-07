@@ -91,8 +91,8 @@ int main(int argc, char **argv) {
     FDASTest::bitstream_file = "bin/fdas_emu.aocx";
     FDASTest::templates_file = "../../fdas/tmpl/fdas_templates_21_87.5_ft_p4.npy";
 #else
-    FDASTest::bitstreamFile = "bin/fdas.aocx";
-    FDASTest::templatesFile = "../../fdas/tmpl/fdas_templates_85_350_ft_p4.npy"
+    FDASTest::bitstream_file = "bin/fdas.aocx";
+    FDASTest::templates_file = "../../fdas/tmpl/fdas_templates_85_350_ft_p4.npy"
 #endif
 
     return RUN_ALL_TESTS();
