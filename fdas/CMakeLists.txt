@@ -9,10 +9,6 @@ if (NOT FDAS_MODE)
 endif()
 
 add_definitions(-DFDAS_${FDAS_MODE})
-add_executable(fdas
-        src/host/main.cpp
-        src/host/FDAS.cpp)
-target_link_libraries(fdas npy alteracl OpenCL elf)
 
 add_executable(fdas_gtest
         src/host/main_gtest.cpp
