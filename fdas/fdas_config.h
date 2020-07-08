@@ -92,13 +92,39 @@
 
 // === Harmonic summing ================================================================================================
 
-// Number of harmonic planes to consider
+// Number of harmonic planes to consider, i.e. FOP = HP_1, HP_2, ..., HP_{HMS_N_PLANES}
 #define HMS_N_PLANES                   (8)
 
 // Maximum number of detections, i.e. pulsar candidates, recorded per harmonic plane
-#define HMS_DETECTION_SZ               (40)
+#define HMS_DETECTION_SZ               (64)
+
+// If true, explicitly write harmonic planes to memory, otherwise compare FOP amplitudes to thresholds on-the-fly
+#define HMS_STORE_PLANES               (true)
+
+// Buffer size to store the harmonic planes (-1 because the FOP is already in its own buffer).
+#define HMS_PLANES_SZ                  ((HMS_N_PLANES - 1) * FOP_SZ)
+
+// Format used to encode a detection location in a 32-bit unsigned integer:
+//   ┌───┬───────┬──────────────────────┐
+//   │ k │filter │       channel        │
+//   └───┴───────┴──────────────────────┘
+//  31 29|28   22|21                    0
+#define HMS_ENCODE_LOCATION(k, f, c)   ((((k - 1) & 0x7) << 29) | (((f + N_FILTERS_PER_ACCEL_SIGN) & 0x7f) << 22) | (c & 0x3fffff))
+#define HMS_INVALID_LOCATION           (HMS_ENCODE_LOCATION(1, N_FILTERS_PER_ACCEL_SIGN + 1, 0))
+#define HMS_GET_LOCATION_HARMONIC(loc) (((loc >> 29) & 0x7) + 1)
+#define HMS_GET_LOCATION_FILTER(loc)   (((loc >> 22) & 0x7f) - N_FILTERS_PER_ACCEL_SIGN)
+#define HMS_GET_LOCATION_CHANNEL(loc)  (loc & 0x3fffff)
 
 // === Output ==========================================================================================================
 
 // Maximum number of pulsar candidates returned from the FDAS module
 #define N_CANDIDATES                   (HMS_N_PLANES * HMS_DETECTION_SZ)
+
+// === Misc ============================================================================================================
+
+// Define a value that we can be used directly in C++ code
+#if defined(FDAS_FPGA)
+#define TARGET_IS_FPGA                 (true)
+#else
+#define TARGET_IS_FPGA                 (false)
+#endif

@@ -17,8 +17,8 @@ def main():
                         help="set number of processors to use")
 
     test_args = parser.add_argument_group("test data")
-    test_args.add_argument("-k", dest='test_data_k', type=int, metavar='n', default=8,
-                           help="set index of last harmonic planes to compute (default: 8)")
+    test_args.add_argument("--num-planes", dest='test_data_n_plane', type=int, metavar='n', default=8,
+                           help="set number of harmonic planes to compute, i.e. FOP = HP_1, HP_2, ..., HP_n")
 
     args = parser.parse_args()
 
@@ -41,14 +41,17 @@ def compute_test_data(fop_file, args):
         return
 
     n_tmpl = fop.shape[0]
-    tmpl0_idx = n_tmpl // 2  # index of filter corresponding to zero acceleration
+    n_tmpl_per_accel_sign = n_tmpl // 2
 
     # compute harmonic planes
-    prev_hp = fop
-    for k in range(2, args.test_data_k + 1):
+    n_plane = args.test_data_n_plane
+    hps = np.empty((n_plane,) + fop.shape, dtype=np.float32)
+    hps[0][:][:] = fop
+    for h in range(1, n_plane):
+        k = h + 1
         print(f"[INFO] Computing harmonic plane {k}")
-        hp = np.empty(fop.shape)
-        it = np.nditer(prev_hp, op_flags=['readonly'], flags=['multi_index'])
+
+        it = np.nditer(fop, op_flags=['readonly'], flags=['multi_index'])
         for _ in it:
             # compute indices to simulate access to the k'th stretch plane
 
@@ -57,11 +60,11 @@ def compute_test_data(fop_file, args):
 
             # 'i_num' is the filter number (in the range [-n_tmpl//2, n_tmpl//2]). Its sign determines whether we need
             # to round up or down
-            i_num = i - tmpl0_idx
+            i_num = i - n_tmpl_per_accel_sign
             if i_num < 0:
-                i_sp_idx = int(np.ceil(i_num / k)) + tmpl0_idx
+                i_sp_idx = int(np.ceil(i_num / k)) + n_tmpl_per_accel_sign
             elif i_num > 0:
-                i_sp_idx = int(np.floor(i_num / k)) + tmpl0_idx
+                i_sp_idx = int(np.floor(i_num / k)) + n_tmpl_per_accel_sign
             else:  # i_num == 0
                 pass
 
@@ -69,11 +72,38 @@ def compute_test_data(fop_file, args):
             j_sp_idx = j // k
 
             # see: Eq. (2) in Haomiao's VLSI paper
-            hp[i][j] = prev_hp[i][j] + fop[i_sp_idx][j_sp_idx]
+            hps[h][i][j] = hps[h - 1][i][j] + fop[i_sp_idx][j_sp_idx]
 
-        # save the plane
-        np.save(f"{od}/hp_{k}.npy", hp)
-        prev_hp = hp
+    # save the planes
+    np.save(f"{od}/hps_ref.npy", hps[1:])
+
+    # produce mock-up (!) thresholds
+    thrsh = np.empty(n_plane, dtype=np.float32)
+    for h in range(n_plane):
+        rms = np.sqrt(np.mean(np.square(hps)))
+        thrsh[h] = (2.6 + h * 0.2) * rms
+
+    np.save(f"{od}/thresholds.npy", thrsh)
+
+    # find candidates
+    detections = []
+    for h in range(n_plane):
+        indices = np.flatnonzero([hps[h] > thrsh[h]])
+        print(f"[INFO] {indices.size} candidates in HP_{h + 1}")
+        for i in indices:
+            f, c = np.unravel_index(i, fop.shape)
+            detections += [(h + 1, f - n_tmpl_per_accel_sign, c, hps[h][f][c])]
+
+    # save candidate lists in the format used by the OpenCL implementation
+    locations = np.empty(len(detections), dtype=np.uint32)
+    amplitudes = np.empty(len(detections), dtype=np.float32)
+    for i, det in enumerate(detections):
+        k, f, c, a = det
+        locations[i] = (((k - 1) & 0x7) << 29) | (((f + n_tmpl_per_accel_sign) & 0x7f) << 22) | (c & 0x3fffff)
+        amplitudes[i] = a
+
+    np.save(f"{od}/det_loc_ref.npy", locations)
+    np.save(f"{od}/det_amp_ref.npy", amplitudes)
 
 
 if __name__ == '__main__':

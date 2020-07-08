@@ -141,7 +141,8 @@ def compute_test_data(tim_file, args):
         tile_pld = tile_sz - tile_olap  # payload
         n_tile = n_chan // tile_pld
         if n_tile * tile_pld < n_chan:
-            print(f"[INFO] Input tiling will discard the upper {n_chan - n_tile * tile_pld} channels")
+            print(f"[WARN] Input tiling will discard the upper {n_chan - n_tile * tile_pld} channels")
+            n_chan = n_tile * tile_pld
         tiles = np.empty((n_tile, tile_sz), dtype=np.complex64)
         for i in range(n_tile):
             if i == 0:
@@ -167,9 +168,9 @@ def compute_test_data(tim_file, args):
                     chunk_end = chunk_begin + tile_sz // fft_n_par
                     tile[j::fft_n_par] = tiles[i][chunk_begin:chunk_end]
                 tiles[i][:] = tile
-            np.save(f"{od}/input_tiled_p{fft_n_par}.npy", tiles)
+            np.save(f"{od}/input_tiled_p{fft_n_par}_ref.npy", tiles)
         else:
-            np.save(f"{od}/input_tiled.npy", tiles)
+            np.save(f"{od}/input_tiled_ref.npy", tiles)
 
     # compute and save filter-output plane
     print(f"[INFO] Computing filter-output plane")
@@ -179,7 +180,7 @@ def compute_test_data(tim_file, args):
         conv = scipy.signal.convolve(ft, tmpl)[:n_chan]  # convolve, and trim to input length
         fop[i][:] = np.real(conv * np.conj(conv))
 
-    np.save(f"{od}/fop.npy", fop)
+    np.save(f"{od}/fop_ref.npy", fop)
 
 
 if __name__ == '__main__':
