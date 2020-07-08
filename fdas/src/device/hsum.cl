@@ -1,5 +1,5 @@
 
-inline int harmonic_index(int z, uint k)
+inline int harmonic_index(int z, int k)
 {
     // XXX: weird. In the emulator, the division does the right thing here (10/2==5, -10/2==-5)
     return z / k;
