@@ -88,7 +88,7 @@
 // === Filter-output plane =============================================================================================
 
 // Size of the filter-output plane (and of the harmonic planes as well)
-#define FOP_SZ                         (N_FILTERS * FDF_OUTPUT_SZ)
+#define FOP_SZ                         (1l * N_FILTERS * FDF_OUTPUT_SZ)
 
 // === Harmonic summing ================================================================================================
 
@@ -102,7 +102,7 @@
 #define HMS_STORE_PLANES               (false)
 
 // Buffer size to store the harmonic planes (-1 because the FOP is already in its own buffer).
-#define HMS_PLANES_SZ                  ((HMS_N_PLANES - 1) * FOP_SZ)
+#define HMS_PLANES_SZ                  (1l * (HMS_N_PLANES - 1) * FOP_SZ)
 
 // Format used to encode a detection location in a 32-bit unsigned integer:
 //   ┌───┬───────┬──────────────────────┐
