@@ -17,8 +17,8 @@ kernel void harmonic_summing(global float * restrict fop,
                              #endif
                              )
 {
-    uint location_buf[HMS_N_PLANES][HMS_DETECTION_SZ];
-    float amplitude_buf[HMS_N_PLANES][HMS_DETECTION_SZ];
+    uint __attribute__((numbanks(HMS_N_PLANES))) location_buf[HMS_DETECTION_SZ][HMS_N_PLANES];
+    float __attribute__((numbanks(HMS_N_PLANES))) amplitude_buf[HMS_DETECTION_SZ][HMS_N_PLANES];
     ulong valid[HMS_N_PLANES]; // HMS_DETECTION_SZ must be <= 64!
     uint next_slot[HMS_N_PLANES];
 
@@ -30,10 +30,11 @@ kernel void harmonic_summing(global float * restrict fop,
         valid[h] = 0;
     }
 
-    #pragma loop_coalesce
+    #pragma loop_coalesce 2
     for (int f = -N_FILTERS_PER_ACCEL_SIGN; f <= N_FILTERS_PER_ACCEL_SIGN; ++f) {
         for (uint c = 0; c < FDF_OUTPUT_SZ; ++c) {
             float hsum = 0.0f;
+            #pragma unroll
             for (uint h = 0; h < HMS_N_PLANES; ++h) {
                 uint k = h + 1;
                 int f_k = harmonic_index(f, k);
@@ -42,8 +43,8 @@ kernel void harmonic_summing(global float * restrict fop,
 
                 if (hsum > thresholds[h]) {
                     uint slot = next_slot[h];
-                    location_buf[h][slot] = HMS_ENCODE_LOCATION(k, f, c);
-                    amplitude_buf[h][slot] = hsum;
+                    location_buf[slot][h] = HMS_ENCODE_LOCATION(k, f, c);
+                    amplitude_buf[slot][h] = hsum;
                     valid[h] |= 1l << slot;
                     next_slot[h] = (slot == HMS_DETECTION_SZ - 1) ? 0 : slot + 1;
                 }
@@ -56,15 +57,12 @@ kernel void harmonic_summing(global float * restrict fop,
         }
     }
 
-    #pragma loop_coalesce
-    #pragma unroll 1
-    for (uint h = 0; h < HMS_N_PLANES; ++h) {
-        unsigned long v = valid[h];
+    for (uint d = 0; d < HMS_DETECTION_SZ; ++d) {
         #pragma unroll 1
-        for (uint d = 0; d < HMS_DETECTION_SZ; ++d) {
-            if (v & (1l << d)) {
-                detection_location[h * HMS_DETECTION_SZ + d] = location_buf[h][d];
-                detection_amplitude[h * HMS_DETECTION_SZ + d] = amplitude_buf[h][d];
+        for (uint h = 0; h < HMS_N_PLANES; ++h) {
+            if (valid[h] & (1l << d)) {
+                detection_location[h * HMS_DETECTION_SZ + d] = location_buf[d][h];
+                detection_amplitude[h * HMS_DETECTION_SZ + d] = amplitude_buf[d][h];
             } else {
                 detection_location[h * HMS_DETECTION_SZ + d] = HMS_INVALID_LOCATION;
                 detection_amplitude[h * HMS_DETECTION_SZ + d] = 0.0f;

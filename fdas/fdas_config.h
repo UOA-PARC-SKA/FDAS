@@ -99,7 +99,7 @@
 #define HMS_DETECTION_SZ               (64)
 
 // If true, explicitly write harmonic planes to memory, otherwise compare FOP amplitudes to thresholds on-the-fly
-#define HMS_STORE_PLANES               (true)
+#define HMS_STORE_PLANES               (false)
 
 // Buffer size to store the harmonic planes (-1 because the FOP is already in its own buffer).
 #define HMS_PLANES_SZ                  ((HMS_N_PLANES - 1) * FOP_SZ)
