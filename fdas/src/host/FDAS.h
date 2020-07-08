@@ -27,8 +27,6 @@ public:
 public:
     FDAS(std::ostream &log) : log(log) {}
 
-    void print_configuration();
-
     bool initialise_accelerator(std::string bitstream_file_name, const std::function<bool(const std::string &, const std::string &)> &platform_selector, const std::function<bool(int, int, const std::string &)> &device_selector);
 
     bool perform_ft_convolution(const InputType &input, const ShapeType &input_shape,
