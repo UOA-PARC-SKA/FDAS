@@ -94,11 +94,11 @@ channel float2 ifft_in[N_FILTERS_PARALLEL][FFT_N_PARALLEL] __attribute__((depth(
 channel float2 ifft_out[N_FILTERS_PARALLEL][FFT_N_PARALLEL] __attribute__((depth(0)));
 
 // Performs the FFT-typical bit-reversal
-inline int bit_reversed(int x, int bits)
+inline uint bit_reversed(uint x, uint bits)
 {
-    int y = 0;
+    uint y = 0;
     #pragma unroll
-    for (int i = 0; i < bits; i++) {
+    for (uint i = 0; i < bits; i++) {
         y <<= 1;
         y |= x & 1;
         x >>= 1;
@@ -151,15 +151,15 @@ kernel void tile_input(global float2 * restrict input)
     local float2 __attribute__((bank_bits(10,9))) buf[FFT_N_PARALLEL][FFT_N_POINTS_PER_TERMINAL];
 
     // Compute indices used in the following load
-    int tile = get_group_id(0);
-    int step = get_local_id(0);
-    int chunk = step / (FFT_N_POINTS_PER_TERMINAL / FFT_N_PARALLEL);
-    int chunk_rev = bit_reversed(chunk, FFT_N_PARALLEL_LOG);
-    int bundle = step % (FFT_N_POINTS_PER_TERMINAL / FFT_N_PARALLEL);
+    uint tile = get_group_id(0);
+    uint step = get_local_id(0);
+    uint chunk = step / (FFT_N_POINTS_PER_TERMINAL / FFT_N_PARALLEL);
+    uint chunk_rev = bit_reversed(chunk, FFT_N_PARALLEL_LOG);
+    uint bundle = step % (FFT_N_POINTS_PER_TERMINAL / FFT_N_PARALLEL);
 
     // Load a bundle of FFT_N_PARALLEL points from `input`, and store them in the correct chunk buffer [Fig. b)]
     #pragma unroll
-    for (int p = 0; p < FFT_N_PARALLEL; ++p)
+    for (uint p = 0; p < FFT_N_PARALLEL; ++p)
         buf[chunk_rev][bundle * FFT_N_PARALLEL + p] = input[tile   * FDF_TILE_PAYLOAD +
                                                             chunk  * FFT_N_POINTS_PER_TERMINAL +
                                                             bundle * FFT_N_PARALLEL + p];
@@ -169,7 +169,7 @@ kernel void tile_input(global float2 * restrict input)
 
     // Feed FFT_N_PARALLEL points to the FFT engine [Fig. c)]
     #pragma unroll
-    for (int p = 0; p < FFT_N_PARALLEL; ++p)
+    for (uint p = 0; p < FFT_N_PARALLEL; ++p)
         WRITE_CHANNEL(fft_in[p], buf[p][step]);
 }
 
@@ -231,25 +231,25 @@ kernel void fft()
 
     // Process FDF_N_TILES actual tiles, +2 tiles of zeros in order to flush the engine and the output reordering stage
     #pragma loop_coalesce
-    for (int t = 0; t < FDF_N_TILES + 2; ++t) {
-        for (int s = 0; s < FFT_N_POINTS_PER_TERMINAL; ++s) {
+    for (uint t = 0; t < FDF_N_TILES + 2; ++t) {
+        for (uint s = 0; s < FFT_N_POINTS_PER_TERMINAL; ++s) {
             if (t >= 1) {
                 // Valid results are available after FFT_N_POINTS_PER_TERMINAL steps, i.e. after 1 tile was consumed
                 #pragma unroll
-                for (int p = 0; p < FFT_N_PARALLEL; ++p)
+                for (uint p = 0; p < FFT_N_PARALLEL; ++p)
                     buf[1 - (t & 1)][bit_reversed(s, FFT_N_POINTS_PER_TERMINAL_LOG)][p] = data.i[p];
             }
             if (t >= 2) {
                 // Valid results in natural order are available after 2 tiles were consumed
                 #pragma unroll
-                for (int p = 0; p < FFT_N_PARALLEL; ++p)
+                for (uint p = 0; p < FFT_N_PARALLEL; ++p)
                     WRITE_CHANNEL(fft_out[p], buf[t & 1][s][p]);
             }
 
             // Read actual input from the channels, respectively inject zeros to flush the pipeline
             if (t < FDF_N_TILES) {
                 #pragma unroll
-                for (int p = 0; p < FFT_N_PARALLEL; ++p)
+                for (uint p = 0; p < FFT_N_PARALLEL; ++p)
                     data.i[p] = READ_CHANNEL(fft_in[p]);
             } else {
                 data.i0 = data.i1 = data.i2 = data.i3 = 0;
@@ -283,11 +283,11 @@ kernel void fft()
 __attribute__((reqd_work_group_size(FFT_N_POINTS_PER_TERMINAL, 1, 1)))
 kernel void store_tiles(global float2 * restrict tiles)
 {
-    int tile = get_group_id(0);
-    int step = get_local_id(0);
+    uint tile = get_group_id(0);
+    uint step = get_local_id(0);
 
     #pragma unroll
-    for (int p = 0; p < FFT_N_PARALLEL; ++p)
+    for (uint p = 0; p < FFT_N_PARALLEL; ++p)
        tiles[tile * FDF_TILE_SZ + step * FFT_N_PARALLEL + p] = READ_CHANNEL(fft_out[p]);
 }
 
@@ -306,14 +306,14 @@ __attribute__((reqd_work_group_size(FFT_N_POINTS_PER_TERMINAL, 1, 1)))
 kernel void mux_and_mult(global float2 * restrict tiles,
                          global float2 * restrict templates)
 {
-    int batch = get_group_id(1) * N_FILTERS_PARALLEL;
-    int tile = get_group_id(0);
-    int step = get_local_id(0);
+    uint batch = get_group_id(1) * N_FILTERS_PARALLEL;
+    uint tile = get_group_id(0);
+    uint step = get_local_id(0);
 
     #pragma unroll
-    for (int f = 0; f < N_FILTERS_PARALLEL; ++f) {
+    for (uint f = 0; f < N_FILTERS_PARALLEL; ++f) {
         #pragma unroll
-        for (int p = 0; p < FFT_N_PARALLEL; ++p) {
+        for (uint p = 0; p < FFT_N_PARALLEL; ++p) {
             float2 prod = complex_mult(tiles    [tile        * FDF_TILE_SZ + step * FFT_N_PARALLEL + p],
                                        templates[(batch + f) * FDF_TILE_SZ + step * FFT_N_PARALLEL + p]);
             WRITE_CHANNEL(ifft_in[f][p], prod);
@@ -339,7 +339,7 @@ __attribute__((num_compute_units(N_FILTERS_PARALLEL)))
 kernel void ifft()
 {
     // The compute unit ID is used to connect each instance to the correct set of I/O channels
-    int cid = get_compute_id(0);
+    uint cid = get_compute_id(0);
 
     // (Double) buffers used for result re-ordering
     float2 __attribute__((bank_bits(11))) buf[2][FFT_N_POINTS_PER_TERMINAL][FFT_N_PARALLEL];
@@ -353,25 +353,25 @@ kernel void ifft()
     // Process N_FILTER_BATCHES * FDF_N_TILES actual tiles, +2 tiles of zeros in order to flush the engine and the
     // output reordering stage
     #pragma loop_coalesce
-    for (int t = 0; t < N_FILTER_BATCHES * FDF_N_TILES + 2; ++t) {
-        for (int s = 0; s < FFT_N_POINTS_PER_TERMINAL; ++s) {
+    for (uint t = 0; t < N_FILTER_BATCHES * FDF_N_TILES + 2; ++t) {
+        for (uint s = 0; s < FFT_N_POINTS_PER_TERMINAL; ++s) {
             if (t >= 1) {
                 // Valid results are available after FFT_N_POINTS_PER_TERMINAL steps, i.e. after 1 tile was consumed
                 #pragma unroll
-                for (int p = 0; p < FFT_N_PARALLEL; ++p)
+                for (uint p = 0; p < FFT_N_PARALLEL; ++p)
                     buf[1 - (t & 1)][bit_reversed(s, FFT_N_POINTS_PER_TERMINAL_LOG)][p] = data.i[p];
             }
             if (t >= 2) {
                 // Valid results in natural order are available after 2 tiles were consumed
                 #pragma unroll
-                for (int p = 0; p < FFT_N_PARALLEL; ++p)
+                for (uint p = 0; p < FFT_N_PARALLEL; ++p)
                     WRITE_CHANNEL(ifft_out[cid][p], buf[t & 1][s][p]);
             }
 
             // Read actual input from the channels, respectively inject zeros to flush the pipeline
             if (t < N_FILTER_BATCHES * FDF_N_TILES) {
                 #pragma unroll
-                for (int p = 0; p < FFT_N_PARALLEL; ++p)
+                for (uint p = 0; p < FFT_N_PARALLEL; ++p)
                     data.i[p] = READ_CHANNEL(ifft_in[cid][p]);
             } else {
                 data.i0 = data.i1 = data.i2 = data.i3 = 0;
@@ -404,25 +404,25 @@ kernel void square_and_discard(global float * restrict fop)
     float buf[N_FILTERS_PARALLEL][FFT_N_PARALLEL];
 
     // Establish indices for the current work item
-    int batch = get_group_id(1) * N_FILTERS_PARALLEL;
-    int tile = get_group_id(0);
-    int step = get_local_id(0);
+    uint batch = get_group_id(1) * N_FILTERS_PARALLEL;
+    uint tile = get_group_id(0);
+    uint step = get_local_id(0);
 
     // Query all incoming channels, and compute the normalised spectral power of each point
     #pragma unroll
-    for (int f = 0; f < N_FILTERS_PARALLEL; ++f) {
+    for (uint f = 0; f < N_FILTERS_PARALLEL; ++f) {
         #pragma unroll
-        for (int p = 0; p < FFT_N_PARALLEL; ++p)
+        for (uint p = 0; p < FFT_N_PARALLEL; ++p)
             buf[f][p] = power_norm(READ_CHANNEL(ifft_out[f][p]));
     }
 
     // Discard invalid parts of tiles (cf. overlap-save algorithm) while writing to the FOP
     #pragma unroll
-    for (int f = 0; f < N_FILTERS_PARALLEL; ++f) {
+    for (uint f = 0; f < N_FILTERS_PARALLEL; ++f) {
         #pragma unroll
-        for (int p = 0; p < FFT_N_PARALLEL; ++p) {
+        for (uint p = 0; p < FFT_N_PARALLEL; ++p) {
             // We need to undo the bit-reversal of the chunk indices, as the buffer was populated with FFT-ordered data
-            int q = bit_reversed(p, FFT_N_PARALLEL_LOG);
+            uint q = bit_reversed(p, FFT_N_PARALLEL_LOG);
 
             // `element` is the index of the current item in its destination tile in the FOP, i.e. shifted by the
             // amount of overlap we need to discard
