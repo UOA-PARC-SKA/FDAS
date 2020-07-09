@@ -50,7 +50,7 @@
  *  - HMS_BASELINE: unoptimised implementation of inequation (4)
  *  - ... (TODO)
  */
-#define HMS_BASELINE
+#define HMS_HWAN
 
 // Computes an index for accessing the FOP buffer
 #define FOP_IDX(filt, chan) ((filt + N_FILTERS_PER_ACCEL_SIGN) * FDF_OUTPUT_SZ + chan)
@@ -137,6 +137,76 @@ kernel void harmonic_summing(global float * restrict fop,
             } else {
                 detection_location[h * HMS_DETECTION_SZ + d] = HMS_INVALID_LOCATION;
                 detection_amplitude[h * HMS_DETECTION_SZ + d] = 0.0f;
+            }
+        }
+    }
+}
+#endif
+
+#ifdef HMS_HWAN
+#define X 4
+__attribute__((max_global_work_dim(0)))
+kernel void harmonic_summing(global volatile float * restrict fop,
+                             global float * restrict thresholds,
+                             global uint * restrict detection_location,
+                             global float * restrict detection_amplitude
+                             #if HMS_STORE_PLANES
+                             , global float * restrict harmonic_planes
+                             #endif
+                             )
+{
+    uint __attribute__((numbanks(HMS_N_PLANES * X))) location_buf[HMS_DETECTION_SZ/X][X][HMS_N_PLANES];
+    float __attribute__((numbanks(HMS_N_PLANES * X))) amplitude_buf[HMS_DETECTION_SZ/X][X][HMS_N_PLANES];
+    ulong valid[X][HMS_N_PLANES];
+    uint next_slot[X][HMS_N_PLANES];
+
+    for (uint x = 0; x < X; ++x) {
+        for (uint h = 0; h < HMS_N_PLANES; ++h) {
+            next_slot[x][h] = 0;
+            valid[x][h] = 0;
+        }
+    }
+
+    for (int f = -N_FILTERS_PER_ACCEL_SIGN; f <= N_FILTERS_PER_ACCEL_SIGN; ++f) {
+        #pragma unroll 4
+        for (uint c = 0; c < FDF_OUTPUT_SZ; ++c) {
+            float hsum = 0.0f;
+            #pragma unroll
+            for (uint h = 0; h < HMS_N_PLANES; ++h) {
+                int k = h + 1;
+
+                int f_k = f / k;
+                int c_k = c / k;
+
+                hsum += fop[FOP_IDX(f_k, c_k)];
+
+                if (hsum > thresholds[h]) {
+                    uint x = c % X;
+                    uint slot = next_slot[x][h];
+                    location_buf[slot][x][h] = HMS_ENCODE_LOCATION(k, f, c);
+                    amplitude_buf[slot][x][h] = hsum;
+                    valid[x][h] |= 1l << slot;
+                    next_slot[x][h] = (slot == HMS_DETECTION_SZ/X - 1) ? 0 : slot + 1;
+                }
+
+                #if HMS_STORE_PLANES
+                if (h > 0) // do not copy the FOP
+                    harmonic_planes[(h-1) * FOP_SZ + FOP_IDX(f, c)] = hsum;
+                #endif
+            }
+        }
+    }
+
+    for (uint h = 0; h < HMS_N_PLANES; ++h) {
+        for (uint x = 0; x < X; ++x) {
+            for (uint d = 0; d < HMS_DETECTION_SZ/X; ++d) {
+                if (valid[x][h] & (1l << d)) {
+                    detection_location[h * HMS_DETECTION_SZ + x * HMS_DETECTION_SZ/X + d] = location_buf[d][x][h];
+                    detection_amplitude[h * HMS_DETECTION_SZ + x * HMS_DETECTION_SZ/X + d] = amplitude_buf[d][x][h];
+                } else {
+                    detection_location[h * HMS_DETECTION_SZ + x * HMS_DETECTION_SZ/X + d] = HMS_INVALID_LOCATION;
+                    detection_amplitude[h * HMS_DETECTION_SZ + x * HMS_DETECTION_SZ/X + d] = 0.0f;
+                }
             }
         }
     }
