@@ -304,7 +304,7 @@ kernel void store_tiles(global float2 * restrict tiles)
  */
 __attribute__((reqd_work_group_size(FFT_N_POINTS_PER_TERMINAL, 1, 1)))
 kernel void mux_and_mult(global float2 * restrict tiles,
-                         constant float2 * restrict templates)
+                         global float2 * restrict templates)
 {
     uint batch = get_group_id(1) * N_FILTERS_PARALLEL;
     uint tile = get_group_id(0);
