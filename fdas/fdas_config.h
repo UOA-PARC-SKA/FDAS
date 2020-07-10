@@ -115,6 +115,10 @@
 #define HMS_GET_LOCATION_FILTER(loc)   (((loc >> 22) & 0x7f) - N_FILTERS_PER_ACCEL_SIGN)
 #define HMS_GET_LOCATION_CHANNEL(loc)  (loc & 0x3fffff)
 
+// Parallelisation factor in the HMS_HWAN approach. Always change both macros!
+#define HMS_X                          (4)
+#define HMS_CHANNEL_LOOP_UNROLL        _Pragma("unroll 4")
+
 // === Output ==========================================================================================================
 
 // Maximum number of pulsar candidates returned from the FDAS module
