@@ -146,8 +146,8 @@ kernel void harmonic_summing(global float * restrict fop,
 
 #ifdef HMS_HWAN
 __attribute__((max_global_work_dim(0)))
-kernel void harmonic_summing(global volatile float * restrict fop,       // `volatile` to disable private caches
-                             global float * restrict thresholds,
+kernel void harmonic_summing(global float * restrict fop,
+                             constant float * restrict thresholds,
                              global uint * restrict detection_location,
                              global float * restrict detection_amplitude
                              #if HMS_STORE_PLANES
