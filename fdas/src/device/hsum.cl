@@ -158,10 +158,12 @@ kernel void harmonic_summing(global volatile float * restrict fop,       // `vol
     // Layout / banking of detection buffers is chosen to allow no-stall parallel accesses in the unrolled region below
     uint __attribute__((numbanks(HMS_X * HMS_N_PLANES))) location_buf[HMS_DETECTION_SZ / HMS_X][HMS_X][HMS_N_PLANES];
     float __attribute__((numbanks(HMS_X * HMS_N_PLANES))) amplitude_buf[HMS_DETECTION_SZ / HMS_X][HMS_X][HMS_N_PLANES];
-    ulong valid[HMS_X][HMS_N_PLANES];
-    uint next_slot[HMS_X][HMS_N_PLANES];
+    ulong __attribute__((register)) valid[HMS_X][HMS_N_PLANES];
+    uint __attribute__((register)) next_slot[HMS_X][HMS_N_PLANES];
 
+    #pragma unroll
     for (uint x = 0; x < HMS_X; ++x) {
+        #pragma unroll
         for (uint h = 0; h < HMS_N_PLANES; ++h) {
             next_slot[x][h] = 0;
             valid[x][h] = 0;
@@ -169,18 +171,31 @@ kernel void harmonic_summing(global volatile float * restrict fop,       // `vol
     }
 
     for (int f = -N_FILTERS_PER_ACCEL_SIGN; f <= N_FILTERS_PER_ACCEL_SIGN; ++f) {
+        int __attribute__((register)) f_idx[HMS_N_PLANES];
+        #pragma unroll
+        for (uint h = 0; h < HMS_N_PLANES; ++h) {
+            int k = h + 1;
+            f_idx[h] = f / k;
+        }
+
         HMS_CHANNEL_LOOP_UNROLL
         for (uint c = 0; c < FDF_OUTPUT_SZ; ++c) {
+            float __attribute__((register)) sp[HMS_N_PLANES];
+
+            #pragma unroll
+            for (uint h = 0; h < HMS_N_PLANES; ++h) {
+                int k = h + 1;
+                int f_k = f_idx[h];
+                int c_k = c / k;
+
+                sp[h] = fop[FOP_IDX(f_k, c_k)];
+            }
+
             float hsum = 0.0f;
             #pragma unroll
             for (uint h = 0; h < HMS_N_PLANES; ++h) {
                 int k = h + 1;
-
-                int f_k = f / k;
-                int c_k = c / k;
-
-                hsum += fop[FOP_IDX(f_k, c_k)];
-
+                hsum += sp[h];
                 if (hsum > thresholds[h]) {
                     uint x = c % HMS_X;
                     uint slot = next_slot[x][h];
@@ -189,17 +204,24 @@ kernel void harmonic_summing(global volatile float * restrict fop,       // `vol
                     valid[x][h] |= 1l << slot;
                     next_slot[x][h] = (slot == HMS_DETECTION_SZ / HMS_X - 1) ? 0 : slot + 1;
                 }
-
-                #if HMS_STORE_PLANES
-                if (h > 0) // do not copy the FOP
-                    harmonic_planes[(h-1) * FOP_SZ + FOP_IDX(f, c)] = hsum;
-                #endif
             }
+
+            #if HMS_STORE_PLANES
+            hsum = sp[0];
+            #pragma unroll
+            for (uint h = 1; h < HMS_N_PLANES; ++h) { // do not copy the FOP
+                hsum += sp[h];
+                harmonic_planes[(h-1) * FOP_SZ + FOP_IDX(f, c)] = hsum;
+            }
+            #endif
         }
     }
 
+    #pragma unroll 1
     for (uint h = 0; h < HMS_N_PLANES; ++h) {
+        #pragma unroll 1
         for (uint x = 0; x < HMS_X; ++x) {
+            #pragma unroll 1
             for (uint d = 0; d < HMS_DETECTION_SZ / HMS_X; ++d) {
                 if (valid[x][h] & (1l << d)) {
                     detection_location[h * HMS_DETECTION_SZ + x * HMS_DETECTION_SZ / HMS_X + d] = location_buf[d][x][h];
