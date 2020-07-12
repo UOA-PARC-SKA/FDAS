@@ -128,6 +128,7 @@ TEST_P(FDASTest, FT_Convolution) {
         }
     }
     EXPECT_LE(detection_location.size(), detection_location_ref.size());
+    EXPECT_GE(detection_location.size(), 1);
 
     int n_non_cands = 0;
     for (loc_it = detection_location.begin(), amp_it = detection_amplitude.begin();
