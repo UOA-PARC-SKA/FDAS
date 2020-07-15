@@ -1,3 +1,6 @@
+# Jetbrains tools
+.idea
+
 # Python
 __pycache__
 .ipynb_checkpoints
