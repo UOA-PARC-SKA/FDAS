@@ -51,7 +51,7 @@
  *  - HMS_HWAN    : Haomiao's approach: Handle more than one channel through loop unrolling
  *  - ... (TODO)
  */
-#define HMS_HWAN
+#define HMS_SYSTOLIC
 
 // Computes an index for accessing the FOP buffer
 #define FOP_IDX(filt, chan) ((filt + N_FILTERS_PER_ACCEL_SIGN) * FDF_OUTPUT_SZ + chan)
@@ -212,6 +212,12 @@ kernel void harmonic_summing(global volatile float * restrict fop,       // `vol
         }
     }
 }
+#endif
+
+#ifdef HMS_SYSTOLIC
+#include "preld.cl"
+#include "detect.cl"
+#include "ringbuf.cl"
 #endif
 
 #undef FOP_IDX
