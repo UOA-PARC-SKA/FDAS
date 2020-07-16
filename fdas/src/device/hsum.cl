@@ -48,7 +48,7 @@
  *
  * The main challenge here is to cope with the irregular memory accesses. Different approaches are implemented below:
  *  - HMS_BASELINE: unoptimised implementation of inequation (4)
- *  - HMS_HWAN    : Haomiao's approach: Handle more than one channel through loop unrolling
+ *  - HMS_UNROLL  : Haomiao's approach: Handle more than one channel through loop unrolling
  *  - ... (TODO)
  */
 #define HMS_SYSTOLIC
@@ -80,7 +80,7 @@ kernel void harmonic_summing(global float * restrict fop,
     uint location_buf[HMS_N_PLANES][HMS_DETECTION_SZ];
     float amplitude_buf[HMS_N_PLANES][HMS_DETECTION_SZ];
 
-    // One bitfield per HP to indiciate which slots hold valid candidate. HMS_DETECTION_SZ must be <= 64!
+    // One bitfield per HP to indicate which slots hold valid candidates. HMS_DETECTION_SZ must be <= 64!
     ulong valid[HMS_N_PLANES];
 
     // Per-HP index of the next free (or to be overwritten) slot in the detection buffers
@@ -144,7 +144,39 @@ kernel void harmonic_summing(global float * restrict fop,
 }
 #endif
 
-#ifdef HMS_HWAN
+#ifdef HMS_UNROLL
+/*
+ * `harmonic_summing[HMS_UNROLL]` -- single-work item kernel
+ *
+ * Parallel implementation of the on-the-fly thresholding approach, handling HMS_X-many channels per iteration. The
+ * detection buffers are _logically_ partitioned into HMS_X independent ring-buffers per HP, containing detections from
+ * channels congruent to 0 mod HMS_X, 1 mod HMS_X, ..., as illustrated below:
+ *
+ *    |───────────HMS_N_PLANES─────────────|
+ *                                                 ┌ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┐
+ *    HP_1:                    HP_2:   HP_N:          detection,
+ *  - ┌──────────────────────┐ ┌───┐   ┌───┐       │  amplitude:       │
+ *  │ │ channels % HMS_X = 0 │ │   │   │   │         ┌─┬─┬─┬─┬─┬─┬─┬─┐
+ *  H ├──────────────────────┤ ├───┤   ├───┤       │ │r│i│n│g│ │b│u│f│ │
+ *  M │ channels % HMS_X = 1 │ │   │   │   │         └─┴─┴▲┴─┴─┴─┴─┴─┘
+ *  S ├──────────────────────┤ ├───┤...├───┤       │      └──next_slot │
+ *  _ │ channels % HMS_X = 2 │ │   │   │   │          valid:
+ *  X ├──────────────────────┤ ├───┤   ├───┤     ─ │ ┌─┬─┬─┬─┬─┬─┬─┬─┐ │
+ *  │ │ channels % HMS_X = 3 │ │   │   │   │    │    │1│1│0│0│0│0│0│0│
+ *  - └──────────────────────┘ └───┘   └───┘       │ └─┴─┴─┴─┴─┴─┴─┴─┘ │
+ *                │                             │    \               /
+ *                                                 │  HMS_DETECTION_SZ │
+ *                └ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┘            ÷
+ *                                                 │       HMS_X       │
+ *                                                  ─ ─ ─ ─ ─ ─ ─ ─ ─ ─
+ *
+ * In consequence, for each HP, we return the last HMS_DETECTION_SZ / HMS_X candidates per congruence class! E.g. if
+ * all detections are in channels divisible by HMS_X (congruence class '0'), elements in this ring-buffer would be
+ * overwritten even if the other ring-buffers are empty.
+ *
+ * Convention:
+ *   We are using `h` as 0-based index into the arrays, and `k` to represent the 1-based index of the harmonic planes.
+ */
 __attribute__((max_global_work_dim(0)))
 kernel void harmonic_summing(global volatile float * restrict fop,       // `volatile` to disable private caches
                              global float * restrict thresholds,
@@ -155,32 +187,41 @@ kernel void harmonic_summing(global volatile float * restrict fop,       // `vol
                              #endif
                              )
 {
-    // Layout / banking of detection buffers is chosen to allow no-stall parallel accesses in the unrolled region below
+    // The actual layout and banking of the detection and bookkeeping buffers is chosen to allow `aoc` to implement
+    // HMS_X-many no-stall parallel accesses in the unrolled region below. The logical layout is as explained above.
     uint __attribute__((numbanks(HMS_X * HMS_N_PLANES))) location_buf[HMS_DETECTION_SZ / HMS_X][HMS_X][HMS_N_PLANES];
     float __attribute__((numbanks(HMS_X * HMS_N_PLANES))) amplitude_buf[HMS_DETECTION_SZ / HMS_X][HMS_X][HMS_N_PLANES];
     ulong valid[HMS_X][HMS_N_PLANES];
     uint next_slot[HMS_X][HMS_N_PLANES];
 
+    // Zero-initialise bookkeeping buffers
     for (uint x = 0; x < HMS_X; ++x) {
         for (uint h = 0; h < HMS_N_PLANES; ++h) {
             next_slot[x][h] = 0;
-            valid[x][h] = 0;
+            valid[x][h] = 0l;
         }
     }
 
+    // MAIN LOOP: Iterates over all (f,c) coordinates in the FOP, handling HMS_X-many channels per iteration of the
+    //            inner loop
     for (int f = -N_FILTERS_PER_ACCEL_SIGN; f <= N_FILTERS_PER_ACCEL_SIGN; ++f) {
         HMS_CHANNEL_LOOP_UNROLL
         for (uint c = 0; c < FDF_OUTPUT_SZ; ++c) {
             float hsum = 0.0f;
+
+            // Completely unrolled to perform loading and thresholding for all HPs at once
             #pragma unroll
             for (uint h = 0; h < HMS_N_PLANES; ++h) {
                 int k = h + 1;
 
+                // Compute harmonic indices. The OpenCL C division does the right thing here, e.g. -10/3 = -3.
                 int f_k = f / k;
                 int c_k = c / k;
 
+                // After adding SP_k(f,c), `hsum` represents HP_k(f,c)
                 hsum += fop[FOP_IDX(f_k, c_k)];
 
+                // If we have a candidate, store it in the detection buffers and perform bookkeeping
                 if (hsum > thresholds[h]) {
                     uint x = c % HMS_X;
                     uint slot = next_slot[x][h];
@@ -198,6 +239,7 @@ kernel void harmonic_summing(global volatile float * restrict fop,       // `vol
         }
     }
 
+    // Write detection buffers to global memory without messing up the banking of the buffers
     for (uint h = 0; h < HMS_N_PLANES; ++h) {
         for (uint x = 0; x < HMS_X; ++x) {
             for (uint d = 0; d < HMS_DETECTION_SZ / HMS_X; ++d) {
