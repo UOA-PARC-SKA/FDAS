@@ -43,16 +43,16 @@ protected:
     FDAS::ShapeType templates_shape;
 
     FDAS::TilesType tiles, tiles_ref;
-    FDAS::ShapeType tiles_shape, tiles_shape_ref;
+    FDAS::ShapeType tiles_shape, tiles_ref_shape;
 
     FDAS::FOPType fop, fop_ref;
-    FDAS::ShapeType fop_shape, fop_shape_ref;
+    FDAS::ShapeType fop_shape, fop_ref_shape;
 
     FDAS::ThreshType thresholds;
     FDAS::ShapeType thresholds_shape;
 
     FDAS::HPType harmonic_planes, harmonic_planes_ref;
-    FDAS::ShapeType harmonic_planes_shape, harmonic_planes_shape_ref;
+    FDAS::ShapeType harmonic_planes_shape, harmonic_planes_ref_shape;
 
     FDAS::DetLocType detection_location, detection_location_ref;
     FDAS::ShapeType detection_location_shape, detection_location_ref_shape;
@@ -64,13 +64,13 @@ protected:
         bool fortran_order = false; // library wants this as a reference
         npy::LoadArrayFromNumpy(input_file(), input_shape, fortran_order, input);
         npy::LoadArrayFromNumpy(templates_file, templates_shape, fortran_order, templates);
-        npy::LoadArrayFromNumpy(tiles_file(true), tiles_shape_ref, fortran_order, tiles_ref);
-        npy::LoadArrayFromNumpy(fop_file(true), fop_shape_ref, fortran_order, fop_ref);
+        npy::LoadArrayFromNumpy(tiles_file(true), tiles_ref_shape, fortran_order, tiles_ref);
+        npy::LoadArrayFromNumpy(fop_file(true), fop_ref_shape, fortran_order, fop_ref);
         npy::LoadArrayFromNumpy(thrsh_file(), thresholds_shape, fortran_order, thresholds);
         npy::LoadArrayFromNumpy(det_loc_file(true), detection_location_ref_shape, fortran_order, detection_location_ref);
         npy::LoadArrayFromNumpy(det_amp_file(true), detection_amplitude_ref_shape, fortran_order, detection_amplitude_ref);
         if (HMS_STORE_PLANES)
-            npy::LoadArrayFromNumpy(hps_file(true), harmonic_planes_shape_ref, fortran_order, harmonic_planes_ref);
+            npy::LoadArrayFromNumpy(hps_file(true), harmonic_planes_ref_shape, fortran_order, harmonic_planes_ref);
     }
 };
 
@@ -98,6 +98,13 @@ TEST_P(FDASTest, FT_Convolution) {
                            }
     ));
     npy::SaveArrayAsNumpy(fop_file(), false, fop_shape.size(), fop_shape.data(), fop);
+}
+
+TEST_P(FDASTest, Harmonic_Summing) {
+    FDAS pipeline(std::cerr);
+    ASSERT_TRUE(pipeline.initialise_accelerator(bitstream_file, FDAS::choose_first_platform, FDAS::choose_accelerator_devices));
+
+    ASSERT_TRUE(pipeline.inject_FOP(fop_ref, fop_ref_shape));
 
     ASSERT_TRUE(pipeline.perform_harmonic_summing(thresholds, thresholds_shape));
     if (HMS_STORE_PLANES) {

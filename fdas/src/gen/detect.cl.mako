@@ -28,7 +28,10 @@ kernel void detect_${harmonic}(const float threshold,
                 uint loc = HMS_INVALID_LOCATION;
                 float amp = -1.0f;
                 if (hsum[f] > threshold) {
-                    loc = HMS_ENCODE_LOCATION(${harmonic}, negative_filters ? F + f : -(F + f), c);
+                    int fil = F + f;
+                    if (negative_filters)
+                        fil = -fil;
+                    loc = HMS_ENCODE_LOCATION(${harmonic}, fil, c);
                     amp = hsum[f];
                 }
                 WRITE_CHANNEL(locations[${harmonic - 1}][f], loc);

@@ -3,8 +3,8 @@ __attribute__((max_global_work_dim(0)))
 kernel void ringbuf_${harmonic}(global uint * restrict detection_location,
                       global float * restrict detection_amplitude)
 {
-    uint  __attribute__((numbanks(${detection_sz // n_parallel}))) location_buf[${detection_sz // n_parallel}][${n_parallel}];
-    float __attribute__((numbanks(${detection_sz // n_parallel}))) amplitude_buf[${detection_sz // n_parallel}][${n_parallel}];
+    uint  __attribute__((numbanks(${n_parallel}))) location_buf[${detection_sz // n_parallel}][${n_parallel}];
+    float __attribute__((numbanks(${n_parallel}))) amplitude_buf[${detection_sz // n_parallel}][${n_parallel}];
 
     uint valid[${n_parallel}] = {${', '.join(["0"] * n_parallel)}};
     uint next[${n_parallel}]  = {${', '.join(["0"] * n_parallel)}};
@@ -34,12 +34,15 @@ kernel void ringbuf_${harmonic}(global uint * restrict detection_location,
 
     #pragma loop_coalesce
     #pragma unroll 1
-    for (uint d = 0; d < ${detection_sz // n_parallel}; ++d) {
+    for (uint f = 0; f < ${n_parallel}; ++f) {
         #pragma unroll 1
-        for (uint f = 0; f < ${n_parallel}; ++f) {
+        for (uint d = 0; d < ${detection_sz // n_parallel}; ++d) {
             if (valid[f] & (1 << d)) {
-                detection_location[${harmonic - 1} * ${detection_sz} + d * ${detection_sz // n_parallel} + f] = location_buf[d][f];
-                detection_amplitude[${harmonic - 1} * ${detection_sz} + d * ${detection_sz // n_parallel} + f] = amplitude_buf[d][f];
+                detection_location[${harmonic - 1} * ${detection_sz} + f * ${detection_sz // n_parallel} + d] = location_buf[d][f];
+                detection_amplitude[${harmonic - 1} * ${detection_sz} + f * ${detection_sz // n_parallel} + d] = amplitude_buf[d][f];
+            } else {
+                detection_location[${harmonic - 1} * ${detection_sz} + f * ${detection_sz // n_parallel} + d] = HMS_INVALID_LOCATION;
+                detection_amplitude[${harmonic - 1} * ${detection_sz} + f * ${detection_sz // n_parallel} + d] = 0.0f;
             }
         }
     }

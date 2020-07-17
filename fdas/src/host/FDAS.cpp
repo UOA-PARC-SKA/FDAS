@@ -120,7 +120,18 @@ bool FDAS::initialise_accelerator(std::string bitstream_file_name,
     cl_chkref(store_tiles_kernel.reset(new cl::Kernel(*program, "store_tiles", &status)));
     cl_chkref(mux_and_mult_kernel.reset(new cl::Kernel(*program, "mux_and_mult", &status)));
     cl_chkref(square_and_discard_kernel.reset(new cl::Kernel(*program, "square_and_discard", &status)));
-    cl_chkref(harmonic_summing_kernel.reset(new cl::Kernel(*program, "harmonic_summing", &status)));
+
+    preloader_kernels.resize(HMS_N_PLANES);
+    detect_kernels.resize(HMS_N_PLANES);
+    ringbuf_kernels.resize(HMS_N_PLANES);
+    for (int h = 0; h < HMS_N_PLANES; ++h) {
+        auto name = "preloader_" + std::to_string(h + 1);
+        cl_chkref(preloader_kernels[h].reset(new cl::Kernel(*program, name.c_str(), &status)));
+        name = "detect_" + std::to_string(h + 1);
+        cl_chkref(detect_kernels[h].reset(new cl::Kernel(*program, name.c_str(), &status)));
+        name = "ringbuf_" + std::to_string(h + 1);
+        cl_chkref(ringbuf_kernels[h].reset(new cl::Kernel(*program, name.c_str(), &status)));
+    }
 
     // Buffers
     size_t total_allocated = 0;
@@ -136,9 +147,6 @@ bool FDAS::initialise_accelerator(std::string bitstream_file_name,
 
     cl_chkref(fop_buffer.reset(new cl::Buffer(*context, CL_MEM_READ_WRITE, sizeof(cl_float) * FOP_SZ, nullptr, &status)));
     total_allocated += fop_buffer->getInfo<CL_MEM_SIZE>();
-
-    cl_chkref(thresholds_buffer.reset(new cl::Buffer(*context, CL_MEM_READ_ONLY, sizeof(cl_float) * HMS_N_PLANES, nullptr, &status)));
-    total_allocated += thresholds_buffer->getInfo<CL_MEM_SIZE>();
 
     if (HMS_STORE_PLANES) {
         cl_chkref(harmonic_planes_buffer.reset(new cl::Buffer(*context, CL_MEM_WRITE_ONLY, sizeof(cl_float) * HMS_PLANES_SZ, nullptr, &status)));
@@ -241,24 +249,50 @@ bool FDAS::perform_harmonic_summing(const FDAS::ThreshType &thresholds, const FD
         return false;
     }
 
-    cl::CommandQueue buffer_q(*context, default_device);
-    cl::CommandQueue harmonic_summing_q(*context, default_device);
+    const int n_planes = HMS_N_PLANES,
+              n_parallel = 4,
+              burst_len = 8,
+              n_filters = 40,    // divisible by n_parallel
+              n_channels = 4193280; // divisible by k * burst_len for k in 1, ..., n_planes
 
-    cl_chk(harmonic_summing_kernel->setArg<cl::Buffer>(0, *fop_buffer));
-    cl_chk(harmonic_summing_kernel->setArg<cl::Buffer>(1, *thresholds_buffer));
-    cl_chk(harmonic_summing_kernel->setArg<cl::Buffer>(2, *detection_location_buffer));
-    cl_chk(harmonic_summing_kernel->setArg<cl::Buffer>(3, *detection_amplitude_buffer));
-    if (HMS_STORE_PLANES)
-        cl_chk(harmonic_summing_kernel->setArg<cl::Buffer>(4, *harmonic_planes_buffer));
+    std::vector<cl::CommandQueue> preloader_queues, detect_queues, ringbuf_queues;
 
-    cl_chk(buffer_q.enqueueWriteBuffer(*thresholds_buffer, true, 0, sizeof(cl_float) * HMS_N_PLANES, thresholds.data()));
-    cl_chk(buffer_q.finish());
+    for (int h = 0; h < n_planes; ++h) {
+        auto k = h + 1;
 
-    cl::Event harmonic_summing_ev;
-    cl_chk(harmonic_summing_q.enqueueTask(*harmonic_summing_kernel, nullptr, &harmonic_summing_ev));
-    cl_chk(harmonic_summing_q.finish());
+        auto &preld_k = *preloader_kernels[h];
+        cl_chk(preld_k.setArg<cl::Buffer>(0, *fop_buffer));
+        cl_chk(preld_k.setArg<cl_uint>(1, false));
 
-    print_duration("Harmonic summing", harmonic_summing_ev, harmonic_summing_ev);
+        cl::CommandQueue preld_q(*context, default_device);
+        cl_chk(preld_q.enqueueNDRangeKernel(preld_k, cl::NullRange, cl::NDRange(n_channels, n_filters / n_parallel), cl::NDRange(burst_len * k, 1)));
+        preloader_queues.emplace_back(preld_q);
+
+        auto &detect_k = *detect_kernels[h];
+        cl_chk(detect_k.setArg<cl_float>(0, thresholds[h]));
+        cl_chk(detect_k.setArg<cl_uint>(1, false));
+
+        cl::CommandQueue detect_q(*context, default_device);
+        cl_chk(detect_q.enqueueTask(detect_k));
+        detect_queues.emplace_back(detect_q);
+
+        auto &ringbuf_k = *ringbuf_kernels[h];
+        cl_chk(ringbuf_k.setArg<cl::Buffer>(0, *detection_location_buffer));
+        cl_chk(ringbuf_k.setArg<cl::Buffer>(1, *detection_amplitude_buffer));
+
+        cl::CommandQueue ringbuf_q(*context, default_device);
+        cl_chk(ringbuf_q.enqueueTask(ringbuf_k));
+        ringbuf_queues.emplace_back(ringbuf_q);
+    }
+
+    for (auto &q : preloader_queues)
+        cl_chk(q.finish());
+
+    for (auto &q : detect_queues)
+        cl_chk(q.finish());
+
+    for (auto &q : ringbuf_queues)
+        cl_chk(q.finish());
 
     return true;
 }
@@ -312,6 +346,14 @@ bool FDAS::retrieve_candidates(FDAS::DetLocType &detection_location, FDAS::Shape
 
     detection_location_shape.push_back(N_CANDIDATES);
     detection_amplitude_shape.push_back(N_CANDIDATES);
+
+    return true;
+}
+
+bool FDAS::inject_FOP(FDAS::FOPType &fop, FDAS::ShapeType &fop_shape) {
+    cl::CommandQueue buffer_q(*context, default_device);
+    cl_chk(buffer_q.enqueueWriteBuffer(*fop_buffer, true, 0, sizeof(cl_float) * FOP_SZ, fop.data()));
+    cl_chk(buffer_q.finish());
 
     return true;
 }

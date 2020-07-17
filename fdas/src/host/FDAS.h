@@ -38,6 +38,8 @@ public:
 
     bool retrieve_FOP(FOPType &fop, ShapeType &fop_shape);
 
+    bool inject_FOP(FOPType &fop, ShapeType &fop_shape);
+
     bool retrieve_harmonic_planes(HPType &harmonic_planes, ShapeType &harmonic_planes_shape);
 
     bool retrieve_candidates(DetLocType &detection_location, ShapeType &detection_location_shape,
@@ -59,13 +61,15 @@ private:
     std::unique_ptr<cl::Kernel> store_tiles_kernel;
     std::unique_ptr<cl::Kernel> mux_and_mult_kernel;
     std::unique_ptr<cl::Kernel> square_and_discard_kernel;
-    std::unique_ptr<cl::Kernel> harmonic_summing_kernel;
+
+    std::vector<std::unique_ptr<cl::Kernel>> preloader_kernels;
+    std::vector<std::unique_ptr<cl::Kernel>> detect_kernels;
+    std::vector<std::unique_ptr<cl::Kernel>> ringbuf_kernels;
 
     std::unique_ptr<cl::Buffer> input_buffer;
     std::unique_ptr<cl::Buffer> tiles_buffer;
     std::unique_ptr<cl::Buffer> templates_buffer;
     std::unique_ptr<cl::Buffer> fop_buffer;
-    std::unique_ptr<cl::Buffer> thresholds_buffer;
     std::unique_ptr<cl::Buffer> harmonic_planes_buffer;
     std::unique_ptr<cl::Buffer> detection_location_buffer;
     std::unique_ptr<cl::Buffer> detection_amplitude_buffer;

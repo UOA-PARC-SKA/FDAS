@@ -3,12 +3,11 @@ from mako.template import Template
 
 def main():
     n_planes = 8
-    n_parallel = 8
-    burst_len = n_planes
-    detection_sz = 32
-
-    n_filters = 40  # divisible by 8
-    n_channels = 4193280  # divisible by 840
+    n_parallel = 4
+    burst_len = 8
+    detection_sz = 32  # divisible by n_parallel
+    n_filters = 40  # divisible by n_parallel
+    n_channels = 4193280  # divisible by k * burst_len for k in 1, ..., n_planes
 
     preld_template = Template(filename='preld.cl.mako')
     detect_template = Template(filename='detect.cl.mako')
