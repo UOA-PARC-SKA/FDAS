@@ -4,7 +4,7 @@ from mako.template import Template
 def main():
     n_planes = 8
     n_parallel = 4
-    burst_len = 8
+    burst_len = 16
     detection_sz = 32  # divisible by n_parallel
     n_filters = 40  # divisible by n_parallel
     n_channels = 4193280  # divisible by k * burst_len for k in 1, ..., n_planes
