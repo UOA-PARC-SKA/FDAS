@@ -251,21 +251,21 @@ bool FDAS::perform_harmonic_summing(const FDAS::ThreshType &thresholds, const FD
 
     const int n_planes = HMS_N_PLANES,
               n_parallel = 8,
-              burst_len = 16,
+              workgroup_sz = 1680, // divisible by lcm(1, 2, ..., n_planes)
               n_filters = 40,    // divisible by n_parallel
-              n_channels = 4193280; // divisible by k * burst_len for k in 1, ..., n_planes
+              n_channels = 4193280; // divisible by workgroup_sz
 
     std::vector<cl::CommandQueue> preloader_queues, detect_queues, ringbuf_queues;
+    cl::NDRange global(n_channels, n_filters / n_parallel);
+    cl::NDRange local(workgroup_sz, 1);
 
     for (int h = 0; h < n_planes; ++h) {
-        auto k = h + 1;
-
         auto &preld_k = *preloader_kernels[h];
         cl_chk(preld_k.setArg<cl::Buffer>(0, *fop_buffer));
         cl_chk(preld_k.setArg<cl_uint>(1, false));
 
         cl::CommandQueue preld_q(*context, default_device);
-        cl_chk(preld_q.enqueueNDRangeKernel(preld_k, cl::NullRange, cl::NDRange(n_channels, n_filters / n_parallel), cl::NDRange(burst_len * k, 1)));
+        cl_chk(preld_q.enqueueNDRangeKernel(preld_k, cl::NullRange, global, local));
         preloader_queues.emplace_back(preld_q);
 
         auto &detect_k = *detect_kernels[h];
