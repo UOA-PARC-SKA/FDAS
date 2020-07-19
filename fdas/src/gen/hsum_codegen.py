@@ -15,7 +15,7 @@ def main():
     n_planes = 8
     detection_sz = 32  # divisible by n_parallel
 
-    n_parallel = 8
+    n_parallel = 4
     bundle_sz = 8
     workgroup_sz = 2 * lcm(range(1, n_planes + 1))
 

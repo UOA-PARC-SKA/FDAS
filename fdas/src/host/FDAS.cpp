@@ -250,7 +250,7 @@ bool FDAS::perform_harmonic_summing(const FDAS::ThreshType &thresholds, const FD
     }
 
     const int n_planes = HMS_N_PLANES,
-              n_parallel = 8,
+              n_parallel = 4,
               workgroup_sz = 1680, // divisible by lcm(1, 2, ..., n_planes)
               n_filters = 40,    // divisible by n_parallel
               n_channels = 4193280; // divisible by workgroup_sz
