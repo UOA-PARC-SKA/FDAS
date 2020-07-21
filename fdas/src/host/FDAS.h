@@ -49,6 +49,8 @@ public:
 
     static bool choose_accelerator_devices(int device_num, int device_type, const std::string &device_name) { return device_type == CL_DEVICE_TYPE_ACCELERATOR; }
 
+    static bool acl1_on_x240(int device_num, int device_type, const std::string &device_name) { return device_num == 1 && device_type == CL_DEVICE_TYPE_ACCELERATOR; }
+
 private:
     cl::Platform platform;
     cl::Device default_device;
