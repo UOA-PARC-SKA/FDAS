@@ -13,31 +13,28 @@ def lcm(vals):
 
 def main():
     n_planes = 8
-    detection_sz = 32  # divisible by n_parallel
+    detection_sz = 64  # divisible by n_parallel
 
-    n_parallel = 4
-    bundle_sz = 8
-    workgroup_sz = 2 * lcm(range(1, n_planes + 1))
-
-    n_filters = 40  # divisible by n_parallel
-    n_channels = 4193280  # divisible by workgroup_sz
+    n_parallel = 16
+    bundle_sz = 16  # >= n_parallel
+    workgroup_sz = 4 * lcm(range(1, n_planes + 1))
 
     preld_template = Template(filename='preld.cl.mako')
     detect_template = Template(filename='detect.cl.mako')
-    ringbuf_template = Template(filename='ringbuf.cl.mako')
+    store_cands_template = Template(filename='store_cands.cl.mako')
 
     with open("../device/preld.cl", 'wt') as preld_file:
         preld_file.write(f"""
 // Auto-generated file -- see `hsum_codegen.py` and `preld.cl.mako`.
 
-channel float preloaders_out[{n_planes}][{n_parallel}] __attribute__((depth(0)));
+channel float preloaders[{n_planes}][{n_parallel}] __attribute__((depth(0)));
 """)
         for h in range(n_planes):
             preld_file.write(preld_template.render(
                 harmonic=h + 1,
-                workgroup_sz=workgroup_sz,
                 n_parallel=n_parallel,
-                bundle_sz=bundle_sz
+                workgroup_sz=workgroup_sz,
+                bundle_sz=bundle_sz,
             ))
 
     with open("../device/detect.cl", 'wt') as detect_file:
@@ -52,21 +49,17 @@ channel float amplitudes[{n_planes}][{n_parallel}] __attribute__((depth(0)));
                 harmonic=h + 1,
                 n_planes=n_planes,
                 n_parallel=n_parallel,
-                n_filters=n_filters,
-                n_channels=n_channels,
-            ))
-    with open("../device/ringbuf.cl", 'wt') as ringbuf_file:
-        ringbuf_file.write(f"""
-// Auto-generated file -- see `hsum_codegen.py` and `ringbuf.cl.mako`.
-""")
-        for h in range(n_planes):
-            ringbuf_file.write(ringbuf_template.render(
-                harmonic=h + 1,
-                n_parallel=n_parallel,
-                n_filters=n_filters,
-                n_channels=n_channels,
                 detection_sz=detection_sz
             ))
+    with open("../device/store_cands.cl", 'wt') as store_cands_file:
+        store_cands_file.write(f"""
+// Auto-generated file -- see `hsum_codegen.py` and `store_cands.cl.mako`.
+""")
+        store_cands_file.write(store_cands_template.render(
+            n_planes=n_planes,
+            n_parallel=n_parallel,
+            detection_sz=detection_sz
+        ))
 
 
 if __name__ == '__main__':

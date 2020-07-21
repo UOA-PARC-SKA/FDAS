@@ -5,6 +5,7 @@
 
 __attribute__((reqd_work_group_size(${workgroup_sz}, 1, 1)))
 kernel void preloader_${harmonic}(global float * restrict fop,
+                        const uint n_filters,
                         const uint negative_filters)
 {
 <%
@@ -43,9 +44,9 @@ kernel void preloader_${harmonic}(global float * restrict fop,
             buffers_for_output += [(first_buf, second_buf, roff)]
 %>\
 % for b in range(n_buffers):
-    local   float buf_${b}[${buffer_sz}];
+    local   float buffer_${b}[${buffer_sz}];
 % endfor
-    private float ld[${bundle_sz}];
+    private float bundle_load[${bundle_sz}];
 
     int  filter_base  = get_group_id(1) * ${n_parallel} / ${harmonic};
 % if n_configs > 1:
@@ -57,33 +58,30 @@ kernel void preloader_${harmonic}(global float * restrict fop,
     uint bundle = get_local_id(0) % ${n_i_per_buf};
 
     int  filter = filter_base + buffer;
-    if (negative_filters)
-        filter = -filter;
 
-    if (buffer < ${n_buffers}) {
-    % if first_offset_to_use_last_buffer > 0:
-        if (buffer < ${n_buffers - 1} || row_offset >= ${first_offset_to_use_last_buffer}) {
-            #pragma unroll
-            for (uint c = 0; c < ${bundle_sz}; ++c)
-                ld[c] = fop[FOP_IDX(filter, channel_base + bundle * ${bundle_sz} + c)];
-        } else {
-            #pragma unroll
-            for (uint c = 0; c < ${bundle_sz}; ++c)
-                ld[c] = 0.0f;
-        }
-    %else:
+    if (   buffer < ${n_buffers}
+% if first_offset_to_use_last_buffer > 0:
+        && (buffer < ${n_buffers - 1} || row_offset >= ${first_offset_to_use_last_buffer})
+% endif
+        && filter < n_filters) {
+        if (negative_filters)
+            filter = -filter;
+
         #pragma unroll
-        for (uint c = 0; c < ${bundle_sz}; ++c)
-            ld[c] = fop[FOP_IDX(filter, channel_base + bundle * ${bundle_sz} + c)];
-    % endif
+        for (uint x = 0; x < ${bundle_sz}; ++x)
+            bundle_load[x] = fop[FOP_IDX(filter, channel_base + bundle * ${bundle_sz} + x)];
+    } else {
+        #pragma unroll
+        for (uint x = 0; x < ${bundle_sz}; ++x)
+            bundle_load[x] = 0.0f;
     }
 
     switch (buffer) {
     % for b in range(n_buffers):
         case ${b}:
             #pragma unroll
-            for (uint c = 0; c < ${bundle_sz}; ++c)
-                buf_${b}[bundle * ${bundle_sz} + c] = ld[c];
+            for (uint x = 0; x < ${bundle_sz}; ++x)
+                buffer_${b}[bundle * ${bundle_sz} + x] = bundle_load[x];
             break;
     % endfor
         default:
@@ -92,17 +90,17 @@ kernel void preloader_${harmonic}(global float * restrict fop,
 
     barrier(CLK_LOCAL_MEM_FENCE);
 
-    uint step = get_local_id(0) / ${harmonic};
+    uint chan = get_local_id(0) / ${harmonic};
 
-% for i in range(n_buffers):
-    float v_${i} = buf_${i}[step];
+% for b in range(n_buffers):
+    float v_${b} = buffer_${b}[chan];
 % endfor
 
 % for p in range(n_parallel):
 % if len(buffers_for_output[p]) == 1:
-    WRITE_CHANNEL(preloaders_out[${harmonic - 1}][${p}], v_${buffers_for_output[p][0]});
+    WRITE_CHANNEL(preloaders[${harmonic - 1}][${p}], v_${buffers_for_output[p][0]});
 % else:
-    WRITE_CHANNEL(preloaders_out[${harmonic - 1}][${p}], row_offset < ${buffers_for_output[p][2]} ? v_${buffers_for_output[p][0]} : v_${buffers_for_output[p][1]});
+    WRITE_CHANNEL(preloaders[${harmonic - 1}][${p}], row_offset < ${buffers_for_output[p][2]} ? v_${buffers_for_output[p][0]} : v_${buffers_for_output[p][1]});
 % endif
 % endfor
 }

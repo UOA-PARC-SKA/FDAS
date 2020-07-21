@@ -1,54 +1,133 @@
 
 // Auto-generated file -- see `hsum_codegen.py` and `preld.cl.mako`.
 
-channel float preloaders_out[8][4] __attribute__((depth(0)));
+channel float preloaders[8][16] __attribute__((depth(0)));
 
-__attribute__((reqd_work_group_size(1680, 1, 1)))
+__attribute__((reqd_work_group_size(3360, 1, 1)))
 kernel void preloader_1(global float * restrict fop,
+                        const uint n_filters,
                         const uint negative_filters)
 {
-    local   float buf_0[1680];
-    local   float buf_1[1680];
-    local   float buf_2[1680];
-    local   float buf_3[1680];
-    private float ld[8];
+    local   float buffer_0[3360];
+    local   float buffer_1[3360];
+    local   float buffer_2[3360];
+    local   float buffer_3[3360];
+    local   float buffer_4[3360];
+    local   float buffer_5[3360];
+    local   float buffer_6[3360];
+    local   float buffer_7[3360];
+    local   float buffer_8[3360];
+    local   float buffer_9[3360];
+    local   float buffer_10[3360];
+    local   float buffer_11[3360];
+    local   float buffer_12[3360];
+    local   float buffer_13[3360];
+    local   float buffer_14[3360];
+    local   float buffer_15[3360];
+    private float bundle_load[16];
 
-    int  filter_base  = get_group_id(1) * 4 / 1;
-    uint channel_base = get_group_id(0) * 1680;
+    int  filter_base  = get_group_id(1) * 16 / 1;
+    uint channel_base = get_group_id(0) * 3360;
 
     uint buffer = get_local_id(0) / 210;
     uint bundle = get_local_id(0) % 210;
 
     int  filter = filter_base + buffer;
-    if (negative_filters)
-        filter = -filter;
 
-    if (buffer < 4) {
+    if (   buffer < 16
+        && filter < n_filters) {
+        if (negative_filters)
+            filter = -filter;
+
         #pragma unroll
-        for (uint c = 0; c < 8; ++c)
-            ld[c] = fop[FOP_IDX(filter, channel_base + bundle * 8 + c)];
+        for (uint x = 0; x < 16; ++x)
+            bundle_load[x] = fop[FOP_IDX(filter, channel_base + bundle * 16 + x)];
+    } else {
+        #pragma unroll
+        for (uint x = 0; x < 16; ++x)
+            bundle_load[x] = 0.0f;
     }
 
     switch (buffer) {
         case 0:
             #pragma unroll
-            for (uint c = 0; c < 8; ++c)
-                buf_0[bundle * 8 + c] = ld[c];
+            for (uint x = 0; x < 16; ++x)
+                buffer_0[bundle * 16 + x] = bundle_load[x];
             break;
         case 1:
             #pragma unroll
-            for (uint c = 0; c < 8; ++c)
-                buf_1[bundle * 8 + c] = ld[c];
+            for (uint x = 0; x < 16; ++x)
+                buffer_1[bundle * 16 + x] = bundle_load[x];
             break;
         case 2:
             #pragma unroll
-            for (uint c = 0; c < 8; ++c)
-                buf_2[bundle * 8 + c] = ld[c];
+            for (uint x = 0; x < 16; ++x)
+                buffer_2[bundle * 16 + x] = bundle_load[x];
             break;
         case 3:
             #pragma unroll
-            for (uint c = 0; c < 8; ++c)
-                buf_3[bundle * 8 + c] = ld[c];
+            for (uint x = 0; x < 16; ++x)
+                buffer_3[bundle * 16 + x] = bundle_load[x];
+            break;
+        case 4:
+            #pragma unroll
+            for (uint x = 0; x < 16; ++x)
+                buffer_4[bundle * 16 + x] = bundle_load[x];
+            break;
+        case 5:
+            #pragma unroll
+            for (uint x = 0; x < 16; ++x)
+                buffer_5[bundle * 16 + x] = bundle_load[x];
+            break;
+        case 6:
+            #pragma unroll
+            for (uint x = 0; x < 16; ++x)
+                buffer_6[bundle * 16 + x] = bundle_load[x];
+            break;
+        case 7:
+            #pragma unroll
+            for (uint x = 0; x < 16; ++x)
+                buffer_7[bundle * 16 + x] = bundle_load[x];
+            break;
+        case 8:
+            #pragma unroll
+            for (uint x = 0; x < 16; ++x)
+                buffer_8[bundle * 16 + x] = bundle_load[x];
+            break;
+        case 9:
+            #pragma unroll
+            for (uint x = 0; x < 16; ++x)
+                buffer_9[bundle * 16 + x] = bundle_load[x];
+            break;
+        case 10:
+            #pragma unroll
+            for (uint x = 0; x < 16; ++x)
+                buffer_10[bundle * 16 + x] = bundle_load[x];
+            break;
+        case 11:
+            #pragma unroll
+            for (uint x = 0; x < 16; ++x)
+                buffer_11[bundle * 16 + x] = bundle_load[x];
+            break;
+        case 12:
+            #pragma unroll
+            for (uint x = 0; x < 16; ++x)
+                buffer_12[bundle * 16 + x] = bundle_load[x];
+            break;
+        case 13:
+            #pragma unroll
+            for (uint x = 0; x < 16; ++x)
+                buffer_13[bundle * 16 + x] = bundle_load[x];
+            break;
+        case 14:
+            #pragma unroll
+            for (uint x = 0; x < 16; ++x)
+                buffer_14[bundle * 16 + x] = bundle_load[x];
+            break;
+        case 15:
+            #pragma unroll
+            for (uint x = 0; x < 16; ++x)
+                buffer_15[bundle * 16 + x] = bundle_load[x];
             break;
         default:
             break;
@@ -56,53 +135,120 @@ kernel void preloader_1(global float * restrict fop,
 
     barrier(CLK_LOCAL_MEM_FENCE);
 
-    uint step = get_local_id(0) / 1;
+    uint chan = get_local_id(0) / 1;
 
-    float v_0 = buf_0[step];
-    float v_1 = buf_1[step];
-    float v_2 = buf_2[step];
-    float v_3 = buf_3[step];
+    float v_0 = buffer_0[chan];
+    float v_1 = buffer_1[chan];
+    float v_2 = buffer_2[chan];
+    float v_3 = buffer_3[chan];
+    float v_4 = buffer_4[chan];
+    float v_5 = buffer_5[chan];
+    float v_6 = buffer_6[chan];
+    float v_7 = buffer_7[chan];
+    float v_8 = buffer_8[chan];
+    float v_9 = buffer_9[chan];
+    float v_10 = buffer_10[chan];
+    float v_11 = buffer_11[chan];
+    float v_12 = buffer_12[chan];
+    float v_13 = buffer_13[chan];
+    float v_14 = buffer_14[chan];
+    float v_15 = buffer_15[chan];
 
-    WRITE_CHANNEL(preloaders_out[0][0], v_0);
-    WRITE_CHANNEL(preloaders_out[0][1], v_1);
-    WRITE_CHANNEL(preloaders_out[0][2], v_2);
-    WRITE_CHANNEL(preloaders_out[0][3], v_3);
+    WRITE_CHANNEL(preloaders[0][0], v_0);
+    WRITE_CHANNEL(preloaders[0][1], v_1);
+    WRITE_CHANNEL(preloaders[0][2], v_2);
+    WRITE_CHANNEL(preloaders[0][3], v_3);
+    WRITE_CHANNEL(preloaders[0][4], v_4);
+    WRITE_CHANNEL(preloaders[0][5], v_5);
+    WRITE_CHANNEL(preloaders[0][6], v_6);
+    WRITE_CHANNEL(preloaders[0][7], v_7);
+    WRITE_CHANNEL(preloaders[0][8], v_8);
+    WRITE_CHANNEL(preloaders[0][9], v_9);
+    WRITE_CHANNEL(preloaders[0][10], v_10);
+    WRITE_CHANNEL(preloaders[0][11], v_11);
+    WRITE_CHANNEL(preloaders[0][12], v_12);
+    WRITE_CHANNEL(preloaders[0][13], v_13);
+    WRITE_CHANNEL(preloaders[0][14], v_14);
+    WRITE_CHANNEL(preloaders[0][15], v_15);
 }
 
-__attribute__((reqd_work_group_size(1680, 1, 1)))
+__attribute__((reqd_work_group_size(3360, 1, 1)))
 kernel void preloader_2(global float * restrict fop,
+                        const uint n_filters,
                         const uint negative_filters)
 {
-    local   float buf_0[840];
-    local   float buf_1[840];
-    private float ld[8];
+    local   float buffer_0[1680];
+    local   float buffer_1[1680];
+    local   float buffer_2[1680];
+    local   float buffer_3[1680];
+    local   float buffer_4[1680];
+    local   float buffer_5[1680];
+    local   float buffer_6[1680];
+    local   float buffer_7[1680];
+    private float bundle_load[16];
 
-    int  filter_base  = get_group_id(1) * 4 / 2;
-    uint channel_base = get_group_id(0) * 840;
+    int  filter_base  = get_group_id(1) * 16 / 2;
+    uint channel_base = get_group_id(0) * 1680;
 
     uint buffer = get_local_id(0) / 105;
     uint bundle = get_local_id(0) % 105;
 
     int  filter = filter_base + buffer;
-    if (negative_filters)
-        filter = -filter;
 
-    if (buffer < 2) {
+    if (   buffer < 8
+        && filter < n_filters) {
+        if (negative_filters)
+            filter = -filter;
+
         #pragma unroll
-        for (uint c = 0; c < 8; ++c)
-            ld[c] = fop[FOP_IDX(filter, channel_base + bundle * 8 + c)];
+        for (uint x = 0; x < 16; ++x)
+            bundle_load[x] = fop[FOP_IDX(filter, channel_base + bundle * 16 + x)];
+    } else {
+        #pragma unroll
+        for (uint x = 0; x < 16; ++x)
+            bundle_load[x] = 0.0f;
     }
 
     switch (buffer) {
         case 0:
             #pragma unroll
-            for (uint c = 0; c < 8; ++c)
-                buf_0[bundle * 8 + c] = ld[c];
+            for (uint x = 0; x < 16; ++x)
+                buffer_0[bundle * 16 + x] = bundle_load[x];
             break;
         case 1:
             #pragma unroll
-            for (uint c = 0; c < 8; ++c)
-                buf_1[bundle * 8 + c] = ld[c];
+            for (uint x = 0; x < 16; ++x)
+                buffer_1[bundle * 16 + x] = bundle_load[x];
+            break;
+        case 2:
+            #pragma unroll
+            for (uint x = 0; x < 16; ++x)
+                buffer_2[bundle * 16 + x] = bundle_load[x];
+            break;
+        case 3:
+            #pragma unroll
+            for (uint x = 0; x < 16; ++x)
+                buffer_3[bundle * 16 + x] = bundle_load[x];
+            break;
+        case 4:
+            #pragma unroll
+            for (uint x = 0; x < 16; ++x)
+                buffer_4[bundle * 16 + x] = bundle_load[x];
+            break;
+        case 5:
+            #pragma unroll
+            for (uint x = 0; x < 16; ++x)
+                buffer_5[bundle * 16 + x] = bundle_load[x];
+            break;
+        case 6:
+            #pragma unroll
+            for (uint x = 0; x < 16; ++x)
+                buffer_6[bundle * 16 + x] = bundle_load[x];
+            break;
+        case 7:
+            #pragma unroll
+            for (uint x = 0; x < 16; ++x)
+                buffer_7[bundle * 16 + x] = bundle_load[x];
             break;
         default:
             break;
@@ -110,52 +256,101 @@ kernel void preloader_2(global float * restrict fop,
 
     barrier(CLK_LOCAL_MEM_FENCE);
 
-    uint step = get_local_id(0) / 2;
+    uint chan = get_local_id(0) / 2;
 
-    float v_0 = buf_0[step];
-    float v_1 = buf_1[step];
+    float v_0 = buffer_0[chan];
+    float v_1 = buffer_1[chan];
+    float v_2 = buffer_2[chan];
+    float v_3 = buffer_3[chan];
+    float v_4 = buffer_4[chan];
+    float v_5 = buffer_5[chan];
+    float v_6 = buffer_6[chan];
+    float v_7 = buffer_7[chan];
 
-    WRITE_CHANNEL(preloaders_out[1][0], v_0);
-    WRITE_CHANNEL(preloaders_out[1][1], v_0);
-    WRITE_CHANNEL(preloaders_out[1][2], v_1);
-    WRITE_CHANNEL(preloaders_out[1][3], v_1);
+    WRITE_CHANNEL(preloaders[1][0], v_0);
+    WRITE_CHANNEL(preloaders[1][1], v_0);
+    WRITE_CHANNEL(preloaders[1][2], v_1);
+    WRITE_CHANNEL(preloaders[1][3], v_1);
+    WRITE_CHANNEL(preloaders[1][4], v_2);
+    WRITE_CHANNEL(preloaders[1][5], v_2);
+    WRITE_CHANNEL(preloaders[1][6], v_3);
+    WRITE_CHANNEL(preloaders[1][7], v_3);
+    WRITE_CHANNEL(preloaders[1][8], v_4);
+    WRITE_CHANNEL(preloaders[1][9], v_4);
+    WRITE_CHANNEL(preloaders[1][10], v_5);
+    WRITE_CHANNEL(preloaders[1][11], v_5);
+    WRITE_CHANNEL(preloaders[1][12], v_6);
+    WRITE_CHANNEL(preloaders[1][13], v_6);
+    WRITE_CHANNEL(preloaders[1][14], v_7);
+    WRITE_CHANNEL(preloaders[1][15], v_7);
 }
 
-__attribute__((reqd_work_group_size(1680, 1, 1)))
+__attribute__((reqd_work_group_size(3360, 1, 1)))
 kernel void preloader_3(global float * restrict fop,
+                        const uint n_filters,
                         const uint negative_filters)
 {
-    local   float buf_0[560];
-    local   float buf_1[560];
-    private float ld[8];
+    local   float buffer_0[1120];
+    local   float buffer_1[1120];
+    local   float buffer_2[1120];
+    local   float buffer_3[1120];
+    local   float buffer_4[1120];
+    local   float buffer_5[1120];
+    private float bundle_load[16];
 
-    int  filter_base  = get_group_id(1) * 4 / 3;
-    uint row_offset   = get_group_id(1) * 4 % 3;
-    uint channel_base = get_group_id(0) * 560;
+    int  filter_base  = get_group_id(1) * 16 / 3;
+    uint row_offset   = get_group_id(1) * 16 % 3;
+    uint channel_base = get_group_id(0) * 1120;
 
     uint buffer = get_local_id(0) / 70;
     uint bundle = get_local_id(0) % 70;
 
     int  filter = filter_base + buffer;
-    if (negative_filters)
-        filter = -filter;
 
-    if (buffer < 2) {
+    if (   buffer < 6
+        && filter < n_filters) {
+        if (negative_filters)
+            filter = -filter;
+
         #pragma unroll
-        for (uint c = 0; c < 8; ++c)
-            ld[c] = fop[FOP_IDX(filter, channel_base + bundle * 8 + c)];
+        for (uint x = 0; x < 16; ++x)
+            bundle_load[x] = fop[FOP_IDX(filter, channel_base + bundle * 16 + x)];
+    } else {
+        #pragma unroll
+        for (uint x = 0; x < 16; ++x)
+            bundle_load[x] = 0.0f;
     }
 
     switch (buffer) {
         case 0:
             #pragma unroll
-            for (uint c = 0; c < 8; ++c)
-                buf_0[bundle * 8 + c] = ld[c];
+            for (uint x = 0; x < 16; ++x)
+                buffer_0[bundle * 16 + x] = bundle_load[x];
             break;
         case 1:
             #pragma unroll
-            for (uint c = 0; c < 8; ++c)
-                buf_1[bundle * 8 + c] = ld[c];
+            for (uint x = 0; x < 16; ++x)
+                buffer_1[bundle * 16 + x] = bundle_load[x];
+            break;
+        case 2:
+            #pragma unroll
+            for (uint x = 0; x < 16; ++x)
+                buffer_2[bundle * 16 + x] = bundle_load[x];
+            break;
+        case 3:
+            #pragma unroll
+            for (uint x = 0; x < 16; ++x)
+                buffer_3[bundle * 16 + x] = bundle_load[x];
+            break;
+        case 4:
+            #pragma unroll
+            for (uint x = 0; x < 16; ++x)
+                buffer_4[bundle * 16 + x] = bundle_load[x];
+            break;
+        case 5:
+            #pragma unroll
+            for (uint x = 0; x < 16; ++x)
+                buffer_5[bundle * 16 + x] = bundle_load[x];
             break;
         default:
             break;
@@ -163,45 +358,86 @@ kernel void preloader_3(global float * restrict fop,
 
     barrier(CLK_LOCAL_MEM_FENCE);
 
-    uint step = get_local_id(0) / 3;
+    uint chan = get_local_id(0) / 3;
 
-    float v_0 = buf_0[step];
-    float v_1 = buf_1[step];
+    float v_0 = buffer_0[chan];
+    float v_1 = buffer_1[chan];
+    float v_2 = buffer_2[chan];
+    float v_3 = buffer_3[chan];
+    float v_4 = buffer_4[chan];
+    float v_5 = buffer_5[chan];
 
-    WRITE_CHANNEL(preloaders_out[2][0], v_0);
-    WRITE_CHANNEL(preloaders_out[2][1], row_offset < 2 ? v_0 : v_1);
-    WRITE_CHANNEL(preloaders_out[2][2], row_offset < 1 ? v_0 : v_1);
-    WRITE_CHANNEL(preloaders_out[2][3], v_1);
+    WRITE_CHANNEL(preloaders[2][0], v_0);
+    WRITE_CHANNEL(preloaders[2][1], row_offset < 2 ? v_0 : v_1);
+    WRITE_CHANNEL(preloaders[2][2], row_offset < 1 ? v_0 : v_1);
+    WRITE_CHANNEL(preloaders[2][3], v_1);
+    WRITE_CHANNEL(preloaders[2][4], row_offset < 2 ? v_1 : v_2);
+    WRITE_CHANNEL(preloaders[2][5], row_offset < 1 ? v_1 : v_2);
+    WRITE_CHANNEL(preloaders[2][6], v_2);
+    WRITE_CHANNEL(preloaders[2][7], row_offset < 2 ? v_2 : v_3);
+    WRITE_CHANNEL(preloaders[2][8], row_offset < 1 ? v_2 : v_3);
+    WRITE_CHANNEL(preloaders[2][9], v_3);
+    WRITE_CHANNEL(preloaders[2][10], row_offset < 2 ? v_3 : v_4);
+    WRITE_CHANNEL(preloaders[2][11], row_offset < 1 ? v_3 : v_4);
+    WRITE_CHANNEL(preloaders[2][12], v_4);
+    WRITE_CHANNEL(preloaders[2][13], row_offset < 2 ? v_4 : v_5);
+    WRITE_CHANNEL(preloaders[2][14], row_offset < 1 ? v_4 : v_5);
+    WRITE_CHANNEL(preloaders[2][15], v_5);
 }
 
-__attribute__((reqd_work_group_size(1680, 1, 1)))
+__attribute__((reqd_work_group_size(3360, 1, 1)))
 kernel void preloader_4(global float * restrict fop,
+                        const uint n_filters,
                         const uint negative_filters)
 {
-    local   float buf_0[424];
-    private float ld[8];
+    local   float buffer_0[848];
+    local   float buffer_1[848];
+    local   float buffer_2[848];
+    local   float buffer_3[848];
+    private float bundle_load[16];
 
-    int  filter_base  = get_group_id(1) * 4 / 4;
-    uint channel_base = get_group_id(0) * 420;
+    int  filter_base  = get_group_id(1) * 16 / 4;
+    uint channel_base = get_group_id(0) * 840;
 
     uint buffer = get_local_id(0) / 53;
     uint bundle = get_local_id(0) % 53;
 
     int  filter = filter_base + buffer;
-    if (negative_filters)
-        filter = -filter;
 
-    if (buffer < 1) {
+    if (   buffer < 4
+        && filter < n_filters) {
+        if (negative_filters)
+            filter = -filter;
+
         #pragma unroll
-        for (uint c = 0; c < 8; ++c)
-            ld[c] = fop[FOP_IDX(filter, channel_base + bundle * 8 + c)];
+        for (uint x = 0; x < 16; ++x)
+            bundle_load[x] = fop[FOP_IDX(filter, channel_base + bundle * 16 + x)];
+    } else {
+        #pragma unroll
+        for (uint x = 0; x < 16; ++x)
+            bundle_load[x] = 0.0f;
     }
 
     switch (buffer) {
         case 0:
             #pragma unroll
-            for (uint c = 0; c < 8; ++c)
-                buf_0[bundle * 8 + c] = ld[c];
+            for (uint x = 0; x < 16; ++x)
+                buffer_0[bundle * 16 + x] = bundle_load[x];
+            break;
+        case 1:
+            #pragma unroll
+            for (uint x = 0; x < 16; ++x)
+                buffer_1[bundle * 16 + x] = bundle_load[x];
+            break;
+        case 2:
+            #pragma unroll
+            for (uint x = 0; x < 16; ++x)
+                buffer_2[bundle * 16 + x] = bundle_load[x];
+            break;
+        case 3:
+            #pragma unroll
+            for (uint x = 0; x < 16; ++x)
+                buffer_3[bundle * 16 + x] = bundle_load[x];
             break;
         default:
             break;
@@ -209,57 +445,85 @@ kernel void preloader_4(global float * restrict fop,
 
     barrier(CLK_LOCAL_MEM_FENCE);
 
-    uint step = get_local_id(0) / 4;
+    uint chan = get_local_id(0) / 4;
 
-    float v_0 = buf_0[step];
+    float v_0 = buffer_0[chan];
+    float v_1 = buffer_1[chan];
+    float v_2 = buffer_2[chan];
+    float v_3 = buffer_3[chan];
 
-    WRITE_CHANNEL(preloaders_out[3][0], v_0);
-    WRITE_CHANNEL(preloaders_out[3][1], v_0);
-    WRITE_CHANNEL(preloaders_out[3][2], v_0);
-    WRITE_CHANNEL(preloaders_out[3][3], v_0);
+    WRITE_CHANNEL(preloaders[3][0], v_0);
+    WRITE_CHANNEL(preloaders[3][1], v_0);
+    WRITE_CHANNEL(preloaders[3][2], v_0);
+    WRITE_CHANNEL(preloaders[3][3], v_0);
+    WRITE_CHANNEL(preloaders[3][4], v_1);
+    WRITE_CHANNEL(preloaders[3][5], v_1);
+    WRITE_CHANNEL(preloaders[3][6], v_1);
+    WRITE_CHANNEL(preloaders[3][7], v_1);
+    WRITE_CHANNEL(preloaders[3][8], v_2);
+    WRITE_CHANNEL(preloaders[3][9], v_2);
+    WRITE_CHANNEL(preloaders[3][10], v_2);
+    WRITE_CHANNEL(preloaders[3][11], v_2);
+    WRITE_CHANNEL(preloaders[3][12], v_3);
+    WRITE_CHANNEL(preloaders[3][13], v_3);
+    WRITE_CHANNEL(preloaders[3][14], v_3);
+    WRITE_CHANNEL(preloaders[3][15], v_3);
 }
 
-__attribute__((reqd_work_group_size(1680, 1, 1)))
+__attribute__((reqd_work_group_size(3360, 1, 1)))
 kernel void preloader_5(global float * restrict fop,
+                        const uint n_filters,
                         const uint negative_filters)
 {
-    local   float buf_0[336];
-    local   float buf_1[336];
-    private float ld[8];
+    local   float buffer_0[672];
+    local   float buffer_1[672];
+    local   float buffer_2[672];
+    local   float buffer_3[672];
+    private float bundle_load[16];
 
-    int  filter_base  = get_group_id(1) * 4 / 5;
-    uint row_offset   = get_group_id(1) * 4 % 5;
-    uint channel_base = get_group_id(0) * 336;
+    int  filter_base  = get_group_id(1) * 16 / 5;
+    uint row_offset   = get_group_id(1) * 16 % 5;
+    uint channel_base = get_group_id(0) * 672;
 
     uint buffer = get_local_id(0) / 42;
     uint bundle = get_local_id(0) % 42;
 
     int  filter = filter_base + buffer;
-    if (negative_filters)
-        filter = -filter;
 
-    if (buffer < 2) {
-        if (buffer < 1 || row_offset >= 2) {
-            #pragma unroll
-            for (uint c = 0; c < 8; ++c)
-                ld[c] = fop[FOP_IDX(filter, channel_base + bundle * 8 + c)];
-        } else {
-            #pragma unroll
-            for (uint c = 0; c < 8; ++c)
-                ld[c] = 0.0f;
-        }
+    if (   buffer < 4
+        && filter < n_filters) {
+        if (negative_filters)
+            filter = -filter;
+
+        #pragma unroll
+        for (uint x = 0; x < 16; ++x)
+            bundle_load[x] = fop[FOP_IDX(filter, channel_base + bundle * 16 + x)];
+    } else {
+        #pragma unroll
+        for (uint x = 0; x < 16; ++x)
+            bundle_load[x] = 0.0f;
     }
 
     switch (buffer) {
         case 0:
             #pragma unroll
-            for (uint c = 0; c < 8; ++c)
-                buf_0[bundle * 8 + c] = ld[c];
+            for (uint x = 0; x < 16; ++x)
+                buffer_0[bundle * 16 + x] = bundle_load[x];
             break;
         case 1:
             #pragma unroll
-            for (uint c = 0; c < 8; ++c)
-                buf_1[bundle * 8 + c] = ld[c];
+            for (uint x = 0; x < 16; ++x)
+                buffer_1[bundle * 16 + x] = bundle_load[x];
+            break;
+        case 2:
+            #pragma unroll
+            for (uint x = 0; x < 16; ++x)
+                buffer_2[bundle * 16 + x] = bundle_load[x];
+            break;
+        case 3:
+            #pragma unroll
+            for (uint x = 0; x < 16; ++x)
+                buffer_3[bundle * 16 + x] = bundle_load[x];
             break;
         default:
             break;
@@ -267,58 +531,86 @@ kernel void preloader_5(global float * restrict fop,
 
     barrier(CLK_LOCAL_MEM_FENCE);
 
-    uint step = get_local_id(0) / 5;
+    uint chan = get_local_id(0) / 5;
 
-    float v_0 = buf_0[step];
-    float v_1 = buf_1[step];
+    float v_0 = buffer_0[chan];
+    float v_1 = buffer_1[chan];
+    float v_2 = buffer_2[chan];
+    float v_3 = buffer_3[chan];
 
-    WRITE_CHANNEL(preloaders_out[4][0], v_0);
-    WRITE_CHANNEL(preloaders_out[4][1], row_offset < 4 ? v_0 : v_1);
-    WRITE_CHANNEL(preloaders_out[4][2], row_offset < 3 ? v_0 : v_1);
-    WRITE_CHANNEL(preloaders_out[4][3], row_offset < 2 ? v_0 : v_1);
+    WRITE_CHANNEL(preloaders[4][0], v_0);
+    WRITE_CHANNEL(preloaders[4][1], row_offset < 4 ? v_0 : v_1);
+    WRITE_CHANNEL(preloaders[4][2], row_offset < 3 ? v_0 : v_1);
+    WRITE_CHANNEL(preloaders[4][3], row_offset < 2 ? v_0 : v_1);
+    WRITE_CHANNEL(preloaders[4][4], row_offset < 1 ? v_0 : v_1);
+    WRITE_CHANNEL(preloaders[4][5], v_1);
+    WRITE_CHANNEL(preloaders[4][6], row_offset < 4 ? v_1 : v_2);
+    WRITE_CHANNEL(preloaders[4][7], row_offset < 3 ? v_1 : v_2);
+    WRITE_CHANNEL(preloaders[4][8], row_offset < 2 ? v_1 : v_2);
+    WRITE_CHANNEL(preloaders[4][9], row_offset < 1 ? v_1 : v_2);
+    WRITE_CHANNEL(preloaders[4][10], v_2);
+    WRITE_CHANNEL(preloaders[4][11], row_offset < 4 ? v_2 : v_3);
+    WRITE_CHANNEL(preloaders[4][12], row_offset < 3 ? v_2 : v_3);
+    WRITE_CHANNEL(preloaders[4][13], row_offset < 2 ? v_2 : v_3);
+    WRITE_CHANNEL(preloaders[4][14], row_offset < 1 ? v_2 : v_3);
+    WRITE_CHANNEL(preloaders[4][15], v_3);
 }
 
-__attribute__((reqd_work_group_size(1680, 1, 1)))
+__attribute__((reqd_work_group_size(3360, 1, 1)))
 kernel void preloader_6(global float * restrict fop,
+                        const uint n_filters,
                         const uint negative_filters)
 {
-    local   float buf_0[280];
-    local   float buf_1[280];
-    private float ld[8];
+    local   float buffer_0[560];
+    local   float buffer_1[560];
+    local   float buffer_2[560];
+    local   float buffer_3[560];
+    private float bundle_load[16];
 
-    int  filter_base  = get_group_id(1) * 4 / 6;
-    uint row_offset   = get_group_id(1) * 4 % 6;
-    uint channel_base = get_group_id(0) * 280;
+    int  filter_base  = get_group_id(1) * 16 / 6;
+    uint row_offset   = get_group_id(1) * 16 % 6;
+    uint channel_base = get_group_id(0) * 560;
 
     uint buffer = get_local_id(0) / 35;
     uint bundle = get_local_id(0) % 35;
 
     int  filter = filter_base + buffer;
-    if (negative_filters)
-        filter = -filter;
 
-    if (buffer < 2) {
-        if (buffer < 1 || row_offset >= 4) {
-            #pragma unroll
-            for (uint c = 0; c < 8; ++c)
-                ld[c] = fop[FOP_IDX(filter, channel_base + bundle * 8 + c)];
-        } else {
-            #pragma unroll
-            for (uint c = 0; c < 8; ++c)
-                ld[c] = 0.0f;
-        }
+    if (   buffer < 4
+        && (buffer < 3 || row_offset >= 4)
+        && filter < n_filters) {
+        if (negative_filters)
+            filter = -filter;
+
+        #pragma unroll
+        for (uint x = 0; x < 16; ++x)
+            bundle_load[x] = fop[FOP_IDX(filter, channel_base + bundle * 16 + x)];
+    } else {
+        #pragma unroll
+        for (uint x = 0; x < 16; ++x)
+            bundle_load[x] = 0.0f;
     }
 
     switch (buffer) {
         case 0:
             #pragma unroll
-            for (uint c = 0; c < 8; ++c)
-                buf_0[bundle * 8 + c] = ld[c];
+            for (uint x = 0; x < 16; ++x)
+                buffer_0[bundle * 16 + x] = bundle_load[x];
             break;
         case 1:
             #pragma unroll
-            for (uint c = 0; c < 8; ++c)
-                buf_1[bundle * 8 + c] = ld[c];
+            for (uint x = 0; x < 16; ++x)
+                buffer_1[bundle * 16 + x] = bundle_load[x];
+            break;
+        case 2:
+            #pragma unroll
+            for (uint x = 0; x < 16; ++x)
+                buffer_2[bundle * 16 + x] = bundle_load[x];
+            break;
+        case 3:
+            #pragma unroll
+            for (uint x = 0; x < 16; ++x)
+                buffer_3[bundle * 16 + x] = bundle_load[x];
             break;
         default:
             break;
@@ -326,58 +618,86 @@ kernel void preloader_6(global float * restrict fop,
 
     barrier(CLK_LOCAL_MEM_FENCE);
 
-    uint step = get_local_id(0) / 6;
+    uint chan = get_local_id(0) / 6;
 
-    float v_0 = buf_0[step];
-    float v_1 = buf_1[step];
+    float v_0 = buffer_0[chan];
+    float v_1 = buffer_1[chan];
+    float v_2 = buffer_2[chan];
+    float v_3 = buffer_3[chan];
 
-    WRITE_CHANNEL(preloaders_out[5][0], v_0);
-    WRITE_CHANNEL(preloaders_out[5][1], v_0);
-    WRITE_CHANNEL(preloaders_out[5][2], row_offset < 4 ? v_0 : v_1);
-    WRITE_CHANNEL(preloaders_out[5][3], row_offset < 4 ? v_0 : v_1);
+    WRITE_CHANNEL(preloaders[5][0], v_0);
+    WRITE_CHANNEL(preloaders[5][1], v_0);
+    WRITE_CHANNEL(preloaders[5][2], row_offset < 4 ? v_0 : v_1);
+    WRITE_CHANNEL(preloaders[5][3], row_offset < 4 ? v_0 : v_1);
+    WRITE_CHANNEL(preloaders[5][4], row_offset < 2 ? v_0 : v_1);
+    WRITE_CHANNEL(preloaders[5][5], row_offset < 2 ? v_0 : v_1);
+    WRITE_CHANNEL(preloaders[5][6], v_1);
+    WRITE_CHANNEL(preloaders[5][7], v_1);
+    WRITE_CHANNEL(preloaders[5][8], row_offset < 4 ? v_1 : v_2);
+    WRITE_CHANNEL(preloaders[5][9], row_offset < 4 ? v_1 : v_2);
+    WRITE_CHANNEL(preloaders[5][10], row_offset < 2 ? v_1 : v_2);
+    WRITE_CHANNEL(preloaders[5][11], row_offset < 2 ? v_1 : v_2);
+    WRITE_CHANNEL(preloaders[5][12], v_2);
+    WRITE_CHANNEL(preloaders[5][13], v_2);
+    WRITE_CHANNEL(preloaders[5][14], row_offset < 4 ? v_2 : v_3);
+    WRITE_CHANNEL(preloaders[5][15], row_offset < 4 ? v_2 : v_3);
 }
 
-__attribute__((reqd_work_group_size(1680, 1, 1)))
+__attribute__((reqd_work_group_size(3360, 1, 1)))
 kernel void preloader_7(global float * restrict fop,
+                        const uint n_filters,
                         const uint negative_filters)
 {
-    local   float buf_0[240];
-    local   float buf_1[240];
-    private float ld[8];
+    local   float buffer_0[480];
+    local   float buffer_1[480];
+    local   float buffer_2[480];
+    local   float buffer_3[480];
+    private float bundle_load[16];
 
-    int  filter_base  = get_group_id(1) * 4 / 7;
-    uint row_offset   = get_group_id(1) * 4 % 7;
-    uint channel_base = get_group_id(0) * 240;
+    int  filter_base  = get_group_id(1) * 16 / 7;
+    uint row_offset   = get_group_id(1) * 16 % 7;
+    uint channel_base = get_group_id(0) * 480;
 
     uint buffer = get_local_id(0) / 30;
     uint bundle = get_local_id(0) % 30;
 
     int  filter = filter_base + buffer;
-    if (negative_filters)
-        filter = -filter;
 
-    if (buffer < 2) {
-        if (buffer < 1 || row_offset >= 4) {
-            #pragma unroll
-            for (uint c = 0; c < 8; ++c)
-                ld[c] = fop[FOP_IDX(filter, channel_base + bundle * 8 + c)];
-        } else {
-            #pragma unroll
-            for (uint c = 0; c < 8; ++c)
-                ld[c] = 0.0f;
-        }
+    if (   buffer < 4
+        && (buffer < 3 || row_offset >= 6)
+        && filter < n_filters) {
+        if (negative_filters)
+            filter = -filter;
+
+        #pragma unroll
+        for (uint x = 0; x < 16; ++x)
+            bundle_load[x] = fop[FOP_IDX(filter, channel_base + bundle * 16 + x)];
+    } else {
+        #pragma unroll
+        for (uint x = 0; x < 16; ++x)
+            bundle_load[x] = 0.0f;
     }
 
     switch (buffer) {
         case 0:
             #pragma unroll
-            for (uint c = 0; c < 8; ++c)
-                buf_0[bundle * 8 + c] = ld[c];
+            for (uint x = 0; x < 16; ++x)
+                buffer_0[bundle * 16 + x] = bundle_load[x];
             break;
         case 1:
             #pragma unroll
-            for (uint c = 0; c < 8; ++c)
-                buf_1[bundle * 8 + c] = ld[c];
+            for (uint x = 0; x < 16; ++x)
+                buffer_1[bundle * 16 + x] = bundle_load[x];
+            break;
+        case 2:
+            #pragma unroll
+            for (uint x = 0; x < 16; ++x)
+                buffer_2[bundle * 16 + x] = bundle_load[x];
+            break;
+        case 3:
+            #pragma unroll
+            for (uint x = 0; x < 16; ++x)
+                buffer_3[bundle * 16 + x] = bundle_load[x];
             break;
         default:
             break;
@@ -385,45 +705,72 @@ kernel void preloader_7(global float * restrict fop,
 
     barrier(CLK_LOCAL_MEM_FENCE);
 
-    uint step = get_local_id(0) / 7;
+    uint chan = get_local_id(0) / 7;
 
-    float v_0 = buf_0[step];
-    float v_1 = buf_1[step];
+    float v_0 = buffer_0[chan];
+    float v_1 = buffer_1[chan];
+    float v_2 = buffer_2[chan];
+    float v_3 = buffer_3[chan];
 
-    WRITE_CHANNEL(preloaders_out[6][0], v_0);
-    WRITE_CHANNEL(preloaders_out[6][1], row_offset < 6 ? v_0 : v_1);
-    WRITE_CHANNEL(preloaders_out[6][2], row_offset < 5 ? v_0 : v_1);
-    WRITE_CHANNEL(preloaders_out[6][3], row_offset < 4 ? v_0 : v_1);
+    WRITE_CHANNEL(preloaders[6][0], v_0);
+    WRITE_CHANNEL(preloaders[6][1], row_offset < 6 ? v_0 : v_1);
+    WRITE_CHANNEL(preloaders[6][2], row_offset < 5 ? v_0 : v_1);
+    WRITE_CHANNEL(preloaders[6][3], row_offset < 4 ? v_0 : v_1);
+    WRITE_CHANNEL(preloaders[6][4], row_offset < 3 ? v_0 : v_1);
+    WRITE_CHANNEL(preloaders[6][5], row_offset < 2 ? v_0 : v_1);
+    WRITE_CHANNEL(preloaders[6][6], row_offset < 1 ? v_0 : v_1);
+    WRITE_CHANNEL(preloaders[6][7], v_1);
+    WRITE_CHANNEL(preloaders[6][8], row_offset < 6 ? v_1 : v_2);
+    WRITE_CHANNEL(preloaders[6][9], row_offset < 5 ? v_1 : v_2);
+    WRITE_CHANNEL(preloaders[6][10], row_offset < 4 ? v_1 : v_2);
+    WRITE_CHANNEL(preloaders[6][11], row_offset < 3 ? v_1 : v_2);
+    WRITE_CHANNEL(preloaders[6][12], row_offset < 2 ? v_1 : v_2);
+    WRITE_CHANNEL(preloaders[6][13], row_offset < 1 ? v_1 : v_2);
+    WRITE_CHANNEL(preloaders[6][14], v_2);
+    WRITE_CHANNEL(preloaders[6][15], row_offset < 6 ? v_2 : v_3);
 }
 
-__attribute__((reqd_work_group_size(1680, 1, 1)))
+__attribute__((reqd_work_group_size(3360, 1, 1)))
 kernel void preloader_8(global float * restrict fop,
+                        const uint n_filters,
                         const uint negative_filters)
 {
-    local   float buf_0[216];
-    private float ld[8];
+    local   float buffer_0[432];
+    local   float buffer_1[432];
+    private float bundle_load[16];
 
-    int  filter_base  = get_group_id(1) * 4 / 8;
-    uint channel_base = get_group_id(0) * 210;
+    int  filter_base  = get_group_id(1) * 16 / 8;
+    uint channel_base = get_group_id(0) * 420;
 
     uint buffer = get_local_id(0) / 27;
     uint bundle = get_local_id(0) % 27;
 
     int  filter = filter_base + buffer;
-    if (negative_filters)
-        filter = -filter;
 
-    if (buffer < 1) {
+    if (   buffer < 2
+        && filter < n_filters) {
+        if (negative_filters)
+            filter = -filter;
+
         #pragma unroll
-        for (uint c = 0; c < 8; ++c)
-            ld[c] = fop[FOP_IDX(filter, channel_base + bundle * 8 + c)];
+        for (uint x = 0; x < 16; ++x)
+            bundle_load[x] = fop[FOP_IDX(filter, channel_base + bundle * 16 + x)];
+    } else {
+        #pragma unroll
+        for (uint x = 0; x < 16; ++x)
+            bundle_load[x] = 0.0f;
     }
 
     switch (buffer) {
         case 0:
             #pragma unroll
-            for (uint c = 0; c < 8; ++c)
-                buf_0[bundle * 8 + c] = ld[c];
+            for (uint x = 0; x < 16; ++x)
+                buffer_0[bundle * 16 + x] = bundle_load[x];
+            break;
+        case 1:
+            #pragma unroll
+            for (uint x = 0; x < 16; ++x)
+                buffer_1[bundle * 16 + x] = bundle_load[x];
             break;
         default:
             break;
@@ -431,12 +778,25 @@ kernel void preloader_8(global float * restrict fop,
 
     barrier(CLK_LOCAL_MEM_FENCE);
 
-    uint step = get_local_id(0) / 8;
+    uint chan = get_local_id(0) / 8;
 
-    float v_0 = buf_0[step];
+    float v_0 = buffer_0[chan];
+    float v_1 = buffer_1[chan];
 
-    WRITE_CHANNEL(preloaders_out[7][0], v_0);
-    WRITE_CHANNEL(preloaders_out[7][1], v_0);
-    WRITE_CHANNEL(preloaders_out[7][2], v_0);
-    WRITE_CHANNEL(preloaders_out[7][3], v_0);
+    WRITE_CHANNEL(preloaders[7][0], v_0);
+    WRITE_CHANNEL(preloaders[7][1], v_0);
+    WRITE_CHANNEL(preloaders[7][2], v_0);
+    WRITE_CHANNEL(preloaders[7][3], v_0);
+    WRITE_CHANNEL(preloaders[7][4], v_0);
+    WRITE_CHANNEL(preloaders[7][5], v_0);
+    WRITE_CHANNEL(preloaders[7][6], v_0);
+    WRITE_CHANNEL(preloaders[7][7], v_0);
+    WRITE_CHANNEL(preloaders[7][8], v_1);
+    WRITE_CHANNEL(preloaders[7][9], v_1);
+    WRITE_CHANNEL(preloaders[7][10], v_1);
+    WRITE_CHANNEL(preloaders[7][11], v_1);
+    WRITE_CHANNEL(preloaders[7][12], v_1);
+    WRITE_CHANNEL(preloaders[7][13], v_1);
+    WRITE_CHANNEL(preloaders[7][14], v_1);
+    WRITE_CHANNEL(preloaders[7][15], v_1);
 }

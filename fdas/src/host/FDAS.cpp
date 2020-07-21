@@ -123,15 +123,13 @@ bool FDAS::initialise_accelerator(std::string bitstream_file_name,
 
     preloader_kernels.resize(HMS_N_PLANES);
     detect_kernels.resize(HMS_N_PLANES);
-    ringbuf_kernels.resize(HMS_N_PLANES);
     for (int h = 0; h < HMS_N_PLANES; ++h) {
         auto name = "preloader_" + std::to_string(h + 1);
         cl_chkref(preloader_kernels[h].reset(new cl::Kernel(*program, name.c_str(), &status)));
         name = "detect_" + std::to_string(h + 1);
         cl_chkref(detect_kernels[h].reset(new cl::Kernel(*program, name.c_str(), &status)));
-        name = "ringbuf_" + std::to_string(h + 1);
-        cl_chkref(ringbuf_kernels[h].reset(new cl::Kernel(*program, name.c_str(), &status)));
     }
+    cl_chkref(store_cands_kernel.reset(new cl::Kernel(*program, "store_cands", &status)));
 
     // Buffers
     size_t total_allocated = 0;
@@ -250,19 +248,22 @@ bool FDAS::perform_harmonic_summing(const FDAS::ThreshType &thresholds, const FD
     }
 
     const int n_planes = HMS_N_PLANES,
-              n_parallel = 4,
-              workgroup_sz = 1680, // divisible by lcm(1, 2, ..., n_planes)
-              n_filters = 40,    // divisible by n_parallel
-              n_channels = 4193280; // divisible by workgroup_sz
+              n_parallel = 16,
+              workgroup_sz = 3360, // divisible by lcm(1, 2, ..., n_planes)
+              n_filters = N_FILTERS_PER_ACCEL_SIGN + 1,
+              n_channels = 1248 * workgroup_sz, // ~ FDF_OUTPUT_SZ, divisible by workgroup_sz
+              n_filter_batches = (int) ceil(1.0 * n_filters / n_parallel);
 
-    std::vector<cl::CommandQueue> preloader_queues, detect_queues, ringbuf_queues;
-    cl::NDRange global(n_channels, n_filters / n_parallel);
+    std::vector<cl::CommandQueue> preloader_queues, detect_queues;
+    cl::CommandQueue store_cands_queue(*context, default_device);
+    cl::NDRange global(n_channels, n_filter_batches);
     cl::NDRange local(workgroup_sz, 1);
 
     for (int h = 0; h < n_planes; ++h) {
         auto &preld_k = *preloader_kernels[h];
         cl_chk(preld_k.setArg<cl::Buffer>(0, *fop_buffer));
-        cl_chk(preld_k.setArg<cl_uint>(1, false));
+        cl_chk(preld_k.setArg<cl_uint>(1, n_filters));
+        cl_chk(preld_k.setArg<cl_uint>(2, false));
 
         cl::CommandQueue preld_q(*context, default_device);
         cl_chk(preld_q.enqueueNDRangeKernel(preld_k, cl::NullRange, global, local));
@@ -270,20 +271,19 @@ bool FDAS::perform_harmonic_summing(const FDAS::ThreshType &thresholds, const FD
 
         auto &detect_k = *detect_kernels[h];
         cl_chk(detect_k.setArg<cl_float>(0, thresholds[h]));
-        cl_chk(detect_k.setArg<cl_uint>(1, false));
+        cl_chk(detect_k.setArg<cl_uint>(1, n_filter_batches));
+        cl_chk(detect_k.setArg<cl_uint>(2, false));
+        cl_chk(detect_k.setArg<cl_uint>(3, n_filters));
+        cl_chk(detect_k.setArg<cl_uint>(4, n_channels));
 
         cl::CommandQueue detect_q(*context, default_device);
         cl_chk(detect_q.enqueueTask(detect_k));
         detect_queues.emplace_back(detect_q);
-
-        auto &ringbuf_k = *ringbuf_kernels[h];
-        cl_chk(ringbuf_k.setArg<cl::Buffer>(0, *detection_location_buffer));
-        cl_chk(ringbuf_k.setArg<cl::Buffer>(1, *detection_amplitude_buffer));
-
-        cl::CommandQueue ringbuf_q(*context, default_device);
-        cl_chk(ringbuf_q.enqueueTask(ringbuf_k));
-        ringbuf_queues.emplace_back(ringbuf_q);
     }
+
+    cl_chk(store_cands_kernel->setArg<cl::Buffer>(0, *detection_location_buffer));
+    cl_chk(store_cands_kernel->setArg<cl::Buffer>(1, *detection_amplitude_buffer));
+    cl_chk(store_cands_queue.enqueueTask(*store_cands_kernel));
 
     for (auto &q : preloader_queues)
         cl_chk(q.finish());
@@ -291,8 +291,7 @@ bool FDAS::perform_harmonic_summing(const FDAS::ThreshType &thresholds, const FD
     for (auto &q : detect_queues)
         cl_chk(q.finish());
 
-    for (auto &q : ringbuf_queues)
-        cl_chk(q.finish());
+    cl_chk(store_cands_queue.finish());
 
     return true;
 }
