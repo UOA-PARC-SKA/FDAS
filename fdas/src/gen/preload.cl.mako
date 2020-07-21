@@ -4,9 +4,9 @@
 %>\
 
 __attribute__((reqd_work_group_size(${workgroup_sz}, 1, 1)))
-kernel void preloader_${harmonic}(global float * restrict fop,
-                        const uint n_filters,
-                        const uint negative_filters)
+kernel void preload_${harmonic}(global float * restrict fop,
+                      const uint n_filters,
+                      const uint negative_filters)
 {
 <%
     gcd_kp = gcd(harmonic, n_parallel)
@@ -98,9 +98,9 @@ kernel void preloader_${harmonic}(global float * restrict fop,
 
 % for p in range(n_parallel):
 % if len(buffers_for_output[p]) == 1:
-    WRITE_CHANNEL(preloaders[${harmonic - 1}][${p}], v_${buffers_for_output[p][0]});
+    WRITE_CHANNEL(preload_to_detect[${harmonic - 1}][${p}], v_${buffers_for_output[p][0]});
 % else:
-    WRITE_CHANNEL(preloaders[${harmonic - 1}][${p}], row_offset < ${buffers_for_output[p][2]} ? v_${buffers_for_output[p][0]} : v_${buffers_for_output[p][1]});
+    WRITE_CHANNEL(preload_to_detect[${harmonic - 1}][${p}], row_offset < ${buffers_for_output[p][2]} ? v_${buffers_for_output[p][0]} : v_${buffers_for_output[p][1]});
 % endif
 % endfor
 }

@@ -1,8 +1,8 @@
 
 // Auto-generated file -- see `hsum_codegen.py` and `detect.cl.mako`.
-channel float next_plane[7][16] __attribute__((depth(0)));
-channel uint locations[8][16] __attribute__((depth(0)));
-channel float amplitudes[8][16] __attribute__((depth(0)));
+channel float detect_to_detect[7][16] __attribute__((depth(0)));
+channel uint  detect_to_store_location[8][16] __attribute__((depth(0)));
+channel float detect_to_store_amplitude[8][16] __attribute__((depth(0)));
 
 __attribute__((max_global_work_dim(0)))
 kernel void detect_1(const float threshold,
@@ -51,11 +51,11 @@ kernel void detect_1(const float threshold,
 
             #pragma unroll
             for (uint p = 0; p < 16; ++p)
-                hsum[p] = READ_CHANNEL(preloaders[0][p]);
+                hsum[p] = READ_CHANNEL(preload_to_detect[0][p]);
 
             #pragma unroll
             for (uint p = 0; p < 16; ++p)
-                WRITE_CHANNEL(next_plane[0][p], hsum[p]);
+                WRITE_CHANNEL(detect_to_detect[0][p], hsum[p]);
 
             int filter_0 = batch * 16 + 0;
             if (hsum[0] > threshold && filter_0 < n_filters) {
@@ -206,38 +206,38 @@ kernel void detect_1(const float threshold,
 
     #pragma unroll 1
     for (uint slot = 0; slot < 4; ++slot) {
-        WRITE_CHANNEL(locations[0][0], location_buffer_0[slot]);
-        WRITE_CHANNEL(amplitudes[0][0], amplitude_buffer_0[slot]);
-        WRITE_CHANNEL(locations[0][1], location_buffer_1[slot]);
-        WRITE_CHANNEL(amplitudes[0][1], amplitude_buffer_1[slot]);
-        WRITE_CHANNEL(locations[0][2], location_buffer_2[slot]);
-        WRITE_CHANNEL(amplitudes[0][2], amplitude_buffer_2[slot]);
-        WRITE_CHANNEL(locations[0][3], location_buffer_3[slot]);
-        WRITE_CHANNEL(amplitudes[0][3], amplitude_buffer_3[slot]);
-        WRITE_CHANNEL(locations[0][4], location_buffer_4[slot]);
-        WRITE_CHANNEL(amplitudes[0][4], amplitude_buffer_4[slot]);
-        WRITE_CHANNEL(locations[0][5], location_buffer_5[slot]);
-        WRITE_CHANNEL(amplitudes[0][5], amplitude_buffer_5[slot]);
-        WRITE_CHANNEL(locations[0][6], location_buffer_6[slot]);
-        WRITE_CHANNEL(amplitudes[0][6], amplitude_buffer_6[slot]);
-        WRITE_CHANNEL(locations[0][7], location_buffer_7[slot]);
-        WRITE_CHANNEL(amplitudes[0][7], amplitude_buffer_7[slot]);
-        WRITE_CHANNEL(locations[0][8], location_buffer_8[slot]);
-        WRITE_CHANNEL(amplitudes[0][8], amplitude_buffer_8[slot]);
-        WRITE_CHANNEL(locations[0][9], location_buffer_9[slot]);
-        WRITE_CHANNEL(amplitudes[0][9], amplitude_buffer_9[slot]);
-        WRITE_CHANNEL(locations[0][10], location_buffer_10[slot]);
-        WRITE_CHANNEL(amplitudes[0][10], amplitude_buffer_10[slot]);
-        WRITE_CHANNEL(locations[0][11], location_buffer_11[slot]);
-        WRITE_CHANNEL(amplitudes[0][11], amplitude_buffer_11[slot]);
-        WRITE_CHANNEL(locations[0][12], location_buffer_12[slot]);
-        WRITE_CHANNEL(amplitudes[0][12], amplitude_buffer_12[slot]);
-        WRITE_CHANNEL(locations[0][13], location_buffer_13[slot]);
-        WRITE_CHANNEL(amplitudes[0][13], amplitude_buffer_13[slot]);
-        WRITE_CHANNEL(locations[0][14], location_buffer_14[slot]);
-        WRITE_CHANNEL(amplitudes[0][14], amplitude_buffer_14[slot]);
-        WRITE_CHANNEL(locations[0][15], location_buffer_15[slot]);
-        WRITE_CHANNEL(amplitudes[0][15], amplitude_buffer_15[slot]);
+        WRITE_CHANNEL(detect_to_store_location[0][0], location_buffer_0[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[0][0], amplitude_buffer_0[slot]);
+        WRITE_CHANNEL(detect_to_store_location[0][1], location_buffer_1[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[0][1], amplitude_buffer_1[slot]);
+        WRITE_CHANNEL(detect_to_store_location[0][2], location_buffer_2[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[0][2], amplitude_buffer_2[slot]);
+        WRITE_CHANNEL(detect_to_store_location[0][3], location_buffer_3[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[0][3], amplitude_buffer_3[slot]);
+        WRITE_CHANNEL(detect_to_store_location[0][4], location_buffer_4[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[0][4], amplitude_buffer_4[slot]);
+        WRITE_CHANNEL(detect_to_store_location[0][5], location_buffer_5[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[0][5], amplitude_buffer_5[slot]);
+        WRITE_CHANNEL(detect_to_store_location[0][6], location_buffer_6[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[0][6], amplitude_buffer_6[slot]);
+        WRITE_CHANNEL(detect_to_store_location[0][7], location_buffer_7[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[0][7], amplitude_buffer_7[slot]);
+        WRITE_CHANNEL(detect_to_store_location[0][8], location_buffer_8[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[0][8], amplitude_buffer_8[slot]);
+        WRITE_CHANNEL(detect_to_store_location[0][9], location_buffer_9[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[0][9], amplitude_buffer_9[slot]);
+        WRITE_CHANNEL(detect_to_store_location[0][10], location_buffer_10[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[0][10], amplitude_buffer_10[slot]);
+        WRITE_CHANNEL(detect_to_store_location[0][11], location_buffer_11[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[0][11], amplitude_buffer_11[slot]);
+        WRITE_CHANNEL(detect_to_store_location[0][12], location_buffer_12[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[0][12], amplitude_buffer_12[slot]);
+        WRITE_CHANNEL(detect_to_store_location[0][13], location_buffer_13[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[0][13], amplitude_buffer_13[slot]);
+        WRITE_CHANNEL(detect_to_store_location[0][14], location_buffer_14[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[0][14], amplitude_buffer_14[slot]);
+        WRITE_CHANNEL(detect_to_store_location[0][15], location_buffer_15[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[0][15], amplitude_buffer_15[slot]);
     }
 }
 
@@ -288,11 +288,11 @@ kernel void detect_2(const float threshold,
 
             #pragma unroll
             for (uint p = 0; p < 16; ++p)
-                hsum[p] = READ_CHANNEL(next_plane[0][p]) + READ_CHANNEL(preloaders[1][p]);
+                hsum[p] = READ_CHANNEL(detect_to_detect[0][p]) + READ_CHANNEL(preload_to_detect[1][p]);
 
             #pragma unroll
             for (uint p = 0; p < 16; ++p)
-                WRITE_CHANNEL(next_plane[1][p], hsum[p]);
+                WRITE_CHANNEL(detect_to_detect[1][p], hsum[p]);
 
             int filter_0 = batch * 16 + 0;
             if (hsum[0] > threshold && filter_0 < n_filters) {
@@ -443,38 +443,38 @@ kernel void detect_2(const float threshold,
 
     #pragma unroll 1
     for (uint slot = 0; slot < 4; ++slot) {
-        WRITE_CHANNEL(locations[1][0], location_buffer_0[slot]);
-        WRITE_CHANNEL(amplitudes[1][0], amplitude_buffer_0[slot]);
-        WRITE_CHANNEL(locations[1][1], location_buffer_1[slot]);
-        WRITE_CHANNEL(amplitudes[1][1], amplitude_buffer_1[slot]);
-        WRITE_CHANNEL(locations[1][2], location_buffer_2[slot]);
-        WRITE_CHANNEL(amplitudes[1][2], amplitude_buffer_2[slot]);
-        WRITE_CHANNEL(locations[1][3], location_buffer_3[slot]);
-        WRITE_CHANNEL(amplitudes[1][3], amplitude_buffer_3[slot]);
-        WRITE_CHANNEL(locations[1][4], location_buffer_4[slot]);
-        WRITE_CHANNEL(amplitudes[1][4], amplitude_buffer_4[slot]);
-        WRITE_CHANNEL(locations[1][5], location_buffer_5[slot]);
-        WRITE_CHANNEL(amplitudes[1][5], amplitude_buffer_5[slot]);
-        WRITE_CHANNEL(locations[1][6], location_buffer_6[slot]);
-        WRITE_CHANNEL(amplitudes[1][6], amplitude_buffer_6[slot]);
-        WRITE_CHANNEL(locations[1][7], location_buffer_7[slot]);
-        WRITE_CHANNEL(amplitudes[1][7], amplitude_buffer_7[slot]);
-        WRITE_CHANNEL(locations[1][8], location_buffer_8[slot]);
-        WRITE_CHANNEL(amplitudes[1][8], amplitude_buffer_8[slot]);
-        WRITE_CHANNEL(locations[1][9], location_buffer_9[slot]);
-        WRITE_CHANNEL(amplitudes[1][9], amplitude_buffer_9[slot]);
-        WRITE_CHANNEL(locations[1][10], location_buffer_10[slot]);
-        WRITE_CHANNEL(amplitudes[1][10], amplitude_buffer_10[slot]);
-        WRITE_CHANNEL(locations[1][11], location_buffer_11[slot]);
-        WRITE_CHANNEL(amplitudes[1][11], amplitude_buffer_11[slot]);
-        WRITE_CHANNEL(locations[1][12], location_buffer_12[slot]);
-        WRITE_CHANNEL(amplitudes[1][12], amplitude_buffer_12[slot]);
-        WRITE_CHANNEL(locations[1][13], location_buffer_13[slot]);
-        WRITE_CHANNEL(amplitudes[1][13], amplitude_buffer_13[slot]);
-        WRITE_CHANNEL(locations[1][14], location_buffer_14[slot]);
-        WRITE_CHANNEL(amplitudes[1][14], amplitude_buffer_14[slot]);
-        WRITE_CHANNEL(locations[1][15], location_buffer_15[slot]);
-        WRITE_CHANNEL(amplitudes[1][15], amplitude_buffer_15[slot]);
+        WRITE_CHANNEL(detect_to_store_location[1][0], location_buffer_0[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[1][0], amplitude_buffer_0[slot]);
+        WRITE_CHANNEL(detect_to_store_location[1][1], location_buffer_1[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[1][1], amplitude_buffer_1[slot]);
+        WRITE_CHANNEL(detect_to_store_location[1][2], location_buffer_2[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[1][2], amplitude_buffer_2[slot]);
+        WRITE_CHANNEL(detect_to_store_location[1][3], location_buffer_3[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[1][3], amplitude_buffer_3[slot]);
+        WRITE_CHANNEL(detect_to_store_location[1][4], location_buffer_4[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[1][4], amplitude_buffer_4[slot]);
+        WRITE_CHANNEL(detect_to_store_location[1][5], location_buffer_5[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[1][5], amplitude_buffer_5[slot]);
+        WRITE_CHANNEL(detect_to_store_location[1][6], location_buffer_6[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[1][6], amplitude_buffer_6[slot]);
+        WRITE_CHANNEL(detect_to_store_location[1][7], location_buffer_7[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[1][7], amplitude_buffer_7[slot]);
+        WRITE_CHANNEL(detect_to_store_location[1][8], location_buffer_8[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[1][8], amplitude_buffer_8[slot]);
+        WRITE_CHANNEL(detect_to_store_location[1][9], location_buffer_9[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[1][9], amplitude_buffer_9[slot]);
+        WRITE_CHANNEL(detect_to_store_location[1][10], location_buffer_10[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[1][10], amplitude_buffer_10[slot]);
+        WRITE_CHANNEL(detect_to_store_location[1][11], location_buffer_11[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[1][11], amplitude_buffer_11[slot]);
+        WRITE_CHANNEL(detect_to_store_location[1][12], location_buffer_12[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[1][12], amplitude_buffer_12[slot]);
+        WRITE_CHANNEL(detect_to_store_location[1][13], location_buffer_13[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[1][13], amplitude_buffer_13[slot]);
+        WRITE_CHANNEL(detect_to_store_location[1][14], location_buffer_14[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[1][14], amplitude_buffer_14[slot]);
+        WRITE_CHANNEL(detect_to_store_location[1][15], location_buffer_15[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[1][15], amplitude_buffer_15[slot]);
     }
 }
 
@@ -525,11 +525,11 @@ kernel void detect_3(const float threshold,
 
             #pragma unroll
             for (uint p = 0; p < 16; ++p)
-                hsum[p] = READ_CHANNEL(next_plane[1][p]) + READ_CHANNEL(preloaders[2][p]);
+                hsum[p] = READ_CHANNEL(detect_to_detect[1][p]) + READ_CHANNEL(preload_to_detect[2][p]);
 
             #pragma unroll
             for (uint p = 0; p < 16; ++p)
-                WRITE_CHANNEL(next_plane[2][p], hsum[p]);
+                WRITE_CHANNEL(detect_to_detect[2][p], hsum[p]);
 
             int filter_0 = batch * 16 + 0;
             if (hsum[0] > threshold && filter_0 < n_filters) {
@@ -680,38 +680,38 @@ kernel void detect_3(const float threshold,
 
     #pragma unroll 1
     for (uint slot = 0; slot < 4; ++slot) {
-        WRITE_CHANNEL(locations[2][0], location_buffer_0[slot]);
-        WRITE_CHANNEL(amplitudes[2][0], amplitude_buffer_0[slot]);
-        WRITE_CHANNEL(locations[2][1], location_buffer_1[slot]);
-        WRITE_CHANNEL(amplitudes[2][1], amplitude_buffer_1[slot]);
-        WRITE_CHANNEL(locations[2][2], location_buffer_2[slot]);
-        WRITE_CHANNEL(amplitudes[2][2], amplitude_buffer_2[slot]);
-        WRITE_CHANNEL(locations[2][3], location_buffer_3[slot]);
-        WRITE_CHANNEL(amplitudes[2][3], amplitude_buffer_3[slot]);
-        WRITE_CHANNEL(locations[2][4], location_buffer_4[slot]);
-        WRITE_CHANNEL(amplitudes[2][4], amplitude_buffer_4[slot]);
-        WRITE_CHANNEL(locations[2][5], location_buffer_5[slot]);
-        WRITE_CHANNEL(amplitudes[2][5], amplitude_buffer_5[slot]);
-        WRITE_CHANNEL(locations[2][6], location_buffer_6[slot]);
-        WRITE_CHANNEL(amplitudes[2][6], amplitude_buffer_6[slot]);
-        WRITE_CHANNEL(locations[2][7], location_buffer_7[slot]);
-        WRITE_CHANNEL(amplitudes[2][7], amplitude_buffer_7[slot]);
-        WRITE_CHANNEL(locations[2][8], location_buffer_8[slot]);
-        WRITE_CHANNEL(amplitudes[2][8], amplitude_buffer_8[slot]);
-        WRITE_CHANNEL(locations[2][9], location_buffer_9[slot]);
-        WRITE_CHANNEL(amplitudes[2][9], amplitude_buffer_9[slot]);
-        WRITE_CHANNEL(locations[2][10], location_buffer_10[slot]);
-        WRITE_CHANNEL(amplitudes[2][10], amplitude_buffer_10[slot]);
-        WRITE_CHANNEL(locations[2][11], location_buffer_11[slot]);
-        WRITE_CHANNEL(amplitudes[2][11], amplitude_buffer_11[slot]);
-        WRITE_CHANNEL(locations[2][12], location_buffer_12[slot]);
-        WRITE_CHANNEL(amplitudes[2][12], amplitude_buffer_12[slot]);
-        WRITE_CHANNEL(locations[2][13], location_buffer_13[slot]);
-        WRITE_CHANNEL(amplitudes[2][13], amplitude_buffer_13[slot]);
-        WRITE_CHANNEL(locations[2][14], location_buffer_14[slot]);
-        WRITE_CHANNEL(amplitudes[2][14], amplitude_buffer_14[slot]);
-        WRITE_CHANNEL(locations[2][15], location_buffer_15[slot]);
-        WRITE_CHANNEL(amplitudes[2][15], amplitude_buffer_15[slot]);
+        WRITE_CHANNEL(detect_to_store_location[2][0], location_buffer_0[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[2][0], amplitude_buffer_0[slot]);
+        WRITE_CHANNEL(detect_to_store_location[2][1], location_buffer_1[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[2][1], amplitude_buffer_1[slot]);
+        WRITE_CHANNEL(detect_to_store_location[2][2], location_buffer_2[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[2][2], amplitude_buffer_2[slot]);
+        WRITE_CHANNEL(detect_to_store_location[2][3], location_buffer_3[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[2][3], amplitude_buffer_3[slot]);
+        WRITE_CHANNEL(detect_to_store_location[2][4], location_buffer_4[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[2][4], amplitude_buffer_4[slot]);
+        WRITE_CHANNEL(detect_to_store_location[2][5], location_buffer_5[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[2][5], amplitude_buffer_5[slot]);
+        WRITE_CHANNEL(detect_to_store_location[2][6], location_buffer_6[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[2][6], amplitude_buffer_6[slot]);
+        WRITE_CHANNEL(detect_to_store_location[2][7], location_buffer_7[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[2][7], amplitude_buffer_7[slot]);
+        WRITE_CHANNEL(detect_to_store_location[2][8], location_buffer_8[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[2][8], amplitude_buffer_8[slot]);
+        WRITE_CHANNEL(detect_to_store_location[2][9], location_buffer_9[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[2][9], amplitude_buffer_9[slot]);
+        WRITE_CHANNEL(detect_to_store_location[2][10], location_buffer_10[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[2][10], amplitude_buffer_10[slot]);
+        WRITE_CHANNEL(detect_to_store_location[2][11], location_buffer_11[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[2][11], amplitude_buffer_11[slot]);
+        WRITE_CHANNEL(detect_to_store_location[2][12], location_buffer_12[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[2][12], amplitude_buffer_12[slot]);
+        WRITE_CHANNEL(detect_to_store_location[2][13], location_buffer_13[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[2][13], amplitude_buffer_13[slot]);
+        WRITE_CHANNEL(detect_to_store_location[2][14], location_buffer_14[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[2][14], amplitude_buffer_14[slot]);
+        WRITE_CHANNEL(detect_to_store_location[2][15], location_buffer_15[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[2][15], amplitude_buffer_15[slot]);
     }
 }
 
@@ -762,11 +762,11 @@ kernel void detect_4(const float threshold,
 
             #pragma unroll
             for (uint p = 0; p < 16; ++p)
-                hsum[p] = READ_CHANNEL(next_plane[2][p]) + READ_CHANNEL(preloaders[3][p]);
+                hsum[p] = READ_CHANNEL(detect_to_detect[2][p]) + READ_CHANNEL(preload_to_detect[3][p]);
 
             #pragma unroll
             for (uint p = 0; p < 16; ++p)
-                WRITE_CHANNEL(next_plane[3][p], hsum[p]);
+                WRITE_CHANNEL(detect_to_detect[3][p], hsum[p]);
 
             int filter_0 = batch * 16 + 0;
             if (hsum[0] > threshold && filter_0 < n_filters) {
@@ -917,38 +917,38 @@ kernel void detect_4(const float threshold,
 
     #pragma unroll 1
     for (uint slot = 0; slot < 4; ++slot) {
-        WRITE_CHANNEL(locations[3][0], location_buffer_0[slot]);
-        WRITE_CHANNEL(amplitudes[3][0], amplitude_buffer_0[slot]);
-        WRITE_CHANNEL(locations[3][1], location_buffer_1[slot]);
-        WRITE_CHANNEL(amplitudes[3][1], amplitude_buffer_1[slot]);
-        WRITE_CHANNEL(locations[3][2], location_buffer_2[slot]);
-        WRITE_CHANNEL(amplitudes[3][2], amplitude_buffer_2[slot]);
-        WRITE_CHANNEL(locations[3][3], location_buffer_3[slot]);
-        WRITE_CHANNEL(amplitudes[3][3], amplitude_buffer_3[slot]);
-        WRITE_CHANNEL(locations[3][4], location_buffer_4[slot]);
-        WRITE_CHANNEL(amplitudes[3][4], amplitude_buffer_4[slot]);
-        WRITE_CHANNEL(locations[3][5], location_buffer_5[slot]);
-        WRITE_CHANNEL(amplitudes[3][5], amplitude_buffer_5[slot]);
-        WRITE_CHANNEL(locations[3][6], location_buffer_6[slot]);
-        WRITE_CHANNEL(amplitudes[3][6], amplitude_buffer_6[slot]);
-        WRITE_CHANNEL(locations[3][7], location_buffer_7[slot]);
-        WRITE_CHANNEL(amplitudes[3][7], amplitude_buffer_7[slot]);
-        WRITE_CHANNEL(locations[3][8], location_buffer_8[slot]);
-        WRITE_CHANNEL(amplitudes[3][8], amplitude_buffer_8[slot]);
-        WRITE_CHANNEL(locations[3][9], location_buffer_9[slot]);
-        WRITE_CHANNEL(amplitudes[3][9], amplitude_buffer_9[slot]);
-        WRITE_CHANNEL(locations[3][10], location_buffer_10[slot]);
-        WRITE_CHANNEL(amplitudes[3][10], amplitude_buffer_10[slot]);
-        WRITE_CHANNEL(locations[3][11], location_buffer_11[slot]);
-        WRITE_CHANNEL(amplitudes[3][11], amplitude_buffer_11[slot]);
-        WRITE_CHANNEL(locations[3][12], location_buffer_12[slot]);
-        WRITE_CHANNEL(amplitudes[3][12], amplitude_buffer_12[slot]);
-        WRITE_CHANNEL(locations[3][13], location_buffer_13[slot]);
-        WRITE_CHANNEL(amplitudes[3][13], amplitude_buffer_13[slot]);
-        WRITE_CHANNEL(locations[3][14], location_buffer_14[slot]);
-        WRITE_CHANNEL(amplitudes[3][14], amplitude_buffer_14[slot]);
-        WRITE_CHANNEL(locations[3][15], location_buffer_15[slot]);
-        WRITE_CHANNEL(amplitudes[3][15], amplitude_buffer_15[slot]);
+        WRITE_CHANNEL(detect_to_store_location[3][0], location_buffer_0[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[3][0], amplitude_buffer_0[slot]);
+        WRITE_CHANNEL(detect_to_store_location[3][1], location_buffer_1[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[3][1], amplitude_buffer_1[slot]);
+        WRITE_CHANNEL(detect_to_store_location[3][2], location_buffer_2[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[3][2], amplitude_buffer_2[slot]);
+        WRITE_CHANNEL(detect_to_store_location[3][3], location_buffer_3[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[3][3], amplitude_buffer_3[slot]);
+        WRITE_CHANNEL(detect_to_store_location[3][4], location_buffer_4[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[3][4], amplitude_buffer_4[slot]);
+        WRITE_CHANNEL(detect_to_store_location[3][5], location_buffer_5[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[3][5], amplitude_buffer_5[slot]);
+        WRITE_CHANNEL(detect_to_store_location[3][6], location_buffer_6[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[3][6], amplitude_buffer_6[slot]);
+        WRITE_CHANNEL(detect_to_store_location[3][7], location_buffer_7[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[3][7], amplitude_buffer_7[slot]);
+        WRITE_CHANNEL(detect_to_store_location[3][8], location_buffer_8[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[3][8], amplitude_buffer_8[slot]);
+        WRITE_CHANNEL(detect_to_store_location[3][9], location_buffer_9[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[3][9], amplitude_buffer_9[slot]);
+        WRITE_CHANNEL(detect_to_store_location[3][10], location_buffer_10[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[3][10], amplitude_buffer_10[slot]);
+        WRITE_CHANNEL(detect_to_store_location[3][11], location_buffer_11[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[3][11], amplitude_buffer_11[slot]);
+        WRITE_CHANNEL(detect_to_store_location[3][12], location_buffer_12[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[3][12], amplitude_buffer_12[slot]);
+        WRITE_CHANNEL(detect_to_store_location[3][13], location_buffer_13[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[3][13], amplitude_buffer_13[slot]);
+        WRITE_CHANNEL(detect_to_store_location[3][14], location_buffer_14[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[3][14], amplitude_buffer_14[slot]);
+        WRITE_CHANNEL(detect_to_store_location[3][15], location_buffer_15[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[3][15], amplitude_buffer_15[slot]);
     }
 }
 
@@ -999,11 +999,11 @@ kernel void detect_5(const float threshold,
 
             #pragma unroll
             for (uint p = 0; p < 16; ++p)
-                hsum[p] = READ_CHANNEL(next_plane[3][p]) + READ_CHANNEL(preloaders[4][p]);
+                hsum[p] = READ_CHANNEL(detect_to_detect[3][p]) + READ_CHANNEL(preload_to_detect[4][p]);
 
             #pragma unroll
             for (uint p = 0; p < 16; ++p)
-                WRITE_CHANNEL(next_plane[4][p], hsum[p]);
+                WRITE_CHANNEL(detect_to_detect[4][p], hsum[p]);
 
             int filter_0 = batch * 16 + 0;
             if (hsum[0] > threshold && filter_0 < n_filters) {
@@ -1154,38 +1154,38 @@ kernel void detect_5(const float threshold,
 
     #pragma unroll 1
     for (uint slot = 0; slot < 4; ++slot) {
-        WRITE_CHANNEL(locations[4][0], location_buffer_0[slot]);
-        WRITE_CHANNEL(amplitudes[4][0], amplitude_buffer_0[slot]);
-        WRITE_CHANNEL(locations[4][1], location_buffer_1[slot]);
-        WRITE_CHANNEL(amplitudes[4][1], amplitude_buffer_1[slot]);
-        WRITE_CHANNEL(locations[4][2], location_buffer_2[slot]);
-        WRITE_CHANNEL(amplitudes[4][2], amplitude_buffer_2[slot]);
-        WRITE_CHANNEL(locations[4][3], location_buffer_3[slot]);
-        WRITE_CHANNEL(amplitudes[4][3], amplitude_buffer_3[slot]);
-        WRITE_CHANNEL(locations[4][4], location_buffer_4[slot]);
-        WRITE_CHANNEL(amplitudes[4][4], amplitude_buffer_4[slot]);
-        WRITE_CHANNEL(locations[4][5], location_buffer_5[slot]);
-        WRITE_CHANNEL(amplitudes[4][5], amplitude_buffer_5[slot]);
-        WRITE_CHANNEL(locations[4][6], location_buffer_6[slot]);
-        WRITE_CHANNEL(amplitudes[4][6], amplitude_buffer_6[slot]);
-        WRITE_CHANNEL(locations[4][7], location_buffer_7[slot]);
-        WRITE_CHANNEL(amplitudes[4][7], amplitude_buffer_7[slot]);
-        WRITE_CHANNEL(locations[4][8], location_buffer_8[slot]);
-        WRITE_CHANNEL(amplitudes[4][8], amplitude_buffer_8[slot]);
-        WRITE_CHANNEL(locations[4][9], location_buffer_9[slot]);
-        WRITE_CHANNEL(amplitudes[4][9], amplitude_buffer_9[slot]);
-        WRITE_CHANNEL(locations[4][10], location_buffer_10[slot]);
-        WRITE_CHANNEL(amplitudes[4][10], amplitude_buffer_10[slot]);
-        WRITE_CHANNEL(locations[4][11], location_buffer_11[slot]);
-        WRITE_CHANNEL(amplitudes[4][11], amplitude_buffer_11[slot]);
-        WRITE_CHANNEL(locations[4][12], location_buffer_12[slot]);
-        WRITE_CHANNEL(amplitudes[4][12], amplitude_buffer_12[slot]);
-        WRITE_CHANNEL(locations[4][13], location_buffer_13[slot]);
-        WRITE_CHANNEL(amplitudes[4][13], amplitude_buffer_13[slot]);
-        WRITE_CHANNEL(locations[4][14], location_buffer_14[slot]);
-        WRITE_CHANNEL(amplitudes[4][14], amplitude_buffer_14[slot]);
-        WRITE_CHANNEL(locations[4][15], location_buffer_15[slot]);
-        WRITE_CHANNEL(amplitudes[4][15], amplitude_buffer_15[slot]);
+        WRITE_CHANNEL(detect_to_store_location[4][0], location_buffer_0[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[4][0], amplitude_buffer_0[slot]);
+        WRITE_CHANNEL(detect_to_store_location[4][1], location_buffer_1[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[4][1], amplitude_buffer_1[slot]);
+        WRITE_CHANNEL(detect_to_store_location[4][2], location_buffer_2[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[4][2], amplitude_buffer_2[slot]);
+        WRITE_CHANNEL(detect_to_store_location[4][3], location_buffer_3[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[4][3], amplitude_buffer_3[slot]);
+        WRITE_CHANNEL(detect_to_store_location[4][4], location_buffer_4[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[4][4], amplitude_buffer_4[slot]);
+        WRITE_CHANNEL(detect_to_store_location[4][5], location_buffer_5[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[4][5], amplitude_buffer_5[slot]);
+        WRITE_CHANNEL(detect_to_store_location[4][6], location_buffer_6[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[4][6], amplitude_buffer_6[slot]);
+        WRITE_CHANNEL(detect_to_store_location[4][7], location_buffer_7[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[4][7], amplitude_buffer_7[slot]);
+        WRITE_CHANNEL(detect_to_store_location[4][8], location_buffer_8[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[4][8], amplitude_buffer_8[slot]);
+        WRITE_CHANNEL(detect_to_store_location[4][9], location_buffer_9[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[4][9], amplitude_buffer_9[slot]);
+        WRITE_CHANNEL(detect_to_store_location[4][10], location_buffer_10[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[4][10], amplitude_buffer_10[slot]);
+        WRITE_CHANNEL(detect_to_store_location[4][11], location_buffer_11[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[4][11], amplitude_buffer_11[slot]);
+        WRITE_CHANNEL(detect_to_store_location[4][12], location_buffer_12[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[4][12], amplitude_buffer_12[slot]);
+        WRITE_CHANNEL(detect_to_store_location[4][13], location_buffer_13[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[4][13], amplitude_buffer_13[slot]);
+        WRITE_CHANNEL(detect_to_store_location[4][14], location_buffer_14[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[4][14], amplitude_buffer_14[slot]);
+        WRITE_CHANNEL(detect_to_store_location[4][15], location_buffer_15[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[4][15], amplitude_buffer_15[slot]);
     }
 }
 
@@ -1236,11 +1236,11 @@ kernel void detect_6(const float threshold,
 
             #pragma unroll
             for (uint p = 0; p < 16; ++p)
-                hsum[p] = READ_CHANNEL(next_plane[4][p]) + READ_CHANNEL(preloaders[5][p]);
+                hsum[p] = READ_CHANNEL(detect_to_detect[4][p]) + READ_CHANNEL(preload_to_detect[5][p]);
 
             #pragma unroll
             for (uint p = 0; p < 16; ++p)
-                WRITE_CHANNEL(next_plane[5][p], hsum[p]);
+                WRITE_CHANNEL(detect_to_detect[5][p], hsum[p]);
 
             int filter_0 = batch * 16 + 0;
             if (hsum[0] > threshold && filter_0 < n_filters) {
@@ -1391,38 +1391,38 @@ kernel void detect_6(const float threshold,
 
     #pragma unroll 1
     for (uint slot = 0; slot < 4; ++slot) {
-        WRITE_CHANNEL(locations[5][0], location_buffer_0[slot]);
-        WRITE_CHANNEL(amplitudes[5][0], amplitude_buffer_0[slot]);
-        WRITE_CHANNEL(locations[5][1], location_buffer_1[slot]);
-        WRITE_CHANNEL(amplitudes[5][1], amplitude_buffer_1[slot]);
-        WRITE_CHANNEL(locations[5][2], location_buffer_2[slot]);
-        WRITE_CHANNEL(amplitudes[5][2], amplitude_buffer_2[slot]);
-        WRITE_CHANNEL(locations[5][3], location_buffer_3[slot]);
-        WRITE_CHANNEL(amplitudes[5][3], amplitude_buffer_3[slot]);
-        WRITE_CHANNEL(locations[5][4], location_buffer_4[slot]);
-        WRITE_CHANNEL(amplitudes[5][4], amplitude_buffer_4[slot]);
-        WRITE_CHANNEL(locations[5][5], location_buffer_5[slot]);
-        WRITE_CHANNEL(amplitudes[5][5], amplitude_buffer_5[slot]);
-        WRITE_CHANNEL(locations[5][6], location_buffer_6[slot]);
-        WRITE_CHANNEL(amplitudes[5][6], amplitude_buffer_6[slot]);
-        WRITE_CHANNEL(locations[5][7], location_buffer_7[slot]);
-        WRITE_CHANNEL(amplitudes[5][7], amplitude_buffer_7[slot]);
-        WRITE_CHANNEL(locations[5][8], location_buffer_8[slot]);
-        WRITE_CHANNEL(amplitudes[5][8], amplitude_buffer_8[slot]);
-        WRITE_CHANNEL(locations[5][9], location_buffer_9[slot]);
-        WRITE_CHANNEL(amplitudes[5][9], amplitude_buffer_9[slot]);
-        WRITE_CHANNEL(locations[5][10], location_buffer_10[slot]);
-        WRITE_CHANNEL(amplitudes[5][10], amplitude_buffer_10[slot]);
-        WRITE_CHANNEL(locations[5][11], location_buffer_11[slot]);
-        WRITE_CHANNEL(amplitudes[5][11], amplitude_buffer_11[slot]);
-        WRITE_CHANNEL(locations[5][12], location_buffer_12[slot]);
-        WRITE_CHANNEL(amplitudes[5][12], amplitude_buffer_12[slot]);
-        WRITE_CHANNEL(locations[5][13], location_buffer_13[slot]);
-        WRITE_CHANNEL(amplitudes[5][13], amplitude_buffer_13[slot]);
-        WRITE_CHANNEL(locations[5][14], location_buffer_14[slot]);
-        WRITE_CHANNEL(amplitudes[5][14], amplitude_buffer_14[slot]);
-        WRITE_CHANNEL(locations[5][15], location_buffer_15[slot]);
-        WRITE_CHANNEL(amplitudes[5][15], amplitude_buffer_15[slot]);
+        WRITE_CHANNEL(detect_to_store_location[5][0], location_buffer_0[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[5][0], amplitude_buffer_0[slot]);
+        WRITE_CHANNEL(detect_to_store_location[5][1], location_buffer_1[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[5][1], amplitude_buffer_1[slot]);
+        WRITE_CHANNEL(detect_to_store_location[5][2], location_buffer_2[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[5][2], amplitude_buffer_2[slot]);
+        WRITE_CHANNEL(detect_to_store_location[5][3], location_buffer_3[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[5][3], amplitude_buffer_3[slot]);
+        WRITE_CHANNEL(detect_to_store_location[5][4], location_buffer_4[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[5][4], amplitude_buffer_4[slot]);
+        WRITE_CHANNEL(detect_to_store_location[5][5], location_buffer_5[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[5][5], amplitude_buffer_5[slot]);
+        WRITE_CHANNEL(detect_to_store_location[5][6], location_buffer_6[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[5][6], amplitude_buffer_6[slot]);
+        WRITE_CHANNEL(detect_to_store_location[5][7], location_buffer_7[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[5][7], amplitude_buffer_7[slot]);
+        WRITE_CHANNEL(detect_to_store_location[5][8], location_buffer_8[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[5][8], amplitude_buffer_8[slot]);
+        WRITE_CHANNEL(detect_to_store_location[5][9], location_buffer_9[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[5][9], amplitude_buffer_9[slot]);
+        WRITE_CHANNEL(detect_to_store_location[5][10], location_buffer_10[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[5][10], amplitude_buffer_10[slot]);
+        WRITE_CHANNEL(detect_to_store_location[5][11], location_buffer_11[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[5][11], amplitude_buffer_11[slot]);
+        WRITE_CHANNEL(detect_to_store_location[5][12], location_buffer_12[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[5][12], amplitude_buffer_12[slot]);
+        WRITE_CHANNEL(detect_to_store_location[5][13], location_buffer_13[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[5][13], amplitude_buffer_13[slot]);
+        WRITE_CHANNEL(detect_to_store_location[5][14], location_buffer_14[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[5][14], amplitude_buffer_14[slot]);
+        WRITE_CHANNEL(detect_to_store_location[5][15], location_buffer_15[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[5][15], amplitude_buffer_15[slot]);
     }
 }
 
@@ -1473,11 +1473,11 @@ kernel void detect_7(const float threshold,
 
             #pragma unroll
             for (uint p = 0; p < 16; ++p)
-                hsum[p] = READ_CHANNEL(next_plane[5][p]) + READ_CHANNEL(preloaders[6][p]);
+                hsum[p] = READ_CHANNEL(detect_to_detect[5][p]) + READ_CHANNEL(preload_to_detect[6][p]);
 
             #pragma unroll
             for (uint p = 0; p < 16; ++p)
-                WRITE_CHANNEL(next_plane[6][p], hsum[p]);
+                WRITE_CHANNEL(detect_to_detect[6][p], hsum[p]);
 
             int filter_0 = batch * 16 + 0;
             if (hsum[0] > threshold && filter_0 < n_filters) {
@@ -1628,38 +1628,38 @@ kernel void detect_7(const float threshold,
 
     #pragma unroll 1
     for (uint slot = 0; slot < 4; ++slot) {
-        WRITE_CHANNEL(locations[6][0], location_buffer_0[slot]);
-        WRITE_CHANNEL(amplitudes[6][0], amplitude_buffer_0[slot]);
-        WRITE_CHANNEL(locations[6][1], location_buffer_1[slot]);
-        WRITE_CHANNEL(amplitudes[6][1], amplitude_buffer_1[slot]);
-        WRITE_CHANNEL(locations[6][2], location_buffer_2[slot]);
-        WRITE_CHANNEL(amplitudes[6][2], amplitude_buffer_2[slot]);
-        WRITE_CHANNEL(locations[6][3], location_buffer_3[slot]);
-        WRITE_CHANNEL(amplitudes[6][3], amplitude_buffer_3[slot]);
-        WRITE_CHANNEL(locations[6][4], location_buffer_4[slot]);
-        WRITE_CHANNEL(amplitudes[6][4], amplitude_buffer_4[slot]);
-        WRITE_CHANNEL(locations[6][5], location_buffer_5[slot]);
-        WRITE_CHANNEL(amplitudes[6][5], amplitude_buffer_5[slot]);
-        WRITE_CHANNEL(locations[6][6], location_buffer_6[slot]);
-        WRITE_CHANNEL(amplitudes[6][6], amplitude_buffer_6[slot]);
-        WRITE_CHANNEL(locations[6][7], location_buffer_7[slot]);
-        WRITE_CHANNEL(amplitudes[6][7], amplitude_buffer_7[slot]);
-        WRITE_CHANNEL(locations[6][8], location_buffer_8[slot]);
-        WRITE_CHANNEL(amplitudes[6][8], amplitude_buffer_8[slot]);
-        WRITE_CHANNEL(locations[6][9], location_buffer_9[slot]);
-        WRITE_CHANNEL(amplitudes[6][9], amplitude_buffer_9[slot]);
-        WRITE_CHANNEL(locations[6][10], location_buffer_10[slot]);
-        WRITE_CHANNEL(amplitudes[6][10], amplitude_buffer_10[slot]);
-        WRITE_CHANNEL(locations[6][11], location_buffer_11[slot]);
-        WRITE_CHANNEL(amplitudes[6][11], amplitude_buffer_11[slot]);
-        WRITE_CHANNEL(locations[6][12], location_buffer_12[slot]);
-        WRITE_CHANNEL(amplitudes[6][12], amplitude_buffer_12[slot]);
-        WRITE_CHANNEL(locations[6][13], location_buffer_13[slot]);
-        WRITE_CHANNEL(amplitudes[6][13], amplitude_buffer_13[slot]);
-        WRITE_CHANNEL(locations[6][14], location_buffer_14[slot]);
-        WRITE_CHANNEL(amplitudes[6][14], amplitude_buffer_14[slot]);
-        WRITE_CHANNEL(locations[6][15], location_buffer_15[slot]);
-        WRITE_CHANNEL(amplitudes[6][15], amplitude_buffer_15[slot]);
+        WRITE_CHANNEL(detect_to_store_location[6][0], location_buffer_0[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[6][0], amplitude_buffer_0[slot]);
+        WRITE_CHANNEL(detect_to_store_location[6][1], location_buffer_1[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[6][1], amplitude_buffer_1[slot]);
+        WRITE_CHANNEL(detect_to_store_location[6][2], location_buffer_2[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[6][2], amplitude_buffer_2[slot]);
+        WRITE_CHANNEL(detect_to_store_location[6][3], location_buffer_3[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[6][3], amplitude_buffer_3[slot]);
+        WRITE_CHANNEL(detect_to_store_location[6][4], location_buffer_4[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[6][4], amplitude_buffer_4[slot]);
+        WRITE_CHANNEL(detect_to_store_location[6][5], location_buffer_5[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[6][5], amplitude_buffer_5[slot]);
+        WRITE_CHANNEL(detect_to_store_location[6][6], location_buffer_6[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[6][6], amplitude_buffer_6[slot]);
+        WRITE_CHANNEL(detect_to_store_location[6][7], location_buffer_7[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[6][7], amplitude_buffer_7[slot]);
+        WRITE_CHANNEL(detect_to_store_location[6][8], location_buffer_8[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[6][8], amplitude_buffer_8[slot]);
+        WRITE_CHANNEL(detect_to_store_location[6][9], location_buffer_9[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[6][9], amplitude_buffer_9[slot]);
+        WRITE_CHANNEL(detect_to_store_location[6][10], location_buffer_10[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[6][10], amplitude_buffer_10[slot]);
+        WRITE_CHANNEL(detect_to_store_location[6][11], location_buffer_11[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[6][11], amplitude_buffer_11[slot]);
+        WRITE_CHANNEL(detect_to_store_location[6][12], location_buffer_12[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[6][12], amplitude_buffer_12[slot]);
+        WRITE_CHANNEL(detect_to_store_location[6][13], location_buffer_13[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[6][13], amplitude_buffer_13[slot]);
+        WRITE_CHANNEL(detect_to_store_location[6][14], location_buffer_14[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[6][14], amplitude_buffer_14[slot]);
+        WRITE_CHANNEL(detect_to_store_location[6][15], location_buffer_15[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[6][15], amplitude_buffer_15[slot]);
     }
 }
 
@@ -1710,7 +1710,7 @@ kernel void detect_8(const float threshold,
 
             #pragma unroll
             for (uint p = 0; p < 16; ++p)
-                hsum[p] = READ_CHANNEL(next_plane[6][p]) + READ_CHANNEL(preloaders[7][p]);
+                hsum[p] = READ_CHANNEL(detect_to_detect[6][p]) + READ_CHANNEL(preload_to_detect[7][p]);
 
 
             int filter_0 = batch * 16 + 0;
@@ -1862,37 +1862,37 @@ kernel void detect_8(const float threshold,
 
     #pragma unroll 1
     for (uint slot = 0; slot < 4; ++slot) {
-        WRITE_CHANNEL(locations[7][0], location_buffer_0[slot]);
-        WRITE_CHANNEL(amplitudes[7][0], amplitude_buffer_0[slot]);
-        WRITE_CHANNEL(locations[7][1], location_buffer_1[slot]);
-        WRITE_CHANNEL(amplitudes[7][1], amplitude_buffer_1[slot]);
-        WRITE_CHANNEL(locations[7][2], location_buffer_2[slot]);
-        WRITE_CHANNEL(amplitudes[7][2], amplitude_buffer_2[slot]);
-        WRITE_CHANNEL(locations[7][3], location_buffer_3[slot]);
-        WRITE_CHANNEL(amplitudes[7][3], amplitude_buffer_3[slot]);
-        WRITE_CHANNEL(locations[7][4], location_buffer_4[slot]);
-        WRITE_CHANNEL(amplitudes[7][4], amplitude_buffer_4[slot]);
-        WRITE_CHANNEL(locations[7][5], location_buffer_5[slot]);
-        WRITE_CHANNEL(amplitudes[7][5], amplitude_buffer_5[slot]);
-        WRITE_CHANNEL(locations[7][6], location_buffer_6[slot]);
-        WRITE_CHANNEL(amplitudes[7][6], amplitude_buffer_6[slot]);
-        WRITE_CHANNEL(locations[7][7], location_buffer_7[slot]);
-        WRITE_CHANNEL(amplitudes[7][7], amplitude_buffer_7[slot]);
-        WRITE_CHANNEL(locations[7][8], location_buffer_8[slot]);
-        WRITE_CHANNEL(amplitudes[7][8], amplitude_buffer_8[slot]);
-        WRITE_CHANNEL(locations[7][9], location_buffer_9[slot]);
-        WRITE_CHANNEL(amplitudes[7][9], amplitude_buffer_9[slot]);
-        WRITE_CHANNEL(locations[7][10], location_buffer_10[slot]);
-        WRITE_CHANNEL(amplitudes[7][10], amplitude_buffer_10[slot]);
-        WRITE_CHANNEL(locations[7][11], location_buffer_11[slot]);
-        WRITE_CHANNEL(amplitudes[7][11], amplitude_buffer_11[slot]);
-        WRITE_CHANNEL(locations[7][12], location_buffer_12[slot]);
-        WRITE_CHANNEL(amplitudes[7][12], amplitude_buffer_12[slot]);
-        WRITE_CHANNEL(locations[7][13], location_buffer_13[slot]);
-        WRITE_CHANNEL(amplitudes[7][13], amplitude_buffer_13[slot]);
-        WRITE_CHANNEL(locations[7][14], location_buffer_14[slot]);
-        WRITE_CHANNEL(amplitudes[7][14], amplitude_buffer_14[slot]);
-        WRITE_CHANNEL(locations[7][15], location_buffer_15[slot]);
-        WRITE_CHANNEL(amplitudes[7][15], amplitude_buffer_15[slot]);
+        WRITE_CHANNEL(detect_to_store_location[7][0], location_buffer_0[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[7][0], amplitude_buffer_0[slot]);
+        WRITE_CHANNEL(detect_to_store_location[7][1], location_buffer_1[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[7][1], amplitude_buffer_1[slot]);
+        WRITE_CHANNEL(detect_to_store_location[7][2], location_buffer_2[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[7][2], amplitude_buffer_2[slot]);
+        WRITE_CHANNEL(detect_to_store_location[7][3], location_buffer_3[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[7][3], amplitude_buffer_3[slot]);
+        WRITE_CHANNEL(detect_to_store_location[7][4], location_buffer_4[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[7][4], amplitude_buffer_4[slot]);
+        WRITE_CHANNEL(detect_to_store_location[7][5], location_buffer_5[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[7][5], amplitude_buffer_5[slot]);
+        WRITE_CHANNEL(detect_to_store_location[7][6], location_buffer_6[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[7][6], amplitude_buffer_6[slot]);
+        WRITE_CHANNEL(detect_to_store_location[7][7], location_buffer_7[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[7][7], amplitude_buffer_7[slot]);
+        WRITE_CHANNEL(detect_to_store_location[7][8], location_buffer_8[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[7][8], amplitude_buffer_8[slot]);
+        WRITE_CHANNEL(detect_to_store_location[7][9], location_buffer_9[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[7][9], amplitude_buffer_9[slot]);
+        WRITE_CHANNEL(detect_to_store_location[7][10], location_buffer_10[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[7][10], amplitude_buffer_10[slot]);
+        WRITE_CHANNEL(detect_to_store_location[7][11], location_buffer_11[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[7][11], amplitude_buffer_11[slot]);
+        WRITE_CHANNEL(detect_to_store_location[7][12], location_buffer_12[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[7][12], amplitude_buffer_12[slot]);
+        WRITE_CHANNEL(detect_to_store_location[7][13], location_buffer_13[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[7][13], amplitude_buffer_13[slot]);
+        WRITE_CHANNEL(detect_to_store_location[7][14], location_buffer_14[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[7][14], amplitude_buffer_14[slot]);
+        WRITE_CHANNEL(detect_to_store_location[7][15], location_buffer_15[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[7][15], amplitude_buffer_15[slot]);
     }
 }

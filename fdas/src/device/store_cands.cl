@@ -15,57 +15,57 @@ kernel void store_cands(global uint * restrict detection_location,
                 case 1:
                     #pragma unroll
                     for (uint p = 0; p < 16; ++p) {
-                        locs[p] = READ_CHANNEL(locations[0][p]);
-                        amps[p] = READ_CHANNEL(amplitudes[0][p]);
+                        locs[p] = READ_CHANNEL(detect_to_store_location[0][p]);
+                        amps[p] = READ_CHANNEL(detect_to_store_amplitude[0][p]);
                     }
                     break;
                 case 2:
                     #pragma unroll
                     for (uint p = 0; p < 16; ++p) {
-                        locs[p] = READ_CHANNEL(locations[1][p]);
-                        amps[p] = READ_CHANNEL(amplitudes[1][p]);
+                        locs[p] = READ_CHANNEL(detect_to_store_location[1][p]);
+                        amps[p] = READ_CHANNEL(detect_to_store_amplitude[1][p]);
                     }
                     break;
                 case 3:
                     #pragma unroll
                     for (uint p = 0; p < 16; ++p) {
-                        locs[p] = READ_CHANNEL(locations[2][p]);
-                        amps[p] = READ_CHANNEL(amplitudes[2][p]);
+                        locs[p] = READ_CHANNEL(detect_to_store_location[2][p]);
+                        amps[p] = READ_CHANNEL(detect_to_store_amplitude[2][p]);
                     }
                     break;
                 case 4:
                     #pragma unroll
                     for (uint p = 0; p < 16; ++p) {
-                        locs[p] = READ_CHANNEL(locations[3][p]);
-                        amps[p] = READ_CHANNEL(amplitudes[3][p]);
+                        locs[p] = READ_CHANNEL(detect_to_store_location[3][p]);
+                        amps[p] = READ_CHANNEL(detect_to_store_amplitude[3][p]);
                     }
                     break;
                 case 5:
                     #pragma unroll
                     for (uint p = 0; p < 16; ++p) {
-                        locs[p] = READ_CHANNEL(locations[4][p]);
-                        amps[p] = READ_CHANNEL(amplitudes[4][p]);
+                        locs[p] = READ_CHANNEL(detect_to_store_location[4][p]);
+                        amps[p] = READ_CHANNEL(detect_to_store_amplitude[4][p]);
                     }
                     break;
                 case 6:
                     #pragma unroll
                     for (uint p = 0; p < 16; ++p) {
-                        locs[p] = READ_CHANNEL(locations[5][p]);
-                        amps[p] = READ_CHANNEL(amplitudes[5][p]);
+                        locs[p] = READ_CHANNEL(detect_to_store_location[5][p]);
+                        amps[p] = READ_CHANNEL(detect_to_store_amplitude[5][p]);
                     }
                     break;
                 case 7:
                     #pragma unroll
                     for (uint p = 0; p < 16; ++p) {
-                        locs[p] = READ_CHANNEL(locations[6][p]);
-                        amps[p] = READ_CHANNEL(amplitudes[6][p]);
+                        locs[p] = READ_CHANNEL(detect_to_store_location[6][p]);
+                        amps[p] = READ_CHANNEL(detect_to_store_amplitude[6][p]);
                     }
                     break;
                 case 8:
                     #pragma unroll
                     for (uint p = 0; p < 16; ++p) {
-                        locs[p] = READ_CHANNEL(locations[7][p]);
-                        amps[p] = READ_CHANNEL(amplitudes[7][p]);
+                        locs[p] = READ_CHANNEL(detect_to_store_location[7][p]);
+                        amps[p] = READ_CHANNEL(detect_to_store_amplitude[7][p]);
                     }
                     break;
                 default:

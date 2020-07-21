@@ -14,8 +14,8 @@ kernel void store_cands(global uint * restrict detection_location,
                 case ${h + 1}:
                     #pragma unroll
                     for (uint p = 0; p < ${n_parallel}; ++p) {
-                        locs[p] = READ_CHANNEL(locations[${h}][p]);
-                        amps[p] = READ_CHANNEL(amplitudes[${h}][p]);
+                        locs[p] = READ_CHANNEL(detect_to_store_location[${h}][p]);
+                        amps[p] = READ_CHANNEL(detect_to_store_amplitude[${h}][p]);
                     }
                     break;
             %endfor

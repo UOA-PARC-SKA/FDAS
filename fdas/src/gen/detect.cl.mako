@@ -24,17 +24,17 @@ kernel void detect_${harmonic}(const float threshold,
         % if harmonic == 1:
             #pragma unroll
             for (uint p = 0; p < ${n_parallel}; ++p)
-                hsum[p] = READ_CHANNEL(preloaders[${harmonic - 1}][p]);
+                hsum[p] = READ_CHANNEL(preload_to_detect[${harmonic - 1}][p]);
         %else:
             #pragma unroll
             for (uint p = 0; p < ${n_parallel}; ++p)
-                hsum[p] = READ_CHANNEL(next_plane[${harmonic - 2}][p]) + READ_CHANNEL(preloaders[${harmonic - 1}][p]);
+                hsum[p] = READ_CHANNEL(detect_to_detect[${harmonic - 2}][p]) + READ_CHANNEL(preload_to_detect[${harmonic - 1}][p]);
         % endif
 
         %if harmonic < n_planes:
             #pragma unroll
             for (uint p = 0; p < ${n_parallel}; ++p)
-                WRITE_CHANNEL(next_plane[${harmonic - 1}][p], hsum[p]);
+                WRITE_CHANNEL(detect_to_detect[${harmonic - 1}][p], hsum[p]);
         %endif
 
         %for p in range(n_parallel):
@@ -54,8 +54,8 @@ kernel void detect_${harmonic}(const float threshold,
     #pragma unroll 1
     for (uint slot = 0; slot < ${n_slots}; ++slot) {
     %for p in range(n_parallel):
-        WRITE_CHANNEL(locations[${harmonic - 1}][${p}], location_buffer_${p}[slot]);
-        WRITE_CHANNEL(amplitudes[${harmonic - 1}][${p}], amplitude_buffer_${p}[slot]);
+        WRITE_CHANNEL(detect_to_store_location[${harmonic - 1}][${p}], location_buffer_${p}[slot]);
+        WRITE_CHANNEL(detect_to_store_amplitude[${harmonic - 1}][${p}], amplitude_buffer_${p}[slot]);
     %endfor
     }
 }
