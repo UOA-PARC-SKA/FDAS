@@ -160,7 +160,6 @@ kernel void detect_1(const float threshold,
         }
     }
 
-    #pragma unroll 1
     for (uint slot = 0; slot < 4; ++slot) {
         WRITE_CHANNEL(detect_to_store_location[0][0], location_buffer_0[slot]);
         WRITE_CHANNEL(detect_to_store_amplitude[0][0], amplitude_buffer_0[slot]);
@@ -345,7 +344,6 @@ kernel void detect_2(const float threshold,
         }
     }
 
-    #pragma unroll 1
     for (uint slot = 0; slot < 4; ++slot) {
         WRITE_CHANNEL(detect_to_store_location[1][0], location_buffer_0[slot]);
         WRITE_CHANNEL(detect_to_store_amplitude[1][0], amplitude_buffer_0[slot]);
@@ -530,7 +528,6 @@ kernel void detect_3(const float threshold,
         }
     }
 
-    #pragma unroll 1
     for (uint slot = 0; slot < 4; ++slot) {
         WRITE_CHANNEL(detect_to_store_location[2][0], location_buffer_0[slot]);
         WRITE_CHANNEL(detect_to_store_amplitude[2][0], amplitude_buffer_0[slot]);
@@ -715,7 +712,6 @@ kernel void detect_4(const float threshold,
         }
     }
 
-    #pragma unroll 1
     for (uint slot = 0; slot < 4; ++slot) {
         WRITE_CHANNEL(detect_to_store_location[3][0], location_buffer_0[slot]);
         WRITE_CHANNEL(detect_to_store_amplitude[3][0], amplitude_buffer_0[slot]);
@@ -900,7 +896,6 @@ kernel void detect_5(const float threshold,
         }
     }
 
-    #pragma unroll 1
     for (uint slot = 0; slot < 4; ++slot) {
         WRITE_CHANNEL(detect_to_store_location[4][0], location_buffer_0[slot]);
         WRITE_CHANNEL(detect_to_store_amplitude[4][0], amplitude_buffer_0[slot]);
@@ -1085,7 +1080,6 @@ kernel void detect_6(const float threshold,
         }
     }
 
-    #pragma unroll 1
     for (uint slot = 0; slot < 4; ++slot) {
         WRITE_CHANNEL(detect_to_store_location[5][0], location_buffer_0[slot]);
         WRITE_CHANNEL(detect_to_store_amplitude[5][0], amplitude_buffer_0[slot]);
@@ -1270,7 +1264,6 @@ kernel void detect_7(const float threshold,
         }
     }
 
-    #pragma unroll 1
     for (uint slot = 0; slot < 4; ++slot) {
         WRITE_CHANNEL(detect_to_store_location[6][0], location_buffer_0[slot]);
         WRITE_CHANNEL(detect_to_store_amplitude[6][0], amplitude_buffer_0[slot]);
@@ -1452,7 +1445,6 @@ kernel void detect_8(const float threshold,
         }
     }
 
-    #pragma unroll 1
     for (uint slot = 0; slot < 4; ++slot) {
         WRITE_CHANNEL(detect_to_store_location[7][0], location_buffer_0[slot]);
         WRITE_CHANNEL(detect_to_store_amplitude[7][0], amplitude_buffer_0[slot]);

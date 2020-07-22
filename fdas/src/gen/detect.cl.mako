@@ -51,7 +51,6 @@ kernel void detect_${harmonic}(const float threshold,
         }
     }
 
-    #pragma unroll 1
     for (uint slot = 0; slot < ${n_slots}; ++slot) {
     %for p in range(n_parallel):
         WRITE_CHANNEL(detect_to_store_location[${harmonic - 1}][${p}], location_buffer_${p}[slot]);
