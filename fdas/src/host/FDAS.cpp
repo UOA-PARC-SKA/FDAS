@@ -124,7 +124,7 @@ bool FDAS::initialise_accelerator(std::string bitstream_file_name,
     preloader_kernels.resize(HMS_N_PLANES);
     detect_kernels.resize(HMS_N_PLANES);
     for (int h = 0; h < HMS_N_PLANES; ++h) {
-        auto name = "preloader_" + std::to_string(h + 1);
+        auto name = "preload_" + std::to_string(h + 1);
         cl_chkref(preloader_kernels[h].reset(new cl::Kernel(*program, name.c_str(), &status)));
         name = "detect_" + std::to_string(h + 1);
         cl_chkref(detect_kernels[h].reset(new cl::Kernel(*program, name.c_str(), &status)));
