@@ -8,64 +8,88 @@ kernel void store_cands(global uint * restrict detection_location,
     #pragma unroll 1
     for (uint harmonic = 1; harmonic <= 8; ++harmonic) {
         #pragma unroll 1
-        for (uint slot = 0; slot < 6; ++slot) {
-            uint locs[8];
-            float amps[8];
+        for (uint slot = 0; slot < 4; ++slot) {
+            uint locs[8][2];
+            float amps[8][2];
             switch (harmonic) {
                 case 1:
                     #pragma unroll
                     for (uint p = 0; p < 8; ++p) {
-                        locs[p] = READ_CHANNEL(detect_to_store_location[0][p]);
-                        amps[p] = READ_CHANNEL(detect_to_store_amplitude[0][p]);
+                        #pragma unroll
+                        for (uint q = 0; q < 2; ++q) {
+                            locs[p][q] = READ_CHANNEL(detect_to_store_location[0][p][q]);
+                            amps[p][q] = READ_CHANNEL(detect_to_store_amplitude[0][p][q]);
+                        }
                     }
                     break;
                 case 2:
                     #pragma unroll
                     for (uint p = 0; p < 8; ++p) {
-                        locs[p] = READ_CHANNEL(detect_to_store_location[1][p]);
-                        amps[p] = READ_CHANNEL(detect_to_store_amplitude[1][p]);
+                        #pragma unroll
+                        for (uint q = 0; q < 2; ++q) {
+                            locs[p][q] = READ_CHANNEL(detect_to_store_location[1][p][q]);
+                            amps[p][q] = READ_CHANNEL(detect_to_store_amplitude[1][p][q]);
+                        }
                     }
                     break;
                 case 3:
                     #pragma unroll
                     for (uint p = 0; p < 8; ++p) {
-                        locs[p] = READ_CHANNEL(detect_to_store_location[2][p]);
-                        amps[p] = READ_CHANNEL(detect_to_store_amplitude[2][p]);
+                        #pragma unroll
+                        for (uint q = 0; q < 2; ++q) {
+                            locs[p][q] = READ_CHANNEL(detect_to_store_location[2][p][q]);
+                            amps[p][q] = READ_CHANNEL(detect_to_store_amplitude[2][p][q]);
+                        }
                     }
                     break;
                 case 4:
                     #pragma unroll
                     for (uint p = 0; p < 8; ++p) {
-                        locs[p] = READ_CHANNEL(detect_to_store_location[3][p]);
-                        amps[p] = READ_CHANNEL(detect_to_store_amplitude[3][p]);
+                        #pragma unroll
+                        for (uint q = 0; q < 2; ++q) {
+                            locs[p][q] = READ_CHANNEL(detect_to_store_location[3][p][q]);
+                            amps[p][q] = READ_CHANNEL(detect_to_store_amplitude[3][p][q]);
+                        }
                     }
                     break;
                 case 5:
                     #pragma unroll
                     for (uint p = 0; p < 8; ++p) {
-                        locs[p] = READ_CHANNEL(detect_to_store_location[4][p]);
-                        amps[p] = READ_CHANNEL(detect_to_store_amplitude[4][p]);
+                        #pragma unroll
+                        for (uint q = 0; q < 2; ++q) {
+                            locs[p][q] = READ_CHANNEL(detect_to_store_location[4][p][q]);
+                            amps[p][q] = READ_CHANNEL(detect_to_store_amplitude[4][p][q]);
+                        }
                     }
                     break;
                 case 6:
                     #pragma unroll
                     for (uint p = 0; p < 8; ++p) {
-                        locs[p] = READ_CHANNEL(detect_to_store_location[5][p]);
-                        amps[p] = READ_CHANNEL(detect_to_store_amplitude[5][p]);
+                        #pragma unroll
+                        for (uint q = 0; q < 2; ++q) {
+                            locs[p][q] = READ_CHANNEL(detect_to_store_location[5][p][q]);
+                            amps[p][q] = READ_CHANNEL(detect_to_store_amplitude[5][p][q]);
+                        }
                     }
                     break;
                 case 7:
                     #pragma unroll
                     for (uint p = 0; p < 8; ++p) {
-                        locs[p] = READ_CHANNEL(detect_to_store_location[6][p]);
-                        amps[p] = READ_CHANNEL(detect_to_store_amplitude[6][p]);
+                        #pragma unroll
+                        for (uint q = 0; q < 2; ++q) {
+                            locs[p][q] = READ_CHANNEL(detect_to_store_location[6][p][q]);
+                            amps[p][q] = READ_CHANNEL(detect_to_store_amplitude[6][p][q]);
+                        }
                     }
                     break;
                 case 8:
                     #pragma unroll
                     for (uint p = 0; p < 8; ++p) {
-                        locs[p] = READ_CHANNEL(detect_to_store_location[7][p]);
-                        amps[p] = READ_CHANNEL(detect_to_store_amplitude[7][p]);
+                        #pragma unroll
+                        for (uint q = 0; q < 2; ++q) {
+                            locs[p][q] = READ_CHANNEL(detect_to_store_location[7][p][q]);
+                            amps[p][q] = READ_CHANNEL(detect_to_store_amplitude[7][p][q]);
+                        }
                     }
                     break;
                 default:
@@ -74,8 +98,11 @@ kernel void store_cands(global uint * restrict detection_location,
 
             #pragma unroll
             for (uint p = 0; p < 8; ++p) {
-                detection_location[(harmonic - 1) * 48 + slot * 8 + p] = locs[p];
-                detection_amplitude[(harmonic - 1) * 48 + slot * 8 + p] = amps[p];
+                #pragma unroll
+                for (uint q = 0; q < 2; ++q) {
+                    detection_location[(harmonic - 1) * 64 + slot * 16 + p * 2 + q] = locs[p][q];
+                    detection_amplitude[(harmonic - 1) * 64 + slot * 16 + p * 2 + q] = amps[p][q];
+                }
             }
         }
     }
