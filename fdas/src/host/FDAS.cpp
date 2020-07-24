@@ -121,11 +121,11 @@ bool FDAS::initialise_accelerator(std::string bitstream_file_name,
     cl_chkref(mux_and_mult_kernel.reset(new cl::Kernel(*program, "mux_and_mult", &status)));
     cl_chkref(square_and_discard_kernel.reset(new cl::Kernel(*program, "square_and_discard", &status)));
 
-    preloader_kernels.resize(HMS_N_PLANES);
+    preload_kernels.resize(HMS_N_PLANES);
     detect_kernels.resize(HMS_N_PLANES);
     for (int h = 0; h < HMS_N_PLANES; ++h) {
         auto name = "preload_" + std::to_string(h + 1);
-        cl_chkref(preloader_kernels[h].reset(new cl::Kernel(*program, name.c_str(), &status)));
+        cl_chkref(preload_kernels[h].reset(new cl::Kernel(*program, name.c_str(), &status)));
         name = "detect_" + std::to_string(h + 1);
         cl_chkref(detect_kernels[h].reset(new cl::Kernel(*program, name.c_str(), &status)));
     }
@@ -249,27 +249,30 @@ bool FDAS::perform_harmonic_summing(const FDAS::ThreshType &thresholds, const FD
 
     const int n_planes = HMS_N_PLANES,
               n_parallel = 8,
-              bundle_sz = 2,
+              bundle_sz = 1,
               workgroup_sz = 840, // divisible by lcm(1, 2, ..., n_planes)
               n_filters = N_FILTERS_PER_ACCEL_SIGN + 1,
               n_filter_batches = (int) ceil(1.0 * n_filters / n_parallel),
-              n_channels = 1248 * workgroup_sz, // ~ FDF_OUTPUT_SZ, divisible by workgroup_sz
+              n_channels = 4992 * workgroup_sz, // ~ FDF_OUTPUT_SZ, divisible by workgroup_sz
               n_channel_bundles = n_channels / bundle_sz;
 
-    std::vector<cl::CommandQueue> preloader_queues, detect_queues;
+    std::vector<cl::Event> preload_evs(n_planes), detect_evs(n_planes);
+    cl::Event store_cands_ev;
+
+    std::vector<cl::CommandQueue> preload_queues, detect_queues;
     cl::CommandQueue store_cands_queue(*context, default_device);
     cl::NDRange global(n_channel_bundles, n_filter_batches);
     cl::NDRange local(workgroup_sz, 1);
 
     for (int h = 0; h < n_planes; ++h) {
-        auto &preld_k = *preloader_kernels[h];
-        cl_chk(preld_k.setArg<cl::Buffer>(0, *fop_buffer));
-        cl_chk(preld_k.setArg<cl_uint>(1, n_filters));
-        cl_chk(preld_k.setArg<cl_uint>(2, false));
+        auto &preload_k = *preload_kernels[h];
+        cl_chk(preload_k.setArg<cl::Buffer>(0, *fop_buffer));
+        cl_chk(preload_k.setArg<cl_uint>(1, n_filters));
+        cl_chk(preload_k.setArg<cl_uint>(2, false));
 
-        cl::CommandQueue preld_q(*context, default_device);
-        cl_chk(preld_q.enqueueNDRangeKernel(preld_k, cl::NullRange, global, local));
-        preloader_queues.emplace_back(preld_q);
+        cl::CommandQueue preload_q(*context, default_device);
+        cl_chk(preload_q.enqueueNDRangeKernel(preload_k, cl::NullRange, global, local, nullptr, &preload_evs[h]));
+        preload_queues.emplace_back(preload_q);
 
         auto &detect_k = *detect_kernels[h];
         cl_chk(detect_k.setArg<cl_float>(0, thresholds[h]));
@@ -279,21 +282,23 @@ bool FDAS::perform_harmonic_summing(const FDAS::ThreshType &thresholds, const FD
         cl_chk(detect_k.setArg<cl_uint>(4, n_channel_bundles));
 
         cl::CommandQueue detect_q(*context, default_device);
-        cl_chk(detect_q.enqueueTask(detect_k));
+        cl_chk(detect_q.enqueueTask(detect_k, nullptr, &detect_evs[h]));
         detect_queues.emplace_back(detect_q);
     }
 
     cl_chk(store_cands_kernel->setArg<cl::Buffer>(0, *detection_location_buffer));
     cl_chk(store_cands_kernel->setArg<cl::Buffer>(1, *detection_amplitude_buffer));
-    cl_chk(store_cands_queue.enqueueTask(*store_cands_kernel));
+    cl_chk(store_cands_queue.enqueueTask(*store_cands_kernel, nullptr, &store_cands_ev));
 
-    for (auto &q : preloader_queues)
+    for (auto &q : preload_queues)
         cl_chk(q.finish());
 
     for (auto &q : detect_queues)
         cl_chk(q.finish());
 
     cl_chk(store_cands_queue.finish());
+
+    print_duration("Harmonic summing (1/2 FOP)", preload_evs.front(), store_cands_ev);
 
     return true;
 }

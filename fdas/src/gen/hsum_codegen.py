@@ -16,7 +16,7 @@ def main():
     detection_sz = 64  # divisible by n_parallel
 
     n_parallel = 8
-    bundle_sz = 2
+    bundle_sz = 1
     workgroup_sz = lcm(range(1, n_planes + 1))
 
     preload_template = Template(filename='preload.cl.mako')

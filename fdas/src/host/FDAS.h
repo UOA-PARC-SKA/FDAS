@@ -64,7 +64,7 @@ private:
     std::unique_ptr<cl::Kernel> mux_and_mult_kernel;
     std::unique_ptr<cl::Kernel> square_and_discard_kernel;
 
-    std::vector<std::unique_ptr<cl::Kernel>> preloader_kernels;
+    std::vector<std::unique_ptr<cl::Kernel>> preload_kernels;
     std::vector<std::unique_ptr<cl::Kernel>> detect_kernels;
     std::unique_ptr<cl::Kernel> store_cands_kernel;
 
