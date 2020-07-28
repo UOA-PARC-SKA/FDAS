@@ -8,7 +8,7 @@ __attribute__((max_global_work_dim(0)))
 kernel void detect_1(const float threshold,
                      const uint n_filters,
                      const uint negative_filters,
-                     const uint n_filter_batches,
+                     const uint n_filter_groups,
                      const uint n_channel_bundles)
 {
     uint location_buffer_0_0[8] = {HMS_INVALID_LOCATION, HMS_INVALID_LOCATION, HMS_INVALID_LOCATION, HMS_INVALID_LOCATION, HMS_INVALID_LOCATION, HMS_INVALID_LOCATION, HMS_INVALID_LOCATION, HMS_INVALID_LOCATION};
@@ -30,7 +30,7 @@ kernel void detect_1(const float threshold,
 
     uint next[8]  = {0, 0, 0, 0, 0, 0, 0, 0};
 
-    for (uint batch = 0; batch < n_filter_batches; ++batch) {
+    for (uint group = 0; group < n_filter_groups; ++group) {
         for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
             float hsum[8][1];
 
@@ -48,7 +48,7 @@ kernel void detect_1(const float threshold,
                     WRITE_CHANNEL(detect_to_detect[0][p][q], hsum[p][q]);
             }
 
-            int filter_0 = batch * 8 + 0;
+            int filter_0 = group * 8 + 0;
             if (filter_0 < n_filters) {
                 uint channel_0 = bundle * 1 + 0;
                 if (hsum[0][0] > threshold) {
@@ -60,7 +60,7 @@ kernel void detect_1(const float threshold,
                     next[0] = (slot + 1) < 8 ? slot + 1 : 0;
                 }
             }
-            int filter_1 = batch * 8 + 1;
+            int filter_1 = group * 8 + 1;
             if (filter_1 < n_filters) {
                 uint channel_0 = bundle * 1 + 0;
                 if (hsum[1][0] > threshold) {
@@ -72,7 +72,7 @@ kernel void detect_1(const float threshold,
                     next[1] = (slot + 1) < 8 ? slot + 1 : 0;
                 }
             }
-            int filter_2 = batch * 8 + 2;
+            int filter_2 = group * 8 + 2;
             if (filter_2 < n_filters) {
                 uint channel_0 = bundle * 1 + 0;
                 if (hsum[2][0] > threshold) {
@@ -84,7 +84,7 @@ kernel void detect_1(const float threshold,
                     next[2] = (slot + 1) < 8 ? slot + 1 : 0;
                 }
             }
-            int filter_3 = batch * 8 + 3;
+            int filter_3 = group * 8 + 3;
             if (filter_3 < n_filters) {
                 uint channel_0 = bundle * 1 + 0;
                 if (hsum[3][0] > threshold) {
@@ -96,7 +96,7 @@ kernel void detect_1(const float threshold,
                     next[3] = (slot + 1) < 8 ? slot + 1 : 0;
                 }
             }
-            int filter_4 = batch * 8 + 4;
+            int filter_4 = group * 8 + 4;
             if (filter_4 < n_filters) {
                 uint channel_0 = bundle * 1 + 0;
                 if (hsum[4][0] > threshold) {
@@ -108,7 +108,7 @@ kernel void detect_1(const float threshold,
                     next[4] = (slot + 1) < 8 ? slot + 1 : 0;
                 }
             }
-            int filter_5 = batch * 8 + 5;
+            int filter_5 = group * 8 + 5;
             if (filter_5 < n_filters) {
                 uint channel_0 = bundle * 1 + 0;
                 if (hsum[5][0] > threshold) {
@@ -120,7 +120,7 @@ kernel void detect_1(const float threshold,
                     next[5] = (slot + 1) < 8 ? slot + 1 : 0;
                 }
             }
-            int filter_6 = batch * 8 + 6;
+            int filter_6 = group * 8 + 6;
             if (filter_6 < n_filters) {
                 uint channel_0 = bundle * 1 + 0;
                 if (hsum[6][0] > threshold) {
@@ -132,7 +132,7 @@ kernel void detect_1(const float threshold,
                     next[6] = (slot + 1) < 8 ? slot + 1 : 0;
                 }
             }
-            int filter_7 = batch * 8 + 7;
+            int filter_7 = group * 8 + 7;
             if (filter_7 < n_filters) {
                 uint channel_0 = bundle * 1 + 0;
                 if (hsum[7][0] > threshold) {
@@ -147,23 +147,23 @@ kernel void detect_1(const float threshold,
         }
     }
 
-    for (uint slot = 0; slot < 8; ++slot) {
-        WRITE_CHANNEL(detect_to_store_location[0][0][0], location_buffer_0_0[slot]);
-        WRITE_CHANNEL(detect_to_store_amplitude[0][0][0], amplitude_buffer_0_0[slot]);
-        WRITE_CHANNEL(detect_to_store_location[0][1][0], location_buffer_1_0[slot]);
-        WRITE_CHANNEL(detect_to_store_amplitude[0][1][0], amplitude_buffer_1_0[slot]);
-        WRITE_CHANNEL(detect_to_store_location[0][2][0], location_buffer_2_0[slot]);
-        WRITE_CHANNEL(detect_to_store_amplitude[0][2][0], amplitude_buffer_2_0[slot]);
-        WRITE_CHANNEL(detect_to_store_location[0][3][0], location_buffer_3_0[slot]);
-        WRITE_CHANNEL(detect_to_store_amplitude[0][3][0], amplitude_buffer_3_0[slot]);
-        WRITE_CHANNEL(detect_to_store_location[0][4][0], location_buffer_4_0[slot]);
-        WRITE_CHANNEL(detect_to_store_amplitude[0][4][0], amplitude_buffer_4_0[slot]);
-        WRITE_CHANNEL(detect_to_store_location[0][5][0], location_buffer_5_0[slot]);
-        WRITE_CHANNEL(detect_to_store_amplitude[0][5][0], amplitude_buffer_5_0[slot]);
-        WRITE_CHANNEL(detect_to_store_location[0][6][0], location_buffer_6_0[slot]);
-        WRITE_CHANNEL(detect_to_store_amplitude[0][6][0], amplitude_buffer_6_0[slot]);
-        WRITE_CHANNEL(detect_to_store_location[0][7][0], location_buffer_7_0[slot]);
-        WRITE_CHANNEL(detect_to_store_amplitude[0][7][0], amplitude_buffer_7_0[slot]);
+    for (uint d = 0; d < 8; ++d) {
+        WRITE_CHANNEL(detect_to_store_location[0][0][0], location_buffer_0_0[d]);
+        WRITE_CHANNEL(detect_to_store_amplitude[0][0][0], amplitude_buffer_0_0[d]);
+        WRITE_CHANNEL(detect_to_store_location[0][1][0], location_buffer_1_0[d]);
+        WRITE_CHANNEL(detect_to_store_amplitude[0][1][0], amplitude_buffer_1_0[d]);
+        WRITE_CHANNEL(detect_to_store_location[0][2][0], location_buffer_2_0[d]);
+        WRITE_CHANNEL(detect_to_store_amplitude[0][2][0], amplitude_buffer_2_0[d]);
+        WRITE_CHANNEL(detect_to_store_location[0][3][0], location_buffer_3_0[d]);
+        WRITE_CHANNEL(detect_to_store_amplitude[0][3][0], amplitude_buffer_3_0[d]);
+        WRITE_CHANNEL(detect_to_store_location[0][4][0], location_buffer_4_0[d]);
+        WRITE_CHANNEL(detect_to_store_amplitude[0][4][0], amplitude_buffer_4_0[d]);
+        WRITE_CHANNEL(detect_to_store_location[0][5][0], location_buffer_5_0[d]);
+        WRITE_CHANNEL(detect_to_store_amplitude[0][5][0], amplitude_buffer_5_0[d]);
+        WRITE_CHANNEL(detect_to_store_location[0][6][0], location_buffer_6_0[d]);
+        WRITE_CHANNEL(detect_to_store_amplitude[0][6][0], amplitude_buffer_6_0[d]);
+        WRITE_CHANNEL(detect_to_store_location[0][7][0], location_buffer_7_0[d]);
+        WRITE_CHANNEL(detect_to_store_amplitude[0][7][0], amplitude_buffer_7_0[d]);
     }
 }
 
@@ -171,7 +171,7 @@ __attribute__((max_global_work_dim(0)))
 kernel void detect_2(const float threshold,
                      const uint n_filters,
                      const uint negative_filters,
-                     const uint n_filter_batches,
+                     const uint n_filter_groups,
                      const uint n_channel_bundles)
 {
     uint location_buffer_0_0[8] = {HMS_INVALID_LOCATION, HMS_INVALID_LOCATION, HMS_INVALID_LOCATION, HMS_INVALID_LOCATION, HMS_INVALID_LOCATION, HMS_INVALID_LOCATION, HMS_INVALID_LOCATION, HMS_INVALID_LOCATION};
@@ -193,7 +193,7 @@ kernel void detect_2(const float threshold,
 
     uint next[8]  = {0, 0, 0, 0, 0, 0, 0, 0};
 
-    for (uint batch = 0; batch < n_filter_batches; ++batch) {
+    for (uint group = 0; group < n_filter_groups; ++group) {
         for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
             float hsum[8][1];
 
@@ -211,7 +211,7 @@ kernel void detect_2(const float threshold,
                     WRITE_CHANNEL(detect_to_detect[1][p][q], hsum[p][q]);
             }
 
-            int filter_0 = batch * 8 + 0;
+            int filter_0 = group * 8 + 0;
             if (filter_0 < n_filters) {
                 uint channel_0 = bundle * 1 + 0;
                 if (hsum[0][0] > threshold) {
@@ -223,7 +223,7 @@ kernel void detect_2(const float threshold,
                     next[0] = (slot + 1) < 8 ? slot + 1 : 0;
                 }
             }
-            int filter_1 = batch * 8 + 1;
+            int filter_1 = group * 8 + 1;
             if (filter_1 < n_filters) {
                 uint channel_0 = bundle * 1 + 0;
                 if (hsum[1][0] > threshold) {
@@ -235,7 +235,7 @@ kernel void detect_2(const float threshold,
                     next[1] = (slot + 1) < 8 ? slot + 1 : 0;
                 }
             }
-            int filter_2 = batch * 8 + 2;
+            int filter_2 = group * 8 + 2;
             if (filter_2 < n_filters) {
                 uint channel_0 = bundle * 1 + 0;
                 if (hsum[2][0] > threshold) {
@@ -247,7 +247,7 @@ kernel void detect_2(const float threshold,
                     next[2] = (slot + 1) < 8 ? slot + 1 : 0;
                 }
             }
-            int filter_3 = batch * 8 + 3;
+            int filter_3 = group * 8 + 3;
             if (filter_3 < n_filters) {
                 uint channel_0 = bundle * 1 + 0;
                 if (hsum[3][0] > threshold) {
@@ -259,7 +259,7 @@ kernel void detect_2(const float threshold,
                     next[3] = (slot + 1) < 8 ? slot + 1 : 0;
                 }
             }
-            int filter_4 = batch * 8 + 4;
+            int filter_4 = group * 8 + 4;
             if (filter_4 < n_filters) {
                 uint channel_0 = bundle * 1 + 0;
                 if (hsum[4][0] > threshold) {
@@ -271,7 +271,7 @@ kernel void detect_2(const float threshold,
                     next[4] = (slot + 1) < 8 ? slot + 1 : 0;
                 }
             }
-            int filter_5 = batch * 8 + 5;
+            int filter_5 = group * 8 + 5;
             if (filter_5 < n_filters) {
                 uint channel_0 = bundle * 1 + 0;
                 if (hsum[5][0] > threshold) {
@@ -283,7 +283,7 @@ kernel void detect_2(const float threshold,
                     next[5] = (slot + 1) < 8 ? slot + 1 : 0;
                 }
             }
-            int filter_6 = batch * 8 + 6;
+            int filter_6 = group * 8 + 6;
             if (filter_6 < n_filters) {
                 uint channel_0 = bundle * 1 + 0;
                 if (hsum[6][0] > threshold) {
@@ -295,7 +295,7 @@ kernel void detect_2(const float threshold,
                     next[6] = (slot + 1) < 8 ? slot + 1 : 0;
                 }
             }
-            int filter_7 = batch * 8 + 7;
+            int filter_7 = group * 8 + 7;
             if (filter_7 < n_filters) {
                 uint channel_0 = bundle * 1 + 0;
                 if (hsum[7][0] > threshold) {
@@ -310,23 +310,23 @@ kernel void detect_2(const float threshold,
         }
     }
 
-    for (uint slot = 0; slot < 8; ++slot) {
-        WRITE_CHANNEL(detect_to_store_location[1][0][0], location_buffer_0_0[slot]);
-        WRITE_CHANNEL(detect_to_store_amplitude[1][0][0], amplitude_buffer_0_0[slot]);
-        WRITE_CHANNEL(detect_to_store_location[1][1][0], location_buffer_1_0[slot]);
-        WRITE_CHANNEL(detect_to_store_amplitude[1][1][0], amplitude_buffer_1_0[slot]);
-        WRITE_CHANNEL(detect_to_store_location[1][2][0], location_buffer_2_0[slot]);
-        WRITE_CHANNEL(detect_to_store_amplitude[1][2][0], amplitude_buffer_2_0[slot]);
-        WRITE_CHANNEL(detect_to_store_location[1][3][0], location_buffer_3_0[slot]);
-        WRITE_CHANNEL(detect_to_store_amplitude[1][3][0], amplitude_buffer_3_0[slot]);
-        WRITE_CHANNEL(detect_to_store_location[1][4][0], location_buffer_4_0[slot]);
-        WRITE_CHANNEL(detect_to_store_amplitude[1][4][0], amplitude_buffer_4_0[slot]);
-        WRITE_CHANNEL(detect_to_store_location[1][5][0], location_buffer_5_0[slot]);
-        WRITE_CHANNEL(detect_to_store_amplitude[1][5][0], amplitude_buffer_5_0[slot]);
-        WRITE_CHANNEL(detect_to_store_location[1][6][0], location_buffer_6_0[slot]);
-        WRITE_CHANNEL(detect_to_store_amplitude[1][6][0], amplitude_buffer_6_0[slot]);
-        WRITE_CHANNEL(detect_to_store_location[1][7][0], location_buffer_7_0[slot]);
-        WRITE_CHANNEL(detect_to_store_amplitude[1][7][0], amplitude_buffer_7_0[slot]);
+    for (uint d = 0; d < 8; ++d) {
+        WRITE_CHANNEL(detect_to_store_location[1][0][0], location_buffer_0_0[d]);
+        WRITE_CHANNEL(detect_to_store_amplitude[1][0][0], amplitude_buffer_0_0[d]);
+        WRITE_CHANNEL(detect_to_store_location[1][1][0], location_buffer_1_0[d]);
+        WRITE_CHANNEL(detect_to_store_amplitude[1][1][0], amplitude_buffer_1_0[d]);
+        WRITE_CHANNEL(detect_to_store_location[1][2][0], location_buffer_2_0[d]);
+        WRITE_CHANNEL(detect_to_store_amplitude[1][2][0], amplitude_buffer_2_0[d]);
+        WRITE_CHANNEL(detect_to_store_location[1][3][0], location_buffer_3_0[d]);
+        WRITE_CHANNEL(detect_to_store_amplitude[1][3][0], amplitude_buffer_3_0[d]);
+        WRITE_CHANNEL(detect_to_store_location[1][4][0], location_buffer_4_0[d]);
+        WRITE_CHANNEL(detect_to_store_amplitude[1][4][0], amplitude_buffer_4_0[d]);
+        WRITE_CHANNEL(detect_to_store_location[1][5][0], location_buffer_5_0[d]);
+        WRITE_CHANNEL(detect_to_store_amplitude[1][5][0], amplitude_buffer_5_0[d]);
+        WRITE_CHANNEL(detect_to_store_location[1][6][0], location_buffer_6_0[d]);
+        WRITE_CHANNEL(detect_to_store_amplitude[1][6][0], amplitude_buffer_6_0[d]);
+        WRITE_CHANNEL(detect_to_store_location[1][7][0], location_buffer_7_0[d]);
+        WRITE_CHANNEL(detect_to_store_amplitude[1][7][0], amplitude_buffer_7_0[d]);
     }
 }
 
@@ -334,7 +334,7 @@ __attribute__((max_global_work_dim(0)))
 kernel void detect_3(const float threshold,
                      const uint n_filters,
                      const uint negative_filters,
-                     const uint n_filter_batches,
+                     const uint n_filter_groups,
                      const uint n_channel_bundles)
 {
     uint location_buffer_0_0[8] = {HMS_INVALID_LOCATION, HMS_INVALID_LOCATION, HMS_INVALID_LOCATION, HMS_INVALID_LOCATION, HMS_INVALID_LOCATION, HMS_INVALID_LOCATION, HMS_INVALID_LOCATION, HMS_INVALID_LOCATION};
@@ -356,7 +356,7 @@ kernel void detect_3(const float threshold,
 
     uint next[8]  = {0, 0, 0, 0, 0, 0, 0, 0};
 
-    for (uint batch = 0; batch < n_filter_batches; ++batch) {
+    for (uint group = 0; group < n_filter_groups; ++group) {
         for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
             float hsum[8][1];
 
@@ -374,7 +374,7 @@ kernel void detect_3(const float threshold,
                     WRITE_CHANNEL(detect_to_detect[2][p][q], hsum[p][q]);
             }
 
-            int filter_0 = batch * 8 + 0;
+            int filter_0 = group * 8 + 0;
             if (filter_0 < n_filters) {
                 uint channel_0 = bundle * 1 + 0;
                 if (hsum[0][0] > threshold) {
@@ -386,7 +386,7 @@ kernel void detect_3(const float threshold,
                     next[0] = (slot + 1) < 8 ? slot + 1 : 0;
                 }
             }
-            int filter_1 = batch * 8 + 1;
+            int filter_1 = group * 8 + 1;
             if (filter_1 < n_filters) {
                 uint channel_0 = bundle * 1 + 0;
                 if (hsum[1][0] > threshold) {
@@ -398,7 +398,7 @@ kernel void detect_3(const float threshold,
                     next[1] = (slot + 1) < 8 ? slot + 1 : 0;
                 }
             }
-            int filter_2 = batch * 8 + 2;
+            int filter_2 = group * 8 + 2;
             if (filter_2 < n_filters) {
                 uint channel_0 = bundle * 1 + 0;
                 if (hsum[2][0] > threshold) {
@@ -410,7 +410,7 @@ kernel void detect_3(const float threshold,
                     next[2] = (slot + 1) < 8 ? slot + 1 : 0;
                 }
             }
-            int filter_3 = batch * 8 + 3;
+            int filter_3 = group * 8 + 3;
             if (filter_3 < n_filters) {
                 uint channel_0 = bundle * 1 + 0;
                 if (hsum[3][0] > threshold) {
@@ -422,7 +422,7 @@ kernel void detect_3(const float threshold,
                     next[3] = (slot + 1) < 8 ? slot + 1 : 0;
                 }
             }
-            int filter_4 = batch * 8 + 4;
+            int filter_4 = group * 8 + 4;
             if (filter_4 < n_filters) {
                 uint channel_0 = bundle * 1 + 0;
                 if (hsum[4][0] > threshold) {
@@ -434,7 +434,7 @@ kernel void detect_3(const float threshold,
                     next[4] = (slot + 1) < 8 ? slot + 1 : 0;
                 }
             }
-            int filter_5 = batch * 8 + 5;
+            int filter_5 = group * 8 + 5;
             if (filter_5 < n_filters) {
                 uint channel_0 = bundle * 1 + 0;
                 if (hsum[5][0] > threshold) {
@@ -446,7 +446,7 @@ kernel void detect_3(const float threshold,
                     next[5] = (slot + 1) < 8 ? slot + 1 : 0;
                 }
             }
-            int filter_6 = batch * 8 + 6;
+            int filter_6 = group * 8 + 6;
             if (filter_6 < n_filters) {
                 uint channel_0 = bundle * 1 + 0;
                 if (hsum[6][0] > threshold) {
@@ -458,7 +458,7 @@ kernel void detect_3(const float threshold,
                     next[6] = (slot + 1) < 8 ? slot + 1 : 0;
                 }
             }
-            int filter_7 = batch * 8 + 7;
+            int filter_7 = group * 8 + 7;
             if (filter_7 < n_filters) {
                 uint channel_0 = bundle * 1 + 0;
                 if (hsum[7][0] > threshold) {
@@ -473,23 +473,23 @@ kernel void detect_3(const float threshold,
         }
     }
 
-    for (uint slot = 0; slot < 8; ++slot) {
-        WRITE_CHANNEL(detect_to_store_location[2][0][0], location_buffer_0_0[slot]);
-        WRITE_CHANNEL(detect_to_store_amplitude[2][0][0], amplitude_buffer_0_0[slot]);
-        WRITE_CHANNEL(detect_to_store_location[2][1][0], location_buffer_1_0[slot]);
-        WRITE_CHANNEL(detect_to_store_amplitude[2][1][0], amplitude_buffer_1_0[slot]);
-        WRITE_CHANNEL(detect_to_store_location[2][2][0], location_buffer_2_0[slot]);
-        WRITE_CHANNEL(detect_to_store_amplitude[2][2][0], amplitude_buffer_2_0[slot]);
-        WRITE_CHANNEL(detect_to_store_location[2][3][0], location_buffer_3_0[slot]);
-        WRITE_CHANNEL(detect_to_store_amplitude[2][3][0], amplitude_buffer_3_0[slot]);
-        WRITE_CHANNEL(detect_to_store_location[2][4][0], location_buffer_4_0[slot]);
-        WRITE_CHANNEL(detect_to_store_amplitude[2][4][0], amplitude_buffer_4_0[slot]);
-        WRITE_CHANNEL(detect_to_store_location[2][5][0], location_buffer_5_0[slot]);
-        WRITE_CHANNEL(detect_to_store_amplitude[2][5][0], amplitude_buffer_5_0[slot]);
-        WRITE_CHANNEL(detect_to_store_location[2][6][0], location_buffer_6_0[slot]);
-        WRITE_CHANNEL(detect_to_store_amplitude[2][6][0], amplitude_buffer_6_0[slot]);
-        WRITE_CHANNEL(detect_to_store_location[2][7][0], location_buffer_7_0[slot]);
-        WRITE_CHANNEL(detect_to_store_amplitude[2][7][0], amplitude_buffer_7_0[slot]);
+    for (uint d = 0; d < 8; ++d) {
+        WRITE_CHANNEL(detect_to_store_location[2][0][0], location_buffer_0_0[d]);
+        WRITE_CHANNEL(detect_to_store_amplitude[2][0][0], amplitude_buffer_0_0[d]);
+        WRITE_CHANNEL(detect_to_store_location[2][1][0], location_buffer_1_0[d]);
+        WRITE_CHANNEL(detect_to_store_amplitude[2][1][0], amplitude_buffer_1_0[d]);
+        WRITE_CHANNEL(detect_to_store_location[2][2][0], location_buffer_2_0[d]);
+        WRITE_CHANNEL(detect_to_store_amplitude[2][2][0], amplitude_buffer_2_0[d]);
+        WRITE_CHANNEL(detect_to_store_location[2][3][0], location_buffer_3_0[d]);
+        WRITE_CHANNEL(detect_to_store_amplitude[2][3][0], amplitude_buffer_3_0[d]);
+        WRITE_CHANNEL(detect_to_store_location[2][4][0], location_buffer_4_0[d]);
+        WRITE_CHANNEL(detect_to_store_amplitude[2][4][0], amplitude_buffer_4_0[d]);
+        WRITE_CHANNEL(detect_to_store_location[2][5][0], location_buffer_5_0[d]);
+        WRITE_CHANNEL(detect_to_store_amplitude[2][5][0], amplitude_buffer_5_0[d]);
+        WRITE_CHANNEL(detect_to_store_location[2][6][0], location_buffer_6_0[d]);
+        WRITE_CHANNEL(detect_to_store_amplitude[2][6][0], amplitude_buffer_6_0[d]);
+        WRITE_CHANNEL(detect_to_store_location[2][7][0], location_buffer_7_0[d]);
+        WRITE_CHANNEL(detect_to_store_amplitude[2][7][0], amplitude_buffer_7_0[d]);
     }
 }
 
@@ -497,7 +497,7 @@ __attribute__((max_global_work_dim(0)))
 kernel void detect_4(const float threshold,
                      const uint n_filters,
                      const uint negative_filters,
-                     const uint n_filter_batches,
+                     const uint n_filter_groups,
                      const uint n_channel_bundles)
 {
     uint location_buffer_0_0[8] = {HMS_INVALID_LOCATION, HMS_INVALID_LOCATION, HMS_INVALID_LOCATION, HMS_INVALID_LOCATION, HMS_INVALID_LOCATION, HMS_INVALID_LOCATION, HMS_INVALID_LOCATION, HMS_INVALID_LOCATION};
@@ -519,7 +519,7 @@ kernel void detect_4(const float threshold,
 
     uint next[8]  = {0, 0, 0, 0, 0, 0, 0, 0};
 
-    for (uint batch = 0; batch < n_filter_batches; ++batch) {
+    for (uint group = 0; group < n_filter_groups; ++group) {
         for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
             float hsum[8][1];
 
@@ -537,7 +537,7 @@ kernel void detect_4(const float threshold,
                     WRITE_CHANNEL(detect_to_detect[3][p][q], hsum[p][q]);
             }
 
-            int filter_0 = batch * 8 + 0;
+            int filter_0 = group * 8 + 0;
             if (filter_0 < n_filters) {
                 uint channel_0 = bundle * 1 + 0;
                 if (hsum[0][0] > threshold) {
@@ -549,7 +549,7 @@ kernel void detect_4(const float threshold,
                     next[0] = (slot + 1) < 8 ? slot + 1 : 0;
                 }
             }
-            int filter_1 = batch * 8 + 1;
+            int filter_1 = group * 8 + 1;
             if (filter_1 < n_filters) {
                 uint channel_0 = bundle * 1 + 0;
                 if (hsum[1][0] > threshold) {
@@ -561,7 +561,7 @@ kernel void detect_4(const float threshold,
                     next[1] = (slot + 1) < 8 ? slot + 1 : 0;
                 }
             }
-            int filter_2 = batch * 8 + 2;
+            int filter_2 = group * 8 + 2;
             if (filter_2 < n_filters) {
                 uint channel_0 = bundle * 1 + 0;
                 if (hsum[2][0] > threshold) {
@@ -573,7 +573,7 @@ kernel void detect_4(const float threshold,
                     next[2] = (slot + 1) < 8 ? slot + 1 : 0;
                 }
             }
-            int filter_3 = batch * 8 + 3;
+            int filter_3 = group * 8 + 3;
             if (filter_3 < n_filters) {
                 uint channel_0 = bundle * 1 + 0;
                 if (hsum[3][0] > threshold) {
@@ -585,7 +585,7 @@ kernel void detect_4(const float threshold,
                     next[3] = (slot + 1) < 8 ? slot + 1 : 0;
                 }
             }
-            int filter_4 = batch * 8 + 4;
+            int filter_4 = group * 8 + 4;
             if (filter_4 < n_filters) {
                 uint channel_0 = bundle * 1 + 0;
                 if (hsum[4][0] > threshold) {
@@ -597,7 +597,7 @@ kernel void detect_4(const float threshold,
                     next[4] = (slot + 1) < 8 ? slot + 1 : 0;
                 }
             }
-            int filter_5 = batch * 8 + 5;
+            int filter_5 = group * 8 + 5;
             if (filter_5 < n_filters) {
                 uint channel_0 = bundle * 1 + 0;
                 if (hsum[5][0] > threshold) {
@@ -609,7 +609,7 @@ kernel void detect_4(const float threshold,
                     next[5] = (slot + 1) < 8 ? slot + 1 : 0;
                 }
             }
-            int filter_6 = batch * 8 + 6;
+            int filter_6 = group * 8 + 6;
             if (filter_6 < n_filters) {
                 uint channel_0 = bundle * 1 + 0;
                 if (hsum[6][0] > threshold) {
@@ -621,7 +621,7 @@ kernel void detect_4(const float threshold,
                     next[6] = (slot + 1) < 8 ? slot + 1 : 0;
                 }
             }
-            int filter_7 = batch * 8 + 7;
+            int filter_7 = group * 8 + 7;
             if (filter_7 < n_filters) {
                 uint channel_0 = bundle * 1 + 0;
                 if (hsum[7][0] > threshold) {
@@ -636,23 +636,23 @@ kernel void detect_4(const float threshold,
         }
     }
 
-    for (uint slot = 0; slot < 8; ++slot) {
-        WRITE_CHANNEL(detect_to_store_location[3][0][0], location_buffer_0_0[slot]);
-        WRITE_CHANNEL(detect_to_store_amplitude[3][0][0], amplitude_buffer_0_0[slot]);
-        WRITE_CHANNEL(detect_to_store_location[3][1][0], location_buffer_1_0[slot]);
-        WRITE_CHANNEL(detect_to_store_amplitude[3][1][0], amplitude_buffer_1_0[slot]);
-        WRITE_CHANNEL(detect_to_store_location[3][2][0], location_buffer_2_0[slot]);
-        WRITE_CHANNEL(detect_to_store_amplitude[3][2][0], amplitude_buffer_2_0[slot]);
-        WRITE_CHANNEL(detect_to_store_location[3][3][0], location_buffer_3_0[slot]);
-        WRITE_CHANNEL(detect_to_store_amplitude[3][3][0], amplitude_buffer_3_0[slot]);
-        WRITE_CHANNEL(detect_to_store_location[3][4][0], location_buffer_4_0[slot]);
-        WRITE_CHANNEL(detect_to_store_amplitude[3][4][0], amplitude_buffer_4_0[slot]);
-        WRITE_CHANNEL(detect_to_store_location[3][5][0], location_buffer_5_0[slot]);
-        WRITE_CHANNEL(detect_to_store_amplitude[3][5][0], amplitude_buffer_5_0[slot]);
-        WRITE_CHANNEL(detect_to_store_location[3][6][0], location_buffer_6_0[slot]);
-        WRITE_CHANNEL(detect_to_store_amplitude[3][6][0], amplitude_buffer_6_0[slot]);
-        WRITE_CHANNEL(detect_to_store_location[3][7][0], location_buffer_7_0[slot]);
-        WRITE_CHANNEL(detect_to_store_amplitude[3][7][0], amplitude_buffer_7_0[slot]);
+    for (uint d = 0; d < 8; ++d) {
+        WRITE_CHANNEL(detect_to_store_location[3][0][0], location_buffer_0_0[d]);
+        WRITE_CHANNEL(detect_to_store_amplitude[3][0][0], amplitude_buffer_0_0[d]);
+        WRITE_CHANNEL(detect_to_store_location[3][1][0], location_buffer_1_0[d]);
+        WRITE_CHANNEL(detect_to_store_amplitude[3][1][0], amplitude_buffer_1_0[d]);
+        WRITE_CHANNEL(detect_to_store_location[3][2][0], location_buffer_2_0[d]);
+        WRITE_CHANNEL(detect_to_store_amplitude[3][2][0], amplitude_buffer_2_0[d]);
+        WRITE_CHANNEL(detect_to_store_location[3][3][0], location_buffer_3_0[d]);
+        WRITE_CHANNEL(detect_to_store_amplitude[3][3][0], amplitude_buffer_3_0[d]);
+        WRITE_CHANNEL(detect_to_store_location[3][4][0], location_buffer_4_0[d]);
+        WRITE_CHANNEL(detect_to_store_amplitude[3][4][0], amplitude_buffer_4_0[d]);
+        WRITE_CHANNEL(detect_to_store_location[3][5][0], location_buffer_5_0[d]);
+        WRITE_CHANNEL(detect_to_store_amplitude[3][5][0], amplitude_buffer_5_0[d]);
+        WRITE_CHANNEL(detect_to_store_location[3][6][0], location_buffer_6_0[d]);
+        WRITE_CHANNEL(detect_to_store_amplitude[3][6][0], amplitude_buffer_6_0[d]);
+        WRITE_CHANNEL(detect_to_store_location[3][7][0], location_buffer_7_0[d]);
+        WRITE_CHANNEL(detect_to_store_amplitude[3][7][0], amplitude_buffer_7_0[d]);
     }
 }
 
@@ -660,7 +660,7 @@ __attribute__((max_global_work_dim(0)))
 kernel void detect_5(const float threshold,
                      const uint n_filters,
                      const uint negative_filters,
-                     const uint n_filter_batches,
+                     const uint n_filter_groups,
                      const uint n_channel_bundles)
 {
     uint location_buffer_0_0[8] = {HMS_INVALID_LOCATION, HMS_INVALID_LOCATION, HMS_INVALID_LOCATION, HMS_INVALID_LOCATION, HMS_INVALID_LOCATION, HMS_INVALID_LOCATION, HMS_INVALID_LOCATION, HMS_INVALID_LOCATION};
@@ -682,7 +682,7 @@ kernel void detect_5(const float threshold,
 
     uint next[8]  = {0, 0, 0, 0, 0, 0, 0, 0};
 
-    for (uint batch = 0; batch < n_filter_batches; ++batch) {
+    for (uint group = 0; group < n_filter_groups; ++group) {
         for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
             float hsum[8][1];
 
@@ -700,7 +700,7 @@ kernel void detect_5(const float threshold,
                     WRITE_CHANNEL(detect_to_detect[4][p][q], hsum[p][q]);
             }
 
-            int filter_0 = batch * 8 + 0;
+            int filter_0 = group * 8 + 0;
             if (filter_0 < n_filters) {
                 uint channel_0 = bundle * 1 + 0;
                 if (hsum[0][0] > threshold) {
@@ -712,7 +712,7 @@ kernel void detect_5(const float threshold,
                     next[0] = (slot + 1) < 8 ? slot + 1 : 0;
                 }
             }
-            int filter_1 = batch * 8 + 1;
+            int filter_1 = group * 8 + 1;
             if (filter_1 < n_filters) {
                 uint channel_0 = bundle * 1 + 0;
                 if (hsum[1][0] > threshold) {
@@ -724,7 +724,7 @@ kernel void detect_5(const float threshold,
                     next[1] = (slot + 1) < 8 ? slot + 1 : 0;
                 }
             }
-            int filter_2 = batch * 8 + 2;
+            int filter_2 = group * 8 + 2;
             if (filter_2 < n_filters) {
                 uint channel_0 = bundle * 1 + 0;
                 if (hsum[2][0] > threshold) {
@@ -736,7 +736,7 @@ kernel void detect_5(const float threshold,
                     next[2] = (slot + 1) < 8 ? slot + 1 : 0;
                 }
             }
-            int filter_3 = batch * 8 + 3;
+            int filter_3 = group * 8 + 3;
             if (filter_3 < n_filters) {
                 uint channel_0 = bundle * 1 + 0;
                 if (hsum[3][0] > threshold) {
@@ -748,7 +748,7 @@ kernel void detect_5(const float threshold,
                     next[3] = (slot + 1) < 8 ? slot + 1 : 0;
                 }
             }
-            int filter_4 = batch * 8 + 4;
+            int filter_4 = group * 8 + 4;
             if (filter_4 < n_filters) {
                 uint channel_0 = bundle * 1 + 0;
                 if (hsum[4][0] > threshold) {
@@ -760,7 +760,7 @@ kernel void detect_5(const float threshold,
                     next[4] = (slot + 1) < 8 ? slot + 1 : 0;
                 }
             }
-            int filter_5 = batch * 8 + 5;
+            int filter_5 = group * 8 + 5;
             if (filter_5 < n_filters) {
                 uint channel_0 = bundle * 1 + 0;
                 if (hsum[5][0] > threshold) {
@@ -772,7 +772,7 @@ kernel void detect_5(const float threshold,
                     next[5] = (slot + 1) < 8 ? slot + 1 : 0;
                 }
             }
-            int filter_6 = batch * 8 + 6;
+            int filter_6 = group * 8 + 6;
             if (filter_6 < n_filters) {
                 uint channel_0 = bundle * 1 + 0;
                 if (hsum[6][0] > threshold) {
@@ -784,7 +784,7 @@ kernel void detect_5(const float threshold,
                     next[6] = (slot + 1) < 8 ? slot + 1 : 0;
                 }
             }
-            int filter_7 = batch * 8 + 7;
+            int filter_7 = group * 8 + 7;
             if (filter_7 < n_filters) {
                 uint channel_0 = bundle * 1 + 0;
                 if (hsum[7][0] > threshold) {
@@ -799,23 +799,23 @@ kernel void detect_5(const float threshold,
         }
     }
 
-    for (uint slot = 0; slot < 8; ++slot) {
-        WRITE_CHANNEL(detect_to_store_location[4][0][0], location_buffer_0_0[slot]);
-        WRITE_CHANNEL(detect_to_store_amplitude[4][0][0], amplitude_buffer_0_0[slot]);
-        WRITE_CHANNEL(detect_to_store_location[4][1][0], location_buffer_1_0[slot]);
-        WRITE_CHANNEL(detect_to_store_amplitude[4][1][0], amplitude_buffer_1_0[slot]);
-        WRITE_CHANNEL(detect_to_store_location[4][2][0], location_buffer_2_0[slot]);
-        WRITE_CHANNEL(detect_to_store_amplitude[4][2][0], amplitude_buffer_2_0[slot]);
-        WRITE_CHANNEL(detect_to_store_location[4][3][0], location_buffer_3_0[slot]);
-        WRITE_CHANNEL(detect_to_store_amplitude[4][3][0], amplitude_buffer_3_0[slot]);
-        WRITE_CHANNEL(detect_to_store_location[4][4][0], location_buffer_4_0[slot]);
-        WRITE_CHANNEL(detect_to_store_amplitude[4][4][0], amplitude_buffer_4_0[slot]);
-        WRITE_CHANNEL(detect_to_store_location[4][5][0], location_buffer_5_0[slot]);
-        WRITE_CHANNEL(detect_to_store_amplitude[4][5][0], amplitude_buffer_5_0[slot]);
-        WRITE_CHANNEL(detect_to_store_location[4][6][0], location_buffer_6_0[slot]);
-        WRITE_CHANNEL(detect_to_store_amplitude[4][6][0], amplitude_buffer_6_0[slot]);
-        WRITE_CHANNEL(detect_to_store_location[4][7][0], location_buffer_7_0[slot]);
-        WRITE_CHANNEL(detect_to_store_amplitude[4][7][0], amplitude_buffer_7_0[slot]);
+    for (uint d = 0; d < 8; ++d) {
+        WRITE_CHANNEL(detect_to_store_location[4][0][0], location_buffer_0_0[d]);
+        WRITE_CHANNEL(detect_to_store_amplitude[4][0][0], amplitude_buffer_0_0[d]);
+        WRITE_CHANNEL(detect_to_store_location[4][1][0], location_buffer_1_0[d]);
+        WRITE_CHANNEL(detect_to_store_amplitude[4][1][0], amplitude_buffer_1_0[d]);
+        WRITE_CHANNEL(detect_to_store_location[4][2][0], location_buffer_2_0[d]);
+        WRITE_CHANNEL(detect_to_store_amplitude[4][2][0], amplitude_buffer_2_0[d]);
+        WRITE_CHANNEL(detect_to_store_location[4][3][0], location_buffer_3_0[d]);
+        WRITE_CHANNEL(detect_to_store_amplitude[4][3][0], amplitude_buffer_3_0[d]);
+        WRITE_CHANNEL(detect_to_store_location[4][4][0], location_buffer_4_0[d]);
+        WRITE_CHANNEL(detect_to_store_amplitude[4][4][0], amplitude_buffer_4_0[d]);
+        WRITE_CHANNEL(detect_to_store_location[4][5][0], location_buffer_5_0[d]);
+        WRITE_CHANNEL(detect_to_store_amplitude[4][5][0], amplitude_buffer_5_0[d]);
+        WRITE_CHANNEL(detect_to_store_location[4][6][0], location_buffer_6_0[d]);
+        WRITE_CHANNEL(detect_to_store_amplitude[4][6][0], amplitude_buffer_6_0[d]);
+        WRITE_CHANNEL(detect_to_store_location[4][7][0], location_buffer_7_0[d]);
+        WRITE_CHANNEL(detect_to_store_amplitude[4][7][0], amplitude_buffer_7_0[d]);
     }
 }
 
@@ -823,7 +823,7 @@ __attribute__((max_global_work_dim(0)))
 kernel void detect_6(const float threshold,
                      const uint n_filters,
                      const uint negative_filters,
-                     const uint n_filter_batches,
+                     const uint n_filter_groups,
                      const uint n_channel_bundles)
 {
     uint location_buffer_0_0[8] = {HMS_INVALID_LOCATION, HMS_INVALID_LOCATION, HMS_INVALID_LOCATION, HMS_INVALID_LOCATION, HMS_INVALID_LOCATION, HMS_INVALID_LOCATION, HMS_INVALID_LOCATION, HMS_INVALID_LOCATION};
@@ -845,7 +845,7 @@ kernel void detect_6(const float threshold,
 
     uint next[8]  = {0, 0, 0, 0, 0, 0, 0, 0};
 
-    for (uint batch = 0; batch < n_filter_batches; ++batch) {
+    for (uint group = 0; group < n_filter_groups; ++group) {
         for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
             float hsum[8][1];
 
@@ -863,7 +863,7 @@ kernel void detect_6(const float threshold,
                     WRITE_CHANNEL(detect_to_detect[5][p][q], hsum[p][q]);
             }
 
-            int filter_0 = batch * 8 + 0;
+            int filter_0 = group * 8 + 0;
             if (filter_0 < n_filters) {
                 uint channel_0 = bundle * 1 + 0;
                 if (hsum[0][0] > threshold) {
@@ -875,7 +875,7 @@ kernel void detect_6(const float threshold,
                     next[0] = (slot + 1) < 8 ? slot + 1 : 0;
                 }
             }
-            int filter_1 = batch * 8 + 1;
+            int filter_1 = group * 8 + 1;
             if (filter_1 < n_filters) {
                 uint channel_0 = bundle * 1 + 0;
                 if (hsum[1][0] > threshold) {
@@ -887,7 +887,7 @@ kernel void detect_6(const float threshold,
                     next[1] = (slot + 1) < 8 ? slot + 1 : 0;
                 }
             }
-            int filter_2 = batch * 8 + 2;
+            int filter_2 = group * 8 + 2;
             if (filter_2 < n_filters) {
                 uint channel_0 = bundle * 1 + 0;
                 if (hsum[2][0] > threshold) {
@@ -899,7 +899,7 @@ kernel void detect_6(const float threshold,
                     next[2] = (slot + 1) < 8 ? slot + 1 : 0;
                 }
             }
-            int filter_3 = batch * 8 + 3;
+            int filter_3 = group * 8 + 3;
             if (filter_3 < n_filters) {
                 uint channel_0 = bundle * 1 + 0;
                 if (hsum[3][0] > threshold) {
@@ -911,7 +911,7 @@ kernel void detect_6(const float threshold,
                     next[3] = (slot + 1) < 8 ? slot + 1 : 0;
                 }
             }
-            int filter_4 = batch * 8 + 4;
+            int filter_4 = group * 8 + 4;
             if (filter_4 < n_filters) {
                 uint channel_0 = bundle * 1 + 0;
                 if (hsum[4][0] > threshold) {
@@ -923,7 +923,7 @@ kernel void detect_6(const float threshold,
                     next[4] = (slot + 1) < 8 ? slot + 1 : 0;
                 }
             }
-            int filter_5 = batch * 8 + 5;
+            int filter_5 = group * 8 + 5;
             if (filter_5 < n_filters) {
                 uint channel_0 = bundle * 1 + 0;
                 if (hsum[5][0] > threshold) {
@@ -935,7 +935,7 @@ kernel void detect_6(const float threshold,
                     next[5] = (slot + 1) < 8 ? slot + 1 : 0;
                 }
             }
-            int filter_6 = batch * 8 + 6;
+            int filter_6 = group * 8 + 6;
             if (filter_6 < n_filters) {
                 uint channel_0 = bundle * 1 + 0;
                 if (hsum[6][0] > threshold) {
@@ -947,7 +947,7 @@ kernel void detect_6(const float threshold,
                     next[6] = (slot + 1) < 8 ? slot + 1 : 0;
                 }
             }
-            int filter_7 = batch * 8 + 7;
+            int filter_7 = group * 8 + 7;
             if (filter_7 < n_filters) {
                 uint channel_0 = bundle * 1 + 0;
                 if (hsum[7][0] > threshold) {
@@ -962,23 +962,23 @@ kernel void detect_6(const float threshold,
         }
     }
 
-    for (uint slot = 0; slot < 8; ++slot) {
-        WRITE_CHANNEL(detect_to_store_location[5][0][0], location_buffer_0_0[slot]);
-        WRITE_CHANNEL(detect_to_store_amplitude[5][0][0], amplitude_buffer_0_0[slot]);
-        WRITE_CHANNEL(detect_to_store_location[5][1][0], location_buffer_1_0[slot]);
-        WRITE_CHANNEL(detect_to_store_amplitude[5][1][0], amplitude_buffer_1_0[slot]);
-        WRITE_CHANNEL(detect_to_store_location[5][2][0], location_buffer_2_0[slot]);
-        WRITE_CHANNEL(detect_to_store_amplitude[5][2][0], amplitude_buffer_2_0[slot]);
-        WRITE_CHANNEL(detect_to_store_location[5][3][0], location_buffer_3_0[slot]);
-        WRITE_CHANNEL(detect_to_store_amplitude[5][3][0], amplitude_buffer_3_0[slot]);
-        WRITE_CHANNEL(detect_to_store_location[5][4][0], location_buffer_4_0[slot]);
-        WRITE_CHANNEL(detect_to_store_amplitude[5][4][0], amplitude_buffer_4_0[slot]);
-        WRITE_CHANNEL(detect_to_store_location[5][5][0], location_buffer_5_0[slot]);
-        WRITE_CHANNEL(detect_to_store_amplitude[5][5][0], amplitude_buffer_5_0[slot]);
-        WRITE_CHANNEL(detect_to_store_location[5][6][0], location_buffer_6_0[slot]);
-        WRITE_CHANNEL(detect_to_store_amplitude[5][6][0], amplitude_buffer_6_0[slot]);
-        WRITE_CHANNEL(detect_to_store_location[5][7][0], location_buffer_7_0[slot]);
-        WRITE_CHANNEL(detect_to_store_amplitude[5][7][0], amplitude_buffer_7_0[slot]);
+    for (uint d = 0; d < 8; ++d) {
+        WRITE_CHANNEL(detect_to_store_location[5][0][0], location_buffer_0_0[d]);
+        WRITE_CHANNEL(detect_to_store_amplitude[5][0][0], amplitude_buffer_0_0[d]);
+        WRITE_CHANNEL(detect_to_store_location[5][1][0], location_buffer_1_0[d]);
+        WRITE_CHANNEL(detect_to_store_amplitude[5][1][0], amplitude_buffer_1_0[d]);
+        WRITE_CHANNEL(detect_to_store_location[5][2][0], location_buffer_2_0[d]);
+        WRITE_CHANNEL(detect_to_store_amplitude[5][2][0], amplitude_buffer_2_0[d]);
+        WRITE_CHANNEL(detect_to_store_location[5][3][0], location_buffer_3_0[d]);
+        WRITE_CHANNEL(detect_to_store_amplitude[5][3][0], amplitude_buffer_3_0[d]);
+        WRITE_CHANNEL(detect_to_store_location[5][4][0], location_buffer_4_0[d]);
+        WRITE_CHANNEL(detect_to_store_amplitude[5][4][0], amplitude_buffer_4_0[d]);
+        WRITE_CHANNEL(detect_to_store_location[5][5][0], location_buffer_5_0[d]);
+        WRITE_CHANNEL(detect_to_store_amplitude[5][5][0], amplitude_buffer_5_0[d]);
+        WRITE_CHANNEL(detect_to_store_location[5][6][0], location_buffer_6_0[d]);
+        WRITE_CHANNEL(detect_to_store_amplitude[5][6][0], amplitude_buffer_6_0[d]);
+        WRITE_CHANNEL(detect_to_store_location[5][7][0], location_buffer_7_0[d]);
+        WRITE_CHANNEL(detect_to_store_amplitude[5][7][0], amplitude_buffer_7_0[d]);
     }
 }
 
@@ -986,7 +986,7 @@ __attribute__((max_global_work_dim(0)))
 kernel void detect_7(const float threshold,
                      const uint n_filters,
                      const uint negative_filters,
-                     const uint n_filter_batches,
+                     const uint n_filter_groups,
                      const uint n_channel_bundles)
 {
     uint location_buffer_0_0[8] = {HMS_INVALID_LOCATION, HMS_INVALID_LOCATION, HMS_INVALID_LOCATION, HMS_INVALID_LOCATION, HMS_INVALID_LOCATION, HMS_INVALID_LOCATION, HMS_INVALID_LOCATION, HMS_INVALID_LOCATION};
@@ -1008,7 +1008,7 @@ kernel void detect_7(const float threshold,
 
     uint next[8]  = {0, 0, 0, 0, 0, 0, 0, 0};
 
-    for (uint batch = 0; batch < n_filter_batches; ++batch) {
+    for (uint group = 0; group < n_filter_groups; ++group) {
         for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
             float hsum[8][1];
 
@@ -1026,7 +1026,7 @@ kernel void detect_7(const float threshold,
                     WRITE_CHANNEL(detect_to_detect[6][p][q], hsum[p][q]);
             }
 
-            int filter_0 = batch * 8 + 0;
+            int filter_0 = group * 8 + 0;
             if (filter_0 < n_filters) {
                 uint channel_0 = bundle * 1 + 0;
                 if (hsum[0][0] > threshold) {
@@ -1038,7 +1038,7 @@ kernel void detect_7(const float threshold,
                     next[0] = (slot + 1) < 8 ? slot + 1 : 0;
                 }
             }
-            int filter_1 = batch * 8 + 1;
+            int filter_1 = group * 8 + 1;
             if (filter_1 < n_filters) {
                 uint channel_0 = bundle * 1 + 0;
                 if (hsum[1][0] > threshold) {
@@ -1050,7 +1050,7 @@ kernel void detect_7(const float threshold,
                     next[1] = (slot + 1) < 8 ? slot + 1 : 0;
                 }
             }
-            int filter_2 = batch * 8 + 2;
+            int filter_2 = group * 8 + 2;
             if (filter_2 < n_filters) {
                 uint channel_0 = bundle * 1 + 0;
                 if (hsum[2][0] > threshold) {
@@ -1062,7 +1062,7 @@ kernel void detect_7(const float threshold,
                     next[2] = (slot + 1) < 8 ? slot + 1 : 0;
                 }
             }
-            int filter_3 = batch * 8 + 3;
+            int filter_3 = group * 8 + 3;
             if (filter_3 < n_filters) {
                 uint channel_0 = bundle * 1 + 0;
                 if (hsum[3][0] > threshold) {
@@ -1074,7 +1074,7 @@ kernel void detect_7(const float threshold,
                     next[3] = (slot + 1) < 8 ? slot + 1 : 0;
                 }
             }
-            int filter_4 = batch * 8 + 4;
+            int filter_4 = group * 8 + 4;
             if (filter_4 < n_filters) {
                 uint channel_0 = bundle * 1 + 0;
                 if (hsum[4][0] > threshold) {
@@ -1086,7 +1086,7 @@ kernel void detect_7(const float threshold,
                     next[4] = (slot + 1) < 8 ? slot + 1 : 0;
                 }
             }
-            int filter_5 = batch * 8 + 5;
+            int filter_5 = group * 8 + 5;
             if (filter_5 < n_filters) {
                 uint channel_0 = bundle * 1 + 0;
                 if (hsum[5][0] > threshold) {
@@ -1098,7 +1098,7 @@ kernel void detect_7(const float threshold,
                     next[5] = (slot + 1) < 8 ? slot + 1 : 0;
                 }
             }
-            int filter_6 = batch * 8 + 6;
+            int filter_6 = group * 8 + 6;
             if (filter_6 < n_filters) {
                 uint channel_0 = bundle * 1 + 0;
                 if (hsum[6][0] > threshold) {
@@ -1110,7 +1110,7 @@ kernel void detect_7(const float threshold,
                     next[6] = (slot + 1) < 8 ? slot + 1 : 0;
                 }
             }
-            int filter_7 = batch * 8 + 7;
+            int filter_7 = group * 8 + 7;
             if (filter_7 < n_filters) {
                 uint channel_0 = bundle * 1 + 0;
                 if (hsum[7][0] > threshold) {
@@ -1125,23 +1125,23 @@ kernel void detect_7(const float threshold,
         }
     }
 
-    for (uint slot = 0; slot < 8; ++slot) {
-        WRITE_CHANNEL(detect_to_store_location[6][0][0], location_buffer_0_0[slot]);
-        WRITE_CHANNEL(detect_to_store_amplitude[6][0][0], amplitude_buffer_0_0[slot]);
-        WRITE_CHANNEL(detect_to_store_location[6][1][0], location_buffer_1_0[slot]);
-        WRITE_CHANNEL(detect_to_store_amplitude[6][1][0], amplitude_buffer_1_0[slot]);
-        WRITE_CHANNEL(detect_to_store_location[6][2][0], location_buffer_2_0[slot]);
-        WRITE_CHANNEL(detect_to_store_amplitude[6][2][0], amplitude_buffer_2_0[slot]);
-        WRITE_CHANNEL(detect_to_store_location[6][3][0], location_buffer_3_0[slot]);
-        WRITE_CHANNEL(detect_to_store_amplitude[6][3][0], amplitude_buffer_3_0[slot]);
-        WRITE_CHANNEL(detect_to_store_location[6][4][0], location_buffer_4_0[slot]);
-        WRITE_CHANNEL(detect_to_store_amplitude[6][4][0], amplitude_buffer_4_0[slot]);
-        WRITE_CHANNEL(detect_to_store_location[6][5][0], location_buffer_5_0[slot]);
-        WRITE_CHANNEL(detect_to_store_amplitude[6][5][0], amplitude_buffer_5_0[slot]);
-        WRITE_CHANNEL(detect_to_store_location[6][6][0], location_buffer_6_0[slot]);
-        WRITE_CHANNEL(detect_to_store_amplitude[6][6][0], amplitude_buffer_6_0[slot]);
-        WRITE_CHANNEL(detect_to_store_location[6][7][0], location_buffer_7_0[slot]);
-        WRITE_CHANNEL(detect_to_store_amplitude[6][7][0], amplitude_buffer_7_0[slot]);
+    for (uint d = 0; d < 8; ++d) {
+        WRITE_CHANNEL(detect_to_store_location[6][0][0], location_buffer_0_0[d]);
+        WRITE_CHANNEL(detect_to_store_amplitude[6][0][0], amplitude_buffer_0_0[d]);
+        WRITE_CHANNEL(detect_to_store_location[6][1][0], location_buffer_1_0[d]);
+        WRITE_CHANNEL(detect_to_store_amplitude[6][1][0], amplitude_buffer_1_0[d]);
+        WRITE_CHANNEL(detect_to_store_location[6][2][0], location_buffer_2_0[d]);
+        WRITE_CHANNEL(detect_to_store_amplitude[6][2][0], amplitude_buffer_2_0[d]);
+        WRITE_CHANNEL(detect_to_store_location[6][3][0], location_buffer_3_0[d]);
+        WRITE_CHANNEL(detect_to_store_amplitude[6][3][0], amplitude_buffer_3_0[d]);
+        WRITE_CHANNEL(detect_to_store_location[6][4][0], location_buffer_4_0[d]);
+        WRITE_CHANNEL(detect_to_store_amplitude[6][4][0], amplitude_buffer_4_0[d]);
+        WRITE_CHANNEL(detect_to_store_location[6][5][0], location_buffer_5_0[d]);
+        WRITE_CHANNEL(detect_to_store_amplitude[6][5][0], amplitude_buffer_5_0[d]);
+        WRITE_CHANNEL(detect_to_store_location[6][6][0], location_buffer_6_0[d]);
+        WRITE_CHANNEL(detect_to_store_amplitude[6][6][0], amplitude_buffer_6_0[d]);
+        WRITE_CHANNEL(detect_to_store_location[6][7][0], location_buffer_7_0[d]);
+        WRITE_CHANNEL(detect_to_store_amplitude[6][7][0], amplitude_buffer_7_0[d]);
     }
 }
 
@@ -1149,7 +1149,7 @@ __attribute__((max_global_work_dim(0)))
 kernel void detect_8(const float threshold,
                      const uint n_filters,
                      const uint negative_filters,
-                     const uint n_filter_batches,
+                     const uint n_filter_groups,
                      const uint n_channel_bundles)
 {
     uint location_buffer_0_0[8] = {HMS_INVALID_LOCATION, HMS_INVALID_LOCATION, HMS_INVALID_LOCATION, HMS_INVALID_LOCATION, HMS_INVALID_LOCATION, HMS_INVALID_LOCATION, HMS_INVALID_LOCATION, HMS_INVALID_LOCATION};
@@ -1171,7 +1171,7 @@ kernel void detect_8(const float threshold,
 
     uint next[8]  = {0, 0, 0, 0, 0, 0, 0, 0};
 
-    for (uint batch = 0; batch < n_filter_batches; ++batch) {
+    for (uint group = 0; group < n_filter_groups; ++group) {
         for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
             float hsum[8][1];
 
@@ -1183,7 +1183,7 @@ kernel void detect_8(const float threshold,
             }
 
 
-            int filter_0 = batch * 8 + 0;
+            int filter_0 = group * 8 + 0;
             if (filter_0 < n_filters) {
                 uint channel_0 = bundle * 1 + 0;
                 if (hsum[0][0] > threshold) {
@@ -1195,7 +1195,7 @@ kernel void detect_8(const float threshold,
                     next[0] = (slot + 1) < 8 ? slot + 1 : 0;
                 }
             }
-            int filter_1 = batch * 8 + 1;
+            int filter_1 = group * 8 + 1;
             if (filter_1 < n_filters) {
                 uint channel_0 = bundle * 1 + 0;
                 if (hsum[1][0] > threshold) {
@@ -1207,7 +1207,7 @@ kernel void detect_8(const float threshold,
                     next[1] = (slot + 1) < 8 ? slot + 1 : 0;
                 }
             }
-            int filter_2 = batch * 8 + 2;
+            int filter_2 = group * 8 + 2;
             if (filter_2 < n_filters) {
                 uint channel_0 = bundle * 1 + 0;
                 if (hsum[2][0] > threshold) {
@@ -1219,7 +1219,7 @@ kernel void detect_8(const float threshold,
                     next[2] = (slot + 1) < 8 ? slot + 1 : 0;
                 }
             }
-            int filter_3 = batch * 8 + 3;
+            int filter_3 = group * 8 + 3;
             if (filter_3 < n_filters) {
                 uint channel_0 = bundle * 1 + 0;
                 if (hsum[3][0] > threshold) {
@@ -1231,7 +1231,7 @@ kernel void detect_8(const float threshold,
                     next[3] = (slot + 1) < 8 ? slot + 1 : 0;
                 }
             }
-            int filter_4 = batch * 8 + 4;
+            int filter_4 = group * 8 + 4;
             if (filter_4 < n_filters) {
                 uint channel_0 = bundle * 1 + 0;
                 if (hsum[4][0] > threshold) {
@@ -1243,7 +1243,7 @@ kernel void detect_8(const float threshold,
                     next[4] = (slot + 1) < 8 ? slot + 1 : 0;
                 }
             }
-            int filter_5 = batch * 8 + 5;
+            int filter_5 = group * 8 + 5;
             if (filter_5 < n_filters) {
                 uint channel_0 = bundle * 1 + 0;
                 if (hsum[5][0] > threshold) {
@@ -1255,7 +1255,7 @@ kernel void detect_8(const float threshold,
                     next[5] = (slot + 1) < 8 ? slot + 1 : 0;
                 }
             }
-            int filter_6 = batch * 8 + 6;
+            int filter_6 = group * 8 + 6;
             if (filter_6 < n_filters) {
                 uint channel_0 = bundle * 1 + 0;
                 if (hsum[6][0] > threshold) {
@@ -1267,7 +1267,7 @@ kernel void detect_8(const float threshold,
                     next[6] = (slot + 1) < 8 ? slot + 1 : 0;
                 }
             }
-            int filter_7 = batch * 8 + 7;
+            int filter_7 = group * 8 + 7;
             if (filter_7 < n_filters) {
                 uint channel_0 = bundle * 1 + 0;
                 if (hsum[7][0] > threshold) {
@@ -1282,22 +1282,22 @@ kernel void detect_8(const float threshold,
         }
     }
 
-    for (uint slot = 0; slot < 8; ++slot) {
-        WRITE_CHANNEL(detect_to_store_location[7][0][0], location_buffer_0_0[slot]);
-        WRITE_CHANNEL(detect_to_store_amplitude[7][0][0], amplitude_buffer_0_0[slot]);
-        WRITE_CHANNEL(detect_to_store_location[7][1][0], location_buffer_1_0[slot]);
-        WRITE_CHANNEL(detect_to_store_amplitude[7][1][0], amplitude_buffer_1_0[slot]);
-        WRITE_CHANNEL(detect_to_store_location[7][2][0], location_buffer_2_0[slot]);
-        WRITE_CHANNEL(detect_to_store_amplitude[7][2][0], amplitude_buffer_2_0[slot]);
-        WRITE_CHANNEL(detect_to_store_location[7][3][0], location_buffer_3_0[slot]);
-        WRITE_CHANNEL(detect_to_store_amplitude[7][3][0], amplitude_buffer_3_0[slot]);
-        WRITE_CHANNEL(detect_to_store_location[7][4][0], location_buffer_4_0[slot]);
-        WRITE_CHANNEL(detect_to_store_amplitude[7][4][0], amplitude_buffer_4_0[slot]);
-        WRITE_CHANNEL(detect_to_store_location[7][5][0], location_buffer_5_0[slot]);
-        WRITE_CHANNEL(detect_to_store_amplitude[7][5][0], amplitude_buffer_5_0[slot]);
-        WRITE_CHANNEL(detect_to_store_location[7][6][0], location_buffer_6_0[slot]);
-        WRITE_CHANNEL(detect_to_store_amplitude[7][6][0], amplitude_buffer_6_0[slot]);
-        WRITE_CHANNEL(detect_to_store_location[7][7][0], location_buffer_7_0[slot]);
-        WRITE_CHANNEL(detect_to_store_amplitude[7][7][0], amplitude_buffer_7_0[slot]);
+    for (uint d = 0; d < 8; ++d) {
+        WRITE_CHANNEL(detect_to_store_location[7][0][0], location_buffer_0_0[d]);
+        WRITE_CHANNEL(detect_to_store_amplitude[7][0][0], amplitude_buffer_0_0[d]);
+        WRITE_CHANNEL(detect_to_store_location[7][1][0], location_buffer_1_0[d]);
+        WRITE_CHANNEL(detect_to_store_amplitude[7][1][0], amplitude_buffer_1_0[d]);
+        WRITE_CHANNEL(detect_to_store_location[7][2][0], location_buffer_2_0[d]);
+        WRITE_CHANNEL(detect_to_store_amplitude[7][2][0], amplitude_buffer_2_0[d]);
+        WRITE_CHANNEL(detect_to_store_location[7][3][0], location_buffer_3_0[d]);
+        WRITE_CHANNEL(detect_to_store_amplitude[7][3][0], amplitude_buffer_3_0[d]);
+        WRITE_CHANNEL(detect_to_store_location[7][4][0], location_buffer_4_0[d]);
+        WRITE_CHANNEL(detect_to_store_amplitude[7][4][0], amplitude_buffer_4_0[d]);
+        WRITE_CHANNEL(detect_to_store_location[7][5][0], location_buffer_5_0[d]);
+        WRITE_CHANNEL(detect_to_store_amplitude[7][5][0], amplitude_buffer_5_0[d]);
+        WRITE_CHANNEL(detect_to_store_location[7][6][0], location_buffer_6_0[d]);
+        WRITE_CHANNEL(detect_to_store_amplitude[7][6][0], amplitude_buffer_6_0[d]);
+        WRITE_CHANNEL(detect_to_store_location[7][7][0], location_buffer_7_0[d]);
+        WRITE_CHANNEL(detect_to_store_amplitude[7][7][0], amplitude_buffer_7_0[d]);
     }
 }

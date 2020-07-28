@@ -6,13 +6,13 @@ kernel void store_cands(global uint * restrict detection_location,
                         global float * restrict detection_amplitude)
 {
     #pragma unroll 1
-    for (uint harmonic = 1; harmonic <= 8; ++harmonic) {
+    for (uint h = 0; h < 8; ++h) {
         #pragma unroll 1
-        for (uint slot = 0; slot < 8; ++slot) {
+        for (uint d = 0; d < 8; ++d) {
             uint locs[8][1];
             float amps[8][1];
-            switch (harmonic) {
-                case 1:
+            switch (h) {
+                case 0:
                     #pragma unroll
                     for (uint p = 0; p < 8; ++p) {
                         #pragma unroll
@@ -22,7 +22,7 @@ kernel void store_cands(global uint * restrict detection_location,
                         }
                     }
                     break;
-                case 2:
+                case 1:
                     #pragma unroll
                     for (uint p = 0; p < 8; ++p) {
                         #pragma unroll
@@ -32,7 +32,7 @@ kernel void store_cands(global uint * restrict detection_location,
                         }
                     }
                     break;
-                case 3:
+                case 2:
                     #pragma unroll
                     for (uint p = 0; p < 8; ++p) {
                         #pragma unroll
@@ -42,7 +42,7 @@ kernel void store_cands(global uint * restrict detection_location,
                         }
                     }
                     break;
-                case 4:
+                case 3:
                     #pragma unroll
                     for (uint p = 0; p < 8; ++p) {
                         #pragma unroll
@@ -52,7 +52,7 @@ kernel void store_cands(global uint * restrict detection_location,
                         }
                     }
                     break;
-                case 5:
+                case 4:
                     #pragma unroll
                     for (uint p = 0; p < 8; ++p) {
                         #pragma unroll
@@ -62,7 +62,7 @@ kernel void store_cands(global uint * restrict detection_location,
                         }
                     }
                     break;
-                case 6:
+                case 5:
                     #pragma unroll
                     for (uint p = 0; p < 8; ++p) {
                         #pragma unroll
@@ -72,7 +72,7 @@ kernel void store_cands(global uint * restrict detection_location,
                         }
                     }
                     break;
-                case 7:
+                case 6:
                     #pragma unroll
                     for (uint p = 0; p < 8; ++p) {
                         #pragma unroll
@@ -82,7 +82,7 @@ kernel void store_cands(global uint * restrict detection_location,
                         }
                     }
                     break;
-                case 8:
+                case 7:
                     #pragma unroll
                     for (uint p = 0; p < 8; ++p) {
                         #pragma unroll
@@ -100,8 +100,8 @@ kernel void store_cands(global uint * restrict detection_location,
             for (uint p = 0; p < 8; ++p) {
                 #pragma unroll
                 for (uint q = 0; q < 1; ++q) {
-                    detection_location[(harmonic - 1) * 64 + slot * 8 + p * 1 + q] = locs[p][q];
-                    detection_amplitude[(harmonic - 1) * 64 + slot * 8 + p * 1 + q] = amps[p][q];
+                    detection_location[h * 64 + d * 8 + p * 1 + q] = locs[p][q];
+                    detection_amplitude[h * 64 + d * 8 + p * 1 + q] = amps[p][q];
                 }
             }
         }

@@ -248,12 +248,12 @@ bool FDAS::perform_harmonic_summing(const FDAS::ThreshType &thresholds, const FD
     }
 
     const int n_planes = HMS_N_PLANES,
-              n_parallel = 8,
+              group_sz = 8,
               bundle_sz = 1,
               workgroup_sz = 840, // divisible by lcm(1, 2, ..., n_planes)
               n_filters = N_FILTERS_PER_ACCEL_SIGN + 1,
-              n_filter_batches = (int) ceil(1.0 * n_filters / n_parallel),
-              n_channels = 4992 * workgroup_sz, // ~ FDF_OUTPUT_SZ, divisible by workgroup_sz
+              n_filter_groups = (int) ceil(1.0 * n_filters / group_sz),
+              n_channels = 2 * workgroup_sz, // ~ FDF_OUTPUT_SZ, divisible by workgroup_sz
               n_channel_bundles = n_channels / bundle_sz;
 
     std::vector<cl::Event> preload_evs(n_planes), detect_evs(n_planes);
@@ -261,7 +261,7 @@ bool FDAS::perform_harmonic_summing(const FDAS::ThreshType &thresholds, const FD
 
     std::vector<cl::CommandQueue> preload_queues, detect_queues;
     cl::CommandQueue store_cands_queue(*context, default_device);
-    cl::NDRange global(n_channel_bundles, n_filter_batches);
+    cl::NDRange global(n_channel_bundles, n_filter_groups);
     cl::NDRange local(workgroup_sz, 1);
 
     for (int h = 0; h < n_planes; ++h) {
@@ -278,7 +278,7 @@ bool FDAS::perform_harmonic_summing(const FDAS::ThreshType &thresholds, const FD
         cl_chk(detect_k.setArg<cl_float>(0, thresholds[h]));
         cl_chk(detect_k.setArg<cl_uint>(1, n_filters));
         cl_chk(detect_k.setArg<cl_uint>(2, false));
-        cl_chk(detect_k.setArg<cl_uint>(3, n_filter_batches));
+        cl_chk(detect_k.setArg<cl_uint>(3, n_filter_groups));
         cl_chk(detect_k.setArg<cl_uint>(4, n_channel_bundles));
 
         cl::CommandQueue detect_q(*context, default_device);
