@@ -1,112 +1,98 @@
-<%!
-    from math import gcd, ceil, log2
-    from collections import defaultdict
-%>\
-
-__attribute__((reqd_work_group_size(${workgroup_sz}, 1, 1)))
-kernel void preload_${k}(global float * restrict fop,
-                      const uint n_filters,
-                      const uint negative_filters)
-{
 <%
-    divisor = gcd(k, group_sz)
-    configs = dict()
-    for l in range(k // divisor):
-        config = tuple([(l * divisor + p) // k for p in range(group_sz)])
-        if config not in configs:
-            configs[config] = l * divisor
+    from hsum_codegen import get_output_mapping
 
-    configs_sorted = list(sorted(configs.keys()))
-    n_configs = len(configs_sorted)
-    n_buffers = configs_sorted[-1][group_sz - 1] + 1
-    buffer_sz = workgroup_sz // k * bundle_sz
-    n_elements_per_workitem = 2 ** int(ceil(log2(n_buffers * bundle_sz)))
-    n_workitems_per_buffer = buffer_sz // n_elements_per_workitem
-    if n_workitems_per_buffer * n_elements_per_workitem < buffer_sz:
-        raise RuntimeError("Integer division with remainder")
+    bundle_idx = lambda i: f".s{i}" if bundle_sz > 1 else ""
 
-    first_offset_to_use_last_buffer = 0
-    for config, offset in configs.items():
-        if config[group_sz - 1] == n_buffers - 1:
-            first_offset_to_use_last_buffer = offset
-            break
+    out_map = get_output_mapping(group_sz, k)
+    n_buffers = max(out_map[-1].keys()) + 1
+
+    need_base_row_offset = 1 < max(map(lambda x: len(x), out_map))
+    first_offset_to_use_last_buffer = k
+    for p in range(group_sz):
+        if (n_buffers - 1) in out_map[p]:
+            first_offset_to_use_last_buffer = min(first_offset_to_use_last_buffer, min(out_map[p][n_buffers - 1]))
 
     buffers_for_output = []
     for p in range(group_sz):
-        first_buf = configs_sorted[0][p]
-        second_buf = -1
-        offset = -1
-        for c in configs_sorted:
-            if c[p] > first_buf:
-                second_buf = c[p]
-                offset = configs[c]
-                break
-        if second_buf == -1:
-            buffers_for_output += [(first_buf,)]
+        idxs = sorted(list(out_map[p].keys()))
+        if len(idxs) == 1:
+            buffers_for_output += [(idxs[0],)]
         else:
-            buffers_for_output += [(first_buf, second_buf, offset)]
+            assert len(idxs) == 2
+            buffers_for_output += [(idxs[0], idxs[1], min(out_map[p][idxs[1]]))]
 %>\
-% for r in range(n_buffers):
-    local   float buffer_${r}[${buffer_sz}];
-% endfor
-    private float load[${n_elements_per_workitem}];
 
-    uint base_row = get_group_id(1) * ${group_sz} / ${k};
-% if n_configs > 1:
-    uint base_row_offset = get_group_id(1) * ${group_sz} % ${k};
-% endif
-    uint base_column = get_group_id(0) * ${buffer_sz};
+__attribute__((max_global_work_dim(0)))
+kernel void preload_${k}(global ${bundle_ty} * restrict fop,
+                      const uint n_rows,
+                      const uint base_row_offset,
+                  % for r in range(n_buffers):
+                      const int filter_${r},
+                  % endfor
+                      const uint n_channel_bundles)
+{
+    ${bundle_ty} load[${n_buffers}];
+    ${bundle_ty} out[${group_sz}];
 
-    uint row = get_local_id(0) / ${n_workitems_per_buffer};
-    uint burst = get_local_id(0) % ${n_workitems_per_buffer};
-
-    int filter = base_row + row;
-
-    if (row < ${n_buffers}
-% if first_offset_to_use_last_buffer > 0:
-        && (row < ${n_buffers - 1} || base_row_offset >= ${first_offset_to_use_last_buffer})
-% endif
-        && filter < n_filters) {
-        if (negative_filters)
-            filter = -filter;
-        #pragma unroll
-        for (uint x = 0; x < ${n_elements_per_workitem}; ++x)
-            load[x] = fop[FOP_IDX(filter, base_column + burst * ${n_elements_per_workitem} + x)];
-    } else {
-        #pragma unroll
-        for (uint x = 0; x < ${n_elements_per_workitem}; ++x)
-            load[x] = 0.0f;
-    }
-
-    switch (row) {
+    for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
     % for r in range(n_buffers):
-        case ${r}:
-            #pragma unroll
-            for (uint x = 0; x < ${n_elements_per_workitem}; ++x)
-                buffer_${r}[burst * ${n_elements_per_workitem} + x] = load[x];
-            break;
+        load[${r}] = ${r} < n_rows ? fop[fop_idx(filter_${r}, bundle)] : 0.0f;
     % endfor
-        default:
-            break;
+
+    % for p in range(group_sz):
+    % if len(buffers_for_output[p]) == 1:
+        out[${p}] = load[${buffers_for_output[p][0]}];
+    % else:
+        out[${p}] = base_row_offset < ${buffers_for_output[p][2]} ? load[${buffers_for_output[p][0]}] : load[${buffers_for_output[p][1]}];
+    % endif
+    % endfor
+
+        #pragma unroll
+        for (uint p = 0; p < ${group_sz}; ++p)
+            WRITE_CHANNEL(preload_to_delay[${k - 1}][p], out[p]);
     }
+}
 
-    barrier(CLK_LOCAL_MEM_FENCE);
+__attribute__((max_global_work_dim(0)))
+kernel void delay_${k}(const uint n_channel_bundles)
+{
+    ${bundle_ty} in[${group_sz}];
+    ${bundle_ty} out[${group_sz}];
 
-% for q in range(bundle_sz):
-    uint channel_${q} = (get_local_id(0) * ${bundle_sz} + ${q}) / ${k};
-% endfor
+    uint M = 0;
+    for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
+        uint m = M;
+        M = M < ${k - 1} ? M + 1 : 0;
 
-% for r in range(n_buffers):
-    float amplitude_${r}[${bundle_sz}] = {${', '.join(f"buffer_{r}[channel_{q}]" for q in range(bundle_sz))}};
-% endfor
+        if (m == 0) {
+            #pragma unroll
+            for (uint p = 0; p < ${group_sz}; ++p)
+                in[p] = READ_CHANNEL(preload_to_delay[${k - 1}][p]);
+        }
 
-% for p in range(group_sz):
-% for q in range(bundle_sz):
-% if len(buffers_for_output[p]) == 1:
-    WRITE_CHANNEL(preload_to_detect[${k - 1}][${p}][${q}], amplitude_${buffers_for_output[p][0]}[${q}]);
-% else:
-    WRITE_CHANNEL(preload_to_detect[${k - 1}][${p}][${q}], base_row_offset < ${buffers_for_output[p][2]} ? amplitude_${buffers_for_output[p][0]}[${q}] : amplitude_${buffers_for_output[p][1]}[${q}]);
-% endif
-% endfor
-% endfor
+        switch (m) {
+        % for l in range(k):
+            case ${l}:
+                #pragma unroll
+                for (uint p = 0; p < ${group_sz}; ++p) {
+            % for q in range(bundle_sz):
+                    out[p]${bundle_idx(q)} = in[p]${bundle_idx((l * bundle_sz + q) // k)};
+            % endfor
+                }
+                break;
+        % endfor
+            default:
+                #pragma unroll
+                for (uint p = 0; p < ${group_sz}; ++p) {
+            % for q in range(bundle_sz):
+                    out[p]${bundle_idx(q)} = 0.0f;
+            % endfor
+                }
+                break;
+        }
+
+        #pragma unroll
+        for (uint p = 0; p < ${group_sz}; ++p)
+            WRITE_CHANNEL(delay_to_detect[${k - 1}][p], out[p]);
+    }
 }

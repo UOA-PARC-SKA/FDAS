@@ -256,10 +256,10 @@ kernel void harmonic_summing(global volatile float * restrict fop,       // `vol
 }
 #endif
 
+#undef FOP_IDX
+
 #ifdef HMS_SYSTOLIC
 #include "preload.cl"
 #include "detect.cl"
 #include "store_cands.cl"
 #endif
-
-#undef FOP_IDX

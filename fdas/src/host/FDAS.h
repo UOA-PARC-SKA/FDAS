@@ -65,6 +65,7 @@ private:
     std::unique_ptr<cl::Kernel> square_and_discard_kernel;
 
     std::vector<std::unique_ptr<cl::Kernel>> preload_kernels;
+    std::vector<std::unique_ptr<cl::Kernel>> delay_kernels;
     std::vector<std::unique_ptr<cl::Kernel>> detect_kernels;
     std::unique_ptr<cl::Kernel> store_cands_kernel;
 

@@ -7,6 +7,7 @@ kernel void detect_${k}(const float threshold,
                      const uint n_channel_bundles)
 {
 <%
+    bundle_idx = lambda i: f".s{i}" if bundle_sz > 1 else ""
     n_slots = detection_sz // group_sz // bundle_sz
 %>\
 %for p in range(group_sz):
@@ -24,31 +25,22 @@ kernel void detect_${k}(const float threshold,
 
     for (uint group = 0; group < n_filter_groups; ++group) {
         for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
-            float hsum[${group_sz}][${bundle_sz}];
+            ${bundle_ty} hsum[${group_sz}];
 
         % if k == 1:
             #pragma unroll
-            for (uint p = 0; p < ${group_sz}; ++p) {
-                #pragma unroll
-                for (uint q = 0; q < ${bundle_sz}; ++q)
-                    hsum[p][q] = READ_CHANNEL(preload_to_detect[${k - 1}][p][q]);
-            }
+            for (uint p = 0; p < ${group_sz}; ++p)
+                hsum[p] = READ_CHANNEL(delay_to_detect[${k - 1}][p]);
         %else:
             #pragma unroll
-            for (uint p = 0; p < ${group_sz}; ++p) {
-                #pragma unroll
-                for (uint q = 0; q < ${bundle_sz}; ++q)
-                    hsum[p][q] = READ_CHANNEL(detect_to_detect[${k - 2}][p][q]) + READ_CHANNEL(preload_to_detect[${k - 1}][p][q]);
-            }
+            for (uint p = 0; p < ${group_sz}; ++p)
+                hsum[p] = READ_CHANNEL(detect_to_detect[${k - 2}][p]) + READ_CHANNEL(delay_to_detect[${k - 1}][p]);
         % endif
 
         %if k < n_planes:
             #pragma unroll
-            for (uint p = 0; p < ${group_sz}; ++p) {
-                #pragma unroll
-                for (uint q = 0; q < ${bundle_sz}; ++q)
-                    WRITE_CHANNEL(detect_to_detect[${k - 1}][p][q], hsum[p][q]);
-            }
+            for (uint p = 0; p < ${group_sz}; ++p)
+                    WRITE_CHANNEL(detect_to_detect[${k - 1}][p], hsum[p]);
         %endif
 
         %for p in range(group_sz):
@@ -56,12 +48,12 @@ kernel void detect_${k}(const float threshold,
             if (filter_${p} < n_filters) {
             %for q in range(bundle_sz):
                 uint channel_${q} = bundle * ${bundle_sz} + ${q};
-                if (hsum[${p}][${q}] > threshold) {
+                if (hsum[${p}]${bundle_idx(q)} > threshold) {
                     uint slot = next[${p * bundle_sz + q}];
                     if (negative_filters)
                         filter_${p} = -filter_${p};
                     location_buffer_${p}_${q}[slot] = HMS_ENCODE_LOCATION(${k}, filter_${p}, channel_${q});
-                    amplitude_buffer_${p}_${q}[slot] = hsum[${p}][${q}];
+                    amplitude_buffer_${p}_${q}[slot] = hsum[${p}]${bundle_idx(q)};
                     next[${p * bundle_sz + q}] = (slot + 1) < ${n_slots} ? slot + 1 : 0;
                 }
             %endfor

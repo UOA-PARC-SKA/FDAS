@@ -122,10 +122,13 @@ bool FDAS::initialise_accelerator(std::string bitstream_file_name,
     cl_chkref(square_and_discard_kernel.reset(new cl::Kernel(*program, "square_and_discard", &status)));
 
     preload_kernels.resize(HMS_N_PLANES);
+    delay_kernels.resize(HMS_N_PLANES);
     detect_kernels.resize(HMS_N_PLANES);
     for (int h = 0; h < HMS_N_PLANES; ++h) {
         auto name = "preload_" + std::to_string(h + 1);
         cl_chkref(preload_kernels[h].reset(new cl::Kernel(*program, name.c_str(), &status)));
+        name = "delay_" + std::to_string(h + 1);
+        cl_chkref(delay_kernels[h].reset(new cl::Kernel(*program, name.c_str(), &status)));
         name = "detect_" + std::to_string(h + 1);
         cl_chkref(detect_kernels[h].reset(new cl::Kernel(*program, name.c_str(), &status)));
     }
@@ -241,49 +244,80 @@ bool FDAS::perform_ft_convolution(const FDAS::InputType &input, const FDAS::Shap
     return true;
 }
 
+#include "gen_info.h"
+
 bool FDAS::perform_harmonic_summing(const FDAS::ThreshType &thresholds, const FDAS::ShapeType &thresholds_shape) {
     if (thresholds_shape.size() != 1 && thresholds_shape[0] < HMS_N_PLANES) {
         log << "[ERROR] Not enough threshold values given" << endl;
         return false;
     }
 
-    const int n_planes = HMS_N_PLANES,
-              group_sz = 8,
-              bundle_sz = 1,
-              workgroup_sz = 840, // divisible by lcm(1, 2, ..., n_planes)
-              n_filters = N_FILTERS_PER_ACCEL_SIGN + 1,
-              n_filter_groups = (int) ceil(1.0 * n_filters / group_sz),
-              n_channels = 2 * workgroup_sz, // ~ FDF_OUTPUT_SZ, divisible by workgroup_sz
-              n_channel_bundles = n_channels / bundle_sz;
+    if (HMS_N_PLANES != GenInfo::n_planes
+        || HMS_DETECTION_SZ != GenInfo::detection_sz) {
+        log << "[ERROR] Inconsistent parameters" << endl;
+        return false;
+    }
 
-    std::vector<cl::Event> preload_evs(n_planes), detect_evs(n_planes);
+    const int n_planes = HMS_N_PLANES;
+    const int n_filters = N_FILTERS_PER_ACCEL_SIGN + 1;
+    const int n_filter_groups = (int) ceil(1.0 * n_filters / GenInfo::group_sz);
+    const int n_channels = FDF_OUTPUT_SZ / GenInfo::bundle_sz / GenInfo::lcm * GenInfo::bundle_sz * GenInfo::lcm;
+    const int n_channel_bundles = n_channels / GenInfo::bundle_sz;
+    const bool negative_filters = false;
+
+    log << "[INFO] HSUM: Considering " << n_channels << " channels per filter" << endl;
+
+    cl::Event preload_evs[n_planes][n_filter_groups];
+    cl::Event delay_evs[n_planes][n_filter_groups];
+    cl::Event detect_evs[n_planes];
     cl::Event store_cands_ev;
 
-    std::vector<cl::CommandQueue> preload_queues, detect_queues;
+    std::vector<cl::CommandQueue> preload_queues, delay_queues, detect_queues;
     cl::CommandQueue store_cands_queue(*context, default_device);
-    cl::NDRange global(n_channel_bundles, n_filter_groups);
-    cl::NDRange local(workgroup_sz, 1);
 
     for (int h = 0; h < n_planes; ++h) {
-        auto &preload_k = *preload_kernels[h];
-        cl_chk(preload_k.setArg<cl::Buffer>(0, *fop_buffer));
-        cl_chk(preload_k.setArg<cl_uint>(1, n_filters));
-        cl_chk(preload_k.setArg<cl_uint>(2, false));
+        auto k = h + 1;
 
         cl::CommandQueue preload_q(*context, default_device);
-        cl_chk(preload_q.enqueueNDRangeKernel(preload_k, cl::NullRange, global, local, nullptr, &preload_evs[h]));
+        cl::CommandQueue delay_q(*context, default_device);
         preload_queues.emplace_back(preload_q);
+        delay_queues.emplace_back(delay_q);
+
+        auto &preload_k = *preload_kernels[h];
+        auto &delay_k = *delay_kernels[h];
+
+        for (int g = 0; g < n_filter_groups; ++g) {
+            int base_row = g * GenInfo::group_sz;
+            int base_row_offset = base_row % k;
+            int n_rows = GenInfo::first_offset_to_use_last_buffer[h] > 0 ?
+                    GenInfo::n_buffers[h] - (base_row_offset < GenInfo::first_offset_to_use_last_buffer[h]) :
+                    n_rows = GenInfo::n_buffers[h];
+            if (base_row + n_rows >= n_filters)
+                n_rows = n_filters - base_row;
+
+            cl_chk(preload_k.setArg<cl::Buffer>(0, *fop_buffer));
+            cl_chk(preload_k.setArg<cl_uint>(1, n_rows));
+            cl_chk(preload_k.setArg<cl_uint>(2, base_row_offset));
+            for (int r = 0; r < GenInfo::n_buffers[h]; ++r) {
+                cl_chk(preload_k.setArg<cl_int>(3 + r, negative_filters ? -base_row - r : base_row + r));
+            }
+            cl_chk(preload_k.setArg<cl_uint>(3 + GenInfo::n_buffers[h], n_channel_bundles / k)); // important: n_channel_bundles must be divisible by all k
+            cl_chk(preload_q.enqueueTask(preload_k, nullptr, &preload_evs[h][g]));
+
+            cl_chk(delay_k.setArg<cl_uint>(0, n_channel_bundles));
+            cl_chk(delay_q.enqueueTask(delay_k, nullptr, &delay_evs[h][g]));
+        }
 
         auto &detect_k = *detect_kernels[h];
         cl_chk(detect_k.setArg<cl_float>(0, thresholds[h]));
         cl_chk(detect_k.setArg<cl_uint>(1, n_filters));
-        cl_chk(detect_k.setArg<cl_uint>(2, false));
+        cl_chk(detect_k.setArg<cl_uint>(2, negative_filters));
         cl_chk(detect_k.setArg<cl_uint>(3, n_filter_groups));
         cl_chk(detect_k.setArg<cl_uint>(4, n_channel_bundles));
 
         cl::CommandQueue detect_q(*context, default_device);
-        cl_chk(detect_q.enqueueTask(detect_k, nullptr, &detect_evs[h]));
         detect_queues.emplace_back(detect_q);
+        cl_chk(detect_q.enqueueTask(detect_k, nullptr, &detect_evs[h]));
     }
 
     cl_chk(store_cands_kernel->setArg<cl::Buffer>(0, *detection_location_buffer));
@@ -293,12 +327,15 @@ bool FDAS::perform_harmonic_summing(const FDAS::ThreshType &thresholds, const FD
     for (auto &q : preload_queues)
         cl_chk(q.finish());
 
+    for (auto &q : delay_queues)
+        cl_chk(q.finish());
+
     for (auto &q : detect_queues)
         cl_chk(q.finish());
 
     cl_chk(store_cands_queue.finish());
 
-    print_duration("Harmonic summing (1/2 FOP)", preload_evs.front(), store_cands_ev);
+    print_duration("Harmonic summing (1/2 FOP)", preload_evs[0][0], store_cands_ev);
 
     return true;
 }
