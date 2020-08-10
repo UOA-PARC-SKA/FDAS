@@ -27,9 +27,9 @@ def lcm(vals):
 
 def main():
     n_planes = 8
-    detection_sz = 64  # divisible by group_sz * bundle_sz
+    detection_sz = 66  # divisible by group_sz * bundle_sz
 
-    group_sz = 8
+    group_sz = 11
     bundle_sz = 1
     bundle_ty = "float" if bundle_sz == 1 else f"float{bundle_sz}"
 

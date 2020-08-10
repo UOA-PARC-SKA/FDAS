@@ -8,13 +8,13 @@ kernel void store_cands(global uint * restrict detection_location,
     #pragma unroll 1
     for (uint h = 0; h < 8; ++h) {
         #pragma unroll 1
-        for (uint d = 0; d < 8; ++d) {
-            uint locs[8][1];
-            float amps[8][1];
+        for (uint d = 0; d < 6; ++d) {
+            uint locs[11][1];
+            float amps[11][1];
             switch (h) {
                 case 0:
                     #pragma unroll
-                    for (uint p = 0; p < 8; ++p) {
+                    for (uint p = 0; p < 11; ++p) {
                         #pragma unroll
                         for (uint q = 0; q < 1; ++q) {
                             locs[p][q] = READ_CHANNEL(detect_to_store_location[0][p][q]);
@@ -24,7 +24,7 @@ kernel void store_cands(global uint * restrict detection_location,
                     break;
                 case 1:
                     #pragma unroll
-                    for (uint p = 0; p < 8; ++p) {
+                    for (uint p = 0; p < 11; ++p) {
                         #pragma unroll
                         for (uint q = 0; q < 1; ++q) {
                             locs[p][q] = READ_CHANNEL(detect_to_store_location[1][p][q]);
@@ -34,7 +34,7 @@ kernel void store_cands(global uint * restrict detection_location,
                     break;
                 case 2:
                     #pragma unroll
-                    for (uint p = 0; p < 8; ++p) {
+                    for (uint p = 0; p < 11; ++p) {
                         #pragma unroll
                         for (uint q = 0; q < 1; ++q) {
                             locs[p][q] = READ_CHANNEL(detect_to_store_location[2][p][q]);
@@ -44,7 +44,7 @@ kernel void store_cands(global uint * restrict detection_location,
                     break;
                 case 3:
                     #pragma unroll
-                    for (uint p = 0; p < 8; ++p) {
+                    for (uint p = 0; p < 11; ++p) {
                         #pragma unroll
                         for (uint q = 0; q < 1; ++q) {
                             locs[p][q] = READ_CHANNEL(detect_to_store_location[3][p][q]);
@@ -54,7 +54,7 @@ kernel void store_cands(global uint * restrict detection_location,
                     break;
                 case 4:
                     #pragma unroll
-                    for (uint p = 0; p < 8; ++p) {
+                    for (uint p = 0; p < 11; ++p) {
                         #pragma unroll
                         for (uint q = 0; q < 1; ++q) {
                             locs[p][q] = READ_CHANNEL(detect_to_store_location[4][p][q]);
@@ -64,7 +64,7 @@ kernel void store_cands(global uint * restrict detection_location,
                     break;
                 case 5:
                     #pragma unroll
-                    for (uint p = 0; p < 8; ++p) {
+                    for (uint p = 0; p < 11; ++p) {
                         #pragma unroll
                         for (uint q = 0; q < 1; ++q) {
                             locs[p][q] = READ_CHANNEL(detect_to_store_location[5][p][q]);
@@ -74,7 +74,7 @@ kernel void store_cands(global uint * restrict detection_location,
                     break;
                 case 6:
                     #pragma unroll
-                    for (uint p = 0; p < 8; ++p) {
+                    for (uint p = 0; p < 11; ++p) {
                         #pragma unroll
                         for (uint q = 0; q < 1; ++q) {
                             locs[p][q] = READ_CHANNEL(detect_to_store_location[6][p][q]);
@@ -84,7 +84,7 @@ kernel void store_cands(global uint * restrict detection_location,
                     break;
                 case 7:
                     #pragma unroll
-                    for (uint p = 0; p < 8; ++p) {
+                    for (uint p = 0; p < 11; ++p) {
                         #pragma unroll
                         for (uint q = 0; q < 1; ++q) {
                             locs[p][q] = READ_CHANNEL(detect_to_store_location[7][p][q]);
@@ -97,11 +97,11 @@ kernel void store_cands(global uint * restrict detection_location,
             }
 
             #pragma unroll
-            for (uint p = 0; p < 8; ++p) {
+            for (uint p = 0; p < 11; ++p) {
                 #pragma unroll
                 for (uint q = 0; q < 1; ++q) {
-                    detection_location[h * 64 + d * 8 + p * 1 + q] = locs[p][q];
-                    detection_amplitude[h * 64 + d * 8 + p * 1 + q] = amps[p][q];
+                    detection_location[h * 66 + d * 11 + p * 1 + q] = locs[p][q];
+                    detection_amplitude[h * 66 + d * 11 + p * 1 + q] = amps[p][q];
                 }
             }
         }

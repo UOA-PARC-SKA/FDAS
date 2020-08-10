@@ -1,8 +1,8 @@
 
 // Auto-generated file -- see `hsum_codegen.py` and `preload.cl.mako`.
 
-channel float preload_to_delay[8][8] __attribute__((depth(0)));
-channel float delay_to_detect[8][8] __attribute__((depth(0)));
+channel float preload_to_delay[8][11] __attribute__((depth(0)));
+channel float delay_to_detect[8][11] __attribute__((depth(0)));
 
 inline ulong fop_idx(int filter, uint bundle) {
     return (filter + N_FILTERS_PER_ACCEL_SIGN) * (FDF_OUTPUT_SZ / 1) + bundle;
@@ -20,10 +20,13 @@ kernel void preload_1(global float * restrict fop,
                       const int filter_5,
                       const int filter_6,
                       const int filter_7,
+                      const int filter_8,
+                      const int filter_9,
+                      const int filter_10,
                       const uint n_channel_bundles)
 {
-    float load[8];
-    float out[8];
+    float load[11];
+    float out[11];
 
     for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
         load[0] = 0 < n_rows ? fop[fop_idx(filter_0, bundle)] : 0.0f;
@@ -34,6 +37,9 @@ kernel void preload_1(global float * restrict fop,
         load[5] = 5 < n_rows ? fop[fop_idx(filter_5, bundle)] : 0.0f;
         load[6] = 6 < n_rows ? fop[fop_idx(filter_6, bundle)] : 0.0f;
         load[7] = 7 < n_rows ? fop[fop_idx(filter_7, bundle)] : 0.0f;
+        load[8] = 8 < n_rows ? fop[fop_idx(filter_8, bundle)] : 0.0f;
+        load[9] = 9 < n_rows ? fop[fop_idx(filter_9, bundle)] : 0.0f;
+        load[10] = 10 < n_rows ? fop[fop_idx(filter_10, bundle)] : 0.0f;
 
         out[0] = load[0];
         out[1] = load[1];
@@ -43,9 +49,12 @@ kernel void preload_1(global float * restrict fop,
         out[5] = load[5];
         out[6] = load[6];
         out[7] = load[7];
+        out[8] = load[8];
+        out[9] = load[9];
+        out[10] = load[10];
 
         #pragma unroll
-        for (uint p = 0; p < 8; ++p)
+        for (uint p = 0; p < 11; ++p)
             WRITE_CHANNEL(preload_to_delay[0][p], out[p]);
     }
 }
@@ -53,8 +62,8 @@ kernel void preload_1(global float * restrict fop,
 __attribute__((max_global_work_dim(0)))
 kernel void delay_1(const uint n_channel_bundles)
 {
-    float in[8];
-    float out[8];
+    float in[11];
+    float out[11];
 
     uint M = 0;
     for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
@@ -63,27 +72,27 @@ kernel void delay_1(const uint n_channel_bundles)
 
         if (m == 0) {
             #pragma unroll
-            for (uint p = 0; p < 8; ++p)
+            for (uint p = 0; p < 11; ++p)
                 in[p] = READ_CHANNEL(preload_to_delay[0][p]);
         }
 
         switch (m) {
             case 0:
                 #pragma unroll
-                for (uint p = 0; p < 8; ++p) {
+                for (uint p = 0; p < 11; ++p) {
                     out[p] = in[p];
                 }
                 break;
             default:
                 #pragma unroll
-                for (uint p = 0; p < 8; ++p) {
+                for (uint p = 0; p < 11; ++p) {
                     out[p] = 0.0f;
                 }
                 break;
         }
 
         #pragma unroll
-        for (uint p = 0; p < 8; ++p)
+        for (uint p = 0; p < 11; ++p)
             WRITE_CHANNEL(delay_to_detect[0][p], out[p]);
     }
 }
@@ -96,28 +105,35 @@ kernel void preload_2(global float * restrict fop,
                       const int filter_1,
                       const int filter_2,
                       const int filter_3,
+                      const int filter_4,
+                      const int filter_5,
                       const uint n_channel_bundles)
 {
-    float load[4];
-    float out[8];
+    float load[6];
+    float out[11];
 
     for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
         load[0] = 0 < n_rows ? fop[fop_idx(filter_0, bundle)] : 0.0f;
         load[1] = 1 < n_rows ? fop[fop_idx(filter_1, bundle)] : 0.0f;
         load[2] = 2 < n_rows ? fop[fop_idx(filter_2, bundle)] : 0.0f;
         load[3] = 3 < n_rows ? fop[fop_idx(filter_3, bundle)] : 0.0f;
+        load[4] = 4 < n_rows ? fop[fop_idx(filter_4, bundle)] : 0.0f;
+        load[5] = 5 < n_rows ? fop[fop_idx(filter_5, bundle)] : 0.0f;
 
         out[0] = load[0];
-        out[1] = load[0];
+        out[1] = base_row_offset < 1 ? load[0] : load[1];
         out[2] = load[1];
-        out[3] = load[1];
+        out[3] = base_row_offset < 1 ? load[1] : load[2];
         out[4] = load[2];
-        out[5] = load[2];
+        out[5] = base_row_offset < 1 ? load[2] : load[3];
         out[6] = load[3];
-        out[7] = load[3];
+        out[7] = base_row_offset < 1 ? load[3] : load[4];
+        out[8] = load[4];
+        out[9] = base_row_offset < 1 ? load[4] : load[5];
+        out[10] = load[5];
 
         #pragma unroll
-        for (uint p = 0; p < 8; ++p)
+        for (uint p = 0; p < 11; ++p)
             WRITE_CHANNEL(preload_to_delay[1][p], out[p]);
     }
 }
@@ -125,8 +141,8 @@ kernel void preload_2(global float * restrict fop,
 __attribute__((max_global_work_dim(0)))
 kernel void delay_2(const uint n_channel_bundles)
 {
-    float in[8];
-    float out[8];
+    float in[11];
+    float out[11];
 
     uint M = 0;
     for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
@@ -135,33 +151,33 @@ kernel void delay_2(const uint n_channel_bundles)
 
         if (m == 0) {
             #pragma unroll
-            for (uint p = 0; p < 8; ++p)
+            for (uint p = 0; p < 11; ++p)
                 in[p] = READ_CHANNEL(preload_to_delay[1][p]);
         }
 
         switch (m) {
             case 0:
                 #pragma unroll
-                for (uint p = 0; p < 8; ++p) {
+                for (uint p = 0; p < 11; ++p) {
                     out[p] = in[p];
                 }
                 break;
             case 1:
                 #pragma unroll
-                for (uint p = 0; p < 8; ++p) {
+                for (uint p = 0; p < 11; ++p) {
                     out[p] = in[p];
                 }
                 break;
             default:
                 #pragma unroll
-                for (uint p = 0; p < 8; ++p) {
+                for (uint p = 0; p < 11; ++p) {
                     out[p] = 0.0f;
                 }
                 break;
         }
 
         #pragma unroll
-        for (uint p = 0; p < 8; ++p)
+        for (uint p = 0; p < 11; ++p)
             WRITE_CHANNEL(delay_to_detect[1][p], out[p]);
     }
 }
@@ -174,16 +190,18 @@ kernel void preload_3(global float * restrict fop,
                       const int filter_1,
                       const int filter_2,
                       const int filter_3,
+                      const int filter_4,
                       const uint n_channel_bundles)
 {
-    float load[4];
-    float out[8];
+    float load[5];
+    float out[11];
 
     for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
         load[0] = 0 < n_rows ? fop[fop_idx(filter_0, bundle)] : 0.0f;
         load[1] = 1 < n_rows ? fop[fop_idx(filter_1, bundle)] : 0.0f;
         load[2] = 2 < n_rows ? fop[fop_idx(filter_2, bundle)] : 0.0f;
         load[3] = 3 < n_rows ? fop[fop_idx(filter_3, bundle)] : 0.0f;
+        load[4] = 4 < n_rows ? fop[fop_idx(filter_4, bundle)] : 0.0f;
 
         out[0] = load[0];
         out[1] = base_row_offset < 2 ? load[0] : load[1];
@@ -193,9 +211,12 @@ kernel void preload_3(global float * restrict fop,
         out[5] = base_row_offset < 1 ? load[1] : load[2];
         out[6] = load[2];
         out[7] = base_row_offset < 2 ? load[2] : load[3];
+        out[8] = base_row_offset < 1 ? load[2] : load[3];
+        out[9] = load[3];
+        out[10] = base_row_offset < 2 ? load[3] : load[4];
 
         #pragma unroll
-        for (uint p = 0; p < 8; ++p)
+        for (uint p = 0; p < 11; ++p)
             WRITE_CHANNEL(preload_to_delay[2][p], out[p]);
     }
 }
@@ -203,8 +224,8 @@ kernel void preload_3(global float * restrict fop,
 __attribute__((max_global_work_dim(0)))
 kernel void delay_3(const uint n_channel_bundles)
 {
-    float in[8];
-    float out[8];
+    float in[11];
+    float out[11];
 
     uint M = 0;
     for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
@@ -213,39 +234,39 @@ kernel void delay_3(const uint n_channel_bundles)
 
         if (m == 0) {
             #pragma unroll
-            for (uint p = 0; p < 8; ++p)
+            for (uint p = 0; p < 11; ++p)
                 in[p] = READ_CHANNEL(preload_to_delay[2][p]);
         }
 
         switch (m) {
             case 0:
                 #pragma unroll
-                for (uint p = 0; p < 8; ++p) {
+                for (uint p = 0; p < 11; ++p) {
                     out[p] = in[p];
                 }
                 break;
             case 1:
                 #pragma unroll
-                for (uint p = 0; p < 8; ++p) {
+                for (uint p = 0; p < 11; ++p) {
                     out[p] = in[p];
                 }
                 break;
             case 2:
                 #pragma unroll
-                for (uint p = 0; p < 8; ++p) {
+                for (uint p = 0; p < 11; ++p) {
                     out[p] = in[p];
                 }
                 break;
             default:
                 #pragma unroll
-                for (uint p = 0; p < 8; ++p) {
+                for (uint p = 0; p < 11; ++p) {
                     out[p] = 0.0f;
                 }
                 break;
         }
 
         #pragma unroll
-        for (uint p = 0; p < 8; ++p)
+        for (uint p = 0; p < 11; ++p)
             WRITE_CHANNEL(delay_to_detect[2][p], out[p]);
     }
 }
@@ -256,26 +277,33 @@ kernel void preload_4(global float * restrict fop,
                       const uint base_row_offset,
                       const int filter_0,
                       const int filter_1,
+                      const int filter_2,
+                      const int filter_3,
                       const uint n_channel_bundles)
 {
-    float load[2];
-    float out[8];
+    float load[4];
+    float out[11];
 
     for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
         load[0] = 0 < n_rows ? fop[fop_idx(filter_0, bundle)] : 0.0f;
         load[1] = 1 < n_rows ? fop[fop_idx(filter_1, bundle)] : 0.0f;
+        load[2] = 2 < n_rows ? fop[fop_idx(filter_2, bundle)] : 0.0f;
+        load[3] = 3 < n_rows ? fop[fop_idx(filter_3, bundle)] : 0.0f;
 
         out[0] = load[0];
-        out[1] = load[0];
-        out[2] = load[0];
-        out[3] = load[0];
+        out[1] = base_row_offset < 3 ? load[0] : load[1];
+        out[2] = base_row_offset < 2 ? load[0] : load[1];
+        out[3] = base_row_offset < 1 ? load[0] : load[1];
         out[4] = load[1];
-        out[5] = load[1];
-        out[6] = load[1];
-        out[7] = load[1];
+        out[5] = base_row_offset < 3 ? load[1] : load[2];
+        out[6] = base_row_offset < 2 ? load[1] : load[2];
+        out[7] = base_row_offset < 1 ? load[1] : load[2];
+        out[8] = load[2];
+        out[9] = base_row_offset < 3 ? load[2] : load[3];
+        out[10] = base_row_offset < 2 ? load[2] : load[3];
 
         #pragma unroll
-        for (uint p = 0; p < 8; ++p)
+        for (uint p = 0; p < 11; ++p)
             WRITE_CHANNEL(preload_to_delay[3][p], out[p]);
     }
 }
@@ -283,8 +311,8 @@ kernel void preload_4(global float * restrict fop,
 __attribute__((max_global_work_dim(0)))
 kernel void delay_4(const uint n_channel_bundles)
 {
-    float in[8];
-    float out[8];
+    float in[11];
+    float out[11];
 
     uint M = 0;
     for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
@@ -293,45 +321,45 @@ kernel void delay_4(const uint n_channel_bundles)
 
         if (m == 0) {
             #pragma unroll
-            for (uint p = 0; p < 8; ++p)
+            for (uint p = 0; p < 11; ++p)
                 in[p] = READ_CHANNEL(preload_to_delay[3][p]);
         }
 
         switch (m) {
             case 0:
                 #pragma unroll
-                for (uint p = 0; p < 8; ++p) {
+                for (uint p = 0; p < 11; ++p) {
                     out[p] = in[p];
                 }
                 break;
             case 1:
                 #pragma unroll
-                for (uint p = 0; p < 8; ++p) {
+                for (uint p = 0; p < 11; ++p) {
                     out[p] = in[p];
                 }
                 break;
             case 2:
                 #pragma unroll
-                for (uint p = 0; p < 8; ++p) {
+                for (uint p = 0; p < 11; ++p) {
                     out[p] = in[p];
                 }
                 break;
             case 3:
                 #pragma unroll
-                for (uint p = 0; p < 8; ++p) {
+                for (uint p = 0; p < 11; ++p) {
                     out[p] = in[p];
                 }
                 break;
             default:
                 #pragma unroll
-                for (uint p = 0; p < 8; ++p) {
+                for (uint p = 0; p < 11; ++p) {
                     out[p] = 0.0f;
                 }
                 break;
         }
 
         #pragma unroll
-        for (uint p = 0; p < 8; ++p)
+        for (uint p = 0; p < 11; ++p)
             WRITE_CHANNEL(delay_to_detect[3][p], out[p]);
     }
 }
@@ -346,7 +374,7 @@ kernel void preload_5(global float * restrict fop,
                       const uint n_channel_bundles)
 {
     float load[3];
-    float out[8];
+    float out[11];
 
     for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
         load[0] = 0 < n_rows ? fop[fop_idx(filter_0, bundle)] : 0.0f;
@@ -361,9 +389,12 @@ kernel void preload_5(global float * restrict fop,
         out[5] = load[1];
         out[6] = base_row_offset < 4 ? load[1] : load[2];
         out[7] = base_row_offset < 3 ? load[1] : load[2];
+        out[8] = base_row_offset < 2 ? load[1] : load[2];
+        out[9] = base_row_offset < 1 ? load[1] : load[2];
+        out[10] = load[2];
 
         #pragma unroll
-        for (uint p = 0; p < 8; ++p)
+        for (uint p = 0; p < 11; ++p)
             WRITE_CHANNEL(preload_to_delay[4][p], out[p]);
     }
 }
@@ -371,8 +402,8 @@ kernel void preload_5(global float * restrict fop,
 __attribute__((max_global_work_dim(0)))
 kernel void delay_5(const uint n_channel_bundles)
 {
-    float in[8];
-    float out[8];
+    float in[11];
+    float out[11];
 
     uint M = 0;
     for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
@@ -381,51 +412,51 @@ kernel void delay_5(const uint n_channel_bundles)
 
         if (m == 0) {
             #pragma unroll
-            for (uint p = 0; p < 8; ++p)
+            for (uint p = 0; p < 11; ++p)
                 in[p] = READ_CHANNEL(preload_to_delay[4][p]);
         }
 
         switch (m) {
             case 0:
                 #pragma unroll
-                for (uint p = 0; p < 8; ++p) {
+                for (uint p = 0; p < 11; ++p) {
                     out[p] = in[p];
                 }
                 break;
             case 1:
                 #pragma unroll
-                for (uint p = 0; p < 8; ++p) {
+                for (uint p = 0; p < 11; ++p) {
                     out[p] = in[p];
                 }
                 break;
             case 2:
                 #pragma unroll
-                for (uint p = 0; p < 8; ++p) {
+                for (uint p = 0; p < 11; ++p) {
                     out[p] = in[p];
                 }
                 break;
             case 3:
                 #pragma unroll
-                for (uint p = 0; p < 8; ++p) {
+                for (uint p = 0; p < 11; ++p) {
                     out[p] = in[p];
                 }
                 break;
             case 4:
                 #pragma unroll
-                for (uint p = 0; p < 8; ++p) {
+                for (uint p = 0; p < 11; ++p) {
                     out[p] = in[p];
                 }
                 break;
             default:
                 #pragma unroll
-                for (uint p = 0; p < 8; ++p) {
+                for (uint p = 0; p < 11; ++p) {
                     out[p] = 0.0f;
                 }
                 break;
         }
 
         #pragma unroll
-        for (uint p = 0; p < 8; ++p)
+        for (uint p = 0; p < 11; ++p)
             WRITE_CHANNEL(delay_to_detect[4][p], out[p]);
     }
 }
@@ -436,26 +467,31 @@ kernel void preload_6(global float * restrict fop,
                       const uint base_row_offset,
                       const int filter_0,
                       const int filter_1,
+                      const int filter_2,
                       const uint n_channel_bundles)
 {
-    float load[2];
-    float out[8];
+    float load[3];
+    float out[11];
 
     for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
         load[0] = 0 < n_rows ? fop[fop_idx(filter_0, bundle)] : 0.0f;
         load[1] = 1 < n_rows ? fop[fop_idx(filter_1, bundle)] : 0.0f;
+        load[2] = 2 < n_rows ? fop[fop_idx(filter_2, bundle)] : 0.0f;
 
         out[0] = load[0];
-        out[1] = load[0];
+        out[1] = base_row_offset < 5 ? load[0] : load[1];
         out[2] = base_row_offset < 4 ? load[0] : load[1];
-        out[3] = base_row_offset < 4 ? load[0] : load[1];
+        out[3] = base_row_offset < 3 ? load[0] : load[1];
         out[4] = base_row_offset < 2 ? load[0] : load[1];
-        out[5] = base_row_offset < 2 ? load[0] : load[1];
+        out[5] = base_row_offset < 1 ? load[0] : load[1];
         out[6] = load[1];
-        out[7] = load[1];
+        out[7] = base_row_offset < 5 ? load[1] : load[2];
+        out[8] = base_row_offset < 4 ? load[1] : load[2];
+        out[9] = base_row_offset < 3 ? load[1] : load[2];
+        out[10] = base_row_offset < 2 ? load[1] : load[2];
 
         #pragma unroll
-        for (uint p = 0; p < 8; ++p)
+        for (uint p = 0; p < 11; ++p)
             WRITE_CHANNEL(preload_to_delay[5][p], out[p]);
     }
 }
@@ -463,8 +499,8 @@ kernel void preload_6(global float * restrict fop,
 __attribute__((max_global_work_dim(0)))
 kernel void delay_6(const uint n_channel_bundles)
 {
-    float in[8];
-    float out[8];
+    float in[11];
+    float out[11];
 
     uint M = 0;
     for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
@@ -473,57 +509,57 @@ kernel void delay_6(const uint n_channel_bundles)
 
         if (m == 0) {
             #pragma unroll
-            for (uint p = 0; p < 8; ++p)
+            for (uint p = 0; p < 11; ++p)
                 in[p] = READ_CHANNEL(preload_to_delay[5][p]);
         }
 
         switch (m) {
             case 0:
                 #pragma unroll
-                for (uint p = 0; p < 8; ++p) {
+                for (uint p = 0; p < 11; ++p) {
                     out[p] = in[p];
                 }
                 break;
             case 1:
                 #pragma unroll
-                for (uint p = 0; p < 8; ++p) {
+                for (uint p = 0; p < 11; ++p) {
                     out[p] = in[p];
                 }
                 break;
             case 2:
                 #pragma unroll
-                for (uint p = 0; p < 8; ++p) {
+                for (uint p = 0; p < 11; ++p) {
                     out[p] = in[p];
                 }
                 break;
             case 3:
                 #pragma unroll
-                for (uint p = 0; p < 8; ++p) {
+                for (uint p = 0; p < 11; ++p) {
                     out[p] = in[p];
                 }
                 break;
             case 4:
                 #pragma unroll
-                for (uint p = 0; p < 8; ++p) {
+                for (uint p = 0; p < 11; ++p) {
                     out[p] = in[p];
                 }
                 break;
             case 5:
                 #pragma unroll
-                for (uint p = 0; p < 8; ++p) {
+                for (uint p = 0; p < 11; ++p) {
                     out[p] = in[p];
                 }
                 break;
             default:
                 #pragma unroll
-                for (uint p = 0; p < 8; ++p) {
+                for (uint p = 0; p < 11; ++p) {
                     out[p] = 0.0f;
                 }
                 break;
         }
 
         #pragma unroll
-        for (uint p = 0; p < 8; ++p)
+        for (uint p = 0; p < 11; ++p)
             WRITE_CHANNEL(delay_to_detect[5][p], out[p]);
     }
 }
@@ -534,14 +570,16 @@ kernel void preload_7(global float * restrict fop,
                       const uint base_row_offset,
                       const int filter_0,
                       const int filter_1,
+                      const int filter_2,
                       const uint n_channel_bundles)
 {
-    float load[2];
-    float out[8];
+    float load[3];
+    float out[11];
 
     for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
         load[0] = 0 < n_rows ? fop[fop_idx(filter_0, bundle)] : 0.0f;
         load[1] = 1 < n_rows ? fop[fop_idx(filter_1, bundle)] : 0.0f;
+        load[2] = 2 < n_rows ? fop[fop_idx(filter_2, bundle)] : 0.0f;
 
         out[0] = load[0];
         out[1] = base_row_offset < 6 ? load[0] : load[1];
@@ -551,9 +589,12 @@ kernel void preload_7(global float * restrict fop,
         out[5] = base_row_offset < 2 ? load[0] : load[1];
         out[6] = base_row_offset < 1 ? load[0] : load[1];
         out[7] = load[1];
+        out[8] = base_row_offset < 6 ? load[1] : load[2];
+        out[9] = base_row_offset < 5 ? load[1] : load[2];
+        out[10] = base_row_offset < 4 ? load[1] : load[2];
 
         #pragma unroll
-        for (uint p = 0; p < 8; ++p)
+        for (uint p = 0; p < 11; ++p)
             WRITE_CHANNEL(preload_to_delay[6][p], out[p]);
     }
 }
@@ -561,8 +602,8 @@ kernel void preload_7(global float * restrict fop,
 __attribute__((max_global_work_dim(0)))
 kernel void delay_7(const uint n_channel_bundles)
 {
-    float in[8];
-    float out[8];
+    float in[11];
+    float out[11];
 
     uint M = 0;
     for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
@@ -571,63 +612,63 @@ kernel void delay_7(const uint n_channel_bundles)
 
         if (m == 0) {
             #pragma unroll
-            for (uint p = 0; p < 8; ++p)
+            for (uint p = 0; p < 11; ++p)
                 in[p] = READ_CHANNEL(preload_to_delay[6][p]);
         }
 
         switch (m) {
             case 0:
                 #pragma unroll
-                for (uint p = 0; p < 8; ++p) {
+                for (uint p = 0; p < 11; ++p) {
                     out[p] = in[p];
                 }
                 break;
             case 1:
                 #pragma unroll
-                for (uint p = 0; p < 8; ++p) {
+                for (uint p = 0; p < 11; ++p) {
                     out[p] = in[p];
                 }
                 break;
             case 2:
                 #pragma unroll
-                for (uint p = 0; p < 8; ++p) {
+                for (uint p = 0; p < 11; ++p) {
                     out[p] = in[p];
                 }
                 break;
             case 3:
                 #pragma unroll
-                for (uint p = 0; p < 8; ++p) {
+                for (uint p = 0; p < 11; ++p) {
                     out[p] = in[p];
                 }
                 break;
             case 4:
                 #pragma unroll
-                for (uint p = 0; p < 8; ++p) {
+                for (uint p = 0; p < 11; ++p) {
                     out[p] = in[p];
                 }
                 break;
             case 5:
                 #pragma unroll
-                for (uint p = 0; p < 8; ++p) {
+                for (uint p = 0; p < 11; ++p) {
                     out[p] = in[p];
                 }
                 break;
             case 6:
                 #pragma unroll
-                for (uint p = 0; p < 8; ++p) {
+                for (uint p = 0; p < 11; ++p) {
                     out[p] = in[p];
                 }
                 break;
             default:
                 #pragma unroll
-                for (uint p = 0; p < 8; ++p) {
+                for (uint p = 0; p < 11; ++p) {
                     out[p] = 0.0f;
                 }
                 break;
         }
 
         #pragma unroll
-        for (uint p = 0; p < 8; ++p)
+        for (uint p = 0; p < 11; ++p)
             WRITE_CHANNEL(delay_to_detect[6][p], out[p]);
     }
 }
@@ -637,25 +678,32 @@ kernel void preload_8(global float * restrict fop,
                       const uint n_rows,
                       const uint base_row_offset,
                       const int filter_0,
+                      const int filter_1,
+                      const int filter_2,
                       const uint n_channel_bundles)
 {
-    float load[1];
-    float out[8];
+    float load[3];
+    float out[11];
 
     for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
         load[0] = 0 < n_rows ? fop[fop_idx(filter_0, bundle)] : 0.0f;
+        load[1] = 1 < n_rows ? fop[fop_idx(filter_1, bundle)] : 0.0f;
+        load[2] = 2 < n_rows ? fop[fop_idx(filter_2, bundle)] : 0.0f;
 
         out[0] = load[0];
-        out[1] = load[0];
-        out[2] = load[0];
-        out[3] = load[0];
-        out[4] = load[0];
-        out[5] = load[0];
-        out[6] = load[0];
-        out[7] = load[0];
+        out[1] = base_row_offset < 7 ? load[0] : load[1];
+        out[2] = base_row_offset < 6 ? load[0] : load[1];
+        out[3] = base_row_offset < 5 ? load[0] : load[1];
+        out[4] = base_row_offset < 4 ? load[0] : load[1];
+        out[5] = base_row_offset < 3 ? load[0] : load[1];
+        out[6] = base_row_offset < 2 ? load[0] : load[1];
+        out[7] = base_row_offset < 1 ? load[0] : load[1];
+        out[8] = load[1];
+        out[9] = base_row_offset < 7 ? load[1] : load[2];
+        out[10] = base_row_offset < 6 ? load[1] : load[2];
 
         #pragma unroll
-        for (uint p = 0; p < 8; ++p)
+        for (uint p = 0; p < 11; ++p)
             WRITE_CHANNEL(preload_to_delay[7][p], out[p]);
     }
 }
@@ -663,8 +711,8 @@ kernel void preload_8(global float * restrict fop,
 __attribute__((max_global_work_dim(0)))
 kernel void delay_8(const uint n_channel_bundles)
 {
-    float in[8];
-    float out[8];
+    float in[11];
+    float out[11];
 
     uint M = 0;
     for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
@@ -673,69 +721,69 @@ kernel void delay_8(const uint n_channel_bundles)
 
         if (m == 0) {
             #pragma unroll
-            for (uint p = 0; p < 8; ++p)
+            for (uint p = 0; p < 11; ++p)
                 in[p] = READ_CHANNEL(preload_to_delay[7][p]);
         }
 
         switch (m) {
             case 0:
                 #pragma unroll
-                for (uint p = 0; p < 8; ++p) {
+                for (uint p = 0; p < 11; ++p) {
                     out[p] = in[p];
                 }
                 break;
             case 1:
                 #pragma unroll
-                for (uint p = 0; p < 8; ++p) {
+                for (uint p = 0; p < 11; ++p) {
                     out[p] = in[p];
                 }
                 break;
             case 2:
                 #pragma unroll
-                for (uint p = 0; p < 8; ++p) {
+                for (uint p = 0; p < 11; ++p) {
                     out[p] = in[p];
                 }
                 break;
             case 3:
                 #pragma unroll
-                for (uint p = 0; p < 8; ++p) {
+                for (uint p = 0; p < 11; ++p) {
                     out[p] = in[p];
                 }
                 break;
             case 4:
                 #pragma unroll
-                for (uint p = 0; p < 8; ++p) {
+                for (uint p = 0; p < 11; ++p) {
                     out[p] = in[p];
                 }
                 break;
             case 5:
                 #pragma unroll
-                for (uint p = 0; p < 8; ++p) {
+                for (uint p = 0; p < 11; ++p) {
                     out[p] = in[p];
                 }
                 break;
             case 6:
                 #pragma unroll
-                for (uint p = 0; p < 8; ++p) {
+                for (uint p = 0; p < 11; ++p) {
                     out[p] = in[p];
                 }
                 break;
             case 7:
                 #pragma unroll
-                for (uint p = 0; p < 8; ++p) {
+                for (uint p = 0; p < 11; ++p) {
                     out[p] = in[p];
                 }
                 break;
             default:
                 #pragma unroll
-                for (uint p = 0; p < 8; ++p) {
+                for (uint p = 0; p < 11; ++p) {
                     out[p] = 0.0f;
                 }
                 break;
         }
 
         #pragma unroll
-        for (uint p = 0; p < 8; ++p)
+        for (uint p = 0; p < 11; ++p)
             WRITE_CHANNEL(delay_to_detect[7][p], out[p]);
     }
 }
