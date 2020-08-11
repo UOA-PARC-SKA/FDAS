@@ -287,8 +287,8 @@ bool FDAS::perform_harmonic_summing(const FDAS::ThreshType &thresholds, const FD
         auto &delay_k = *delay_kernels[h];
 
         for (int g = 0; g < n_filter_groups; ++g) {
-            int base_row = g * GenInfo::group_sz;
-            int base_row_offset = base_row % k;
+            int base_row = g * GenInfo::group_sz / k;
+            int base_row_offset = g * GenInfo::group_sz % k;
             int n_rows = GenInfo::first_offset_to_use_last_buffer[h] > 0 ?
                     GenInfo::n_buffers[h] - (base_row_offset < GenInfo::first_offset_to_use_last_buffer[h]) :
                     n_rows = GenInfo::n_buffers[h];
