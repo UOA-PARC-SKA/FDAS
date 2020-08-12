@@ -196,12 +196,12 @@ bool FDAS::perform_ft_convolution(const FDAS::InputType &input, const FDAS::Shap
     }
 
     // Instantiate command queues, one per kernel, plus one for I/O operations. Multi-device support is NYI
-    cl::CommandQueue buffer_q(*context, default_device);
+    cl::CommandQueue buffer_q(*context, default_device, CL_QUEUE_PROFILING_ENABLE);
 
-    cl::CommandQueue tile_input_q(*context, default_device);
-    cl::CommandQueue store_tiles_q(*context, default_device);
-    cl::CommandQueue mux_and_mult_q(*context, default_device);
-    cl::CommandQueue square_and_discard_q(*context, default_device);
+    cl::CommandQueue tile_input_q(*context, default_device, CL_QUEUE_PROFILING_ENABLE);
+    cl::CommandQueue store_tiles_q(*context, default_device, CL_QUEUE_PROFILING_ENABLE);
+    cl::CommandQueue mux_and_mult_q(*context, default_device, CL_QUEUE_PROFILING_ENABLE);
+    cl::CommandQueue square_and_discard_q(*context, default_device, CL_QUEUE_PROFILING_ENABLE);
 
     // NDRange configuration
     cl::NDRange prep_local(FFT_N_POINTS_PER_TERMINAL);
@@ -273,13 +273,13 @@ bool FDAS::perform_harmonic_summing(const FDAS::ThreshType &thresholds, const FD
     cl::Event store_cands_ev;
 
     std::vector<cl::CommandQueue> preload_queues, delay_queues, detect_queues;
-    cl::CommandQueue store_cands_queue(*context, default_device);
+    cl::CommandQueue store_cands_queue(*context, default_device, CL_QUEUE_PROFILING_ENABLE);
 
     for (int h = 0; h < n_planes; ++h) {
         auto k = h + 1;
 
-        cl::CommandQueue preload_q(*context, default_device);
-        cl::CommandQueue delay_q(*context, default_device);
+        cl::CommandQueue preload_q(*context, default_device, CL_QUEUE_PROFILING_ENABLE);
+        cl::CommandQueue delay_q(*context, default_device, CL_QUEUE_PROFILING_ENABLE);
         preload_queues.emplace_back(preload_q);
         delay_queues.emplace_back(delay_q);
 
@@ -315,7 +315,7 @@ bool FDAS::perform_harmonic_summing(const FDAS::ThreshType &thresholds, const FD
         cl_chk(detect_k.setArg<cl_uint>(3, n_filter_groups));
         cl_chk(detect_k.setArg<cl_uint>(4, n_channel_bundles));
 
-        cl::CommandQueue detect_q(*context, default_device);
+        cl::CommandQueue detect_q(*context, default_device, CL_QUEUE_PROFILING_ENABLE);
         detect_queues.emplace_back(detect_q);
         cl_chk(detect_q.enqueueTask(detect_k, nullptr, &detect_evs[h]));
     }
@@ -342,7 +342,7 @@ bool FDAS::perform_harmonic_summing(const FDAS::ThreshType &thresholds, const FD
 
 bool FDAS::retrieve_tiles(FDAS::TilesType &tiles, FDAS::ShapeType &tiles_shape) {
     tiles.resize(FDF_TILED_INPUT_SZ);
-    cl::CommandQueue buffer_q(*context, default_device);
+    cl::CommandQueue buffer_q(*context, default_device, CL_QUEUE_PROFILING_ENABLE);
     cl_chk(buffer_q.enqueueReadBuffer(*tiles_buffer, true, 0, sizeof(cl_float2) * FDF_TILED_INPUT_SZ, tiles.data()));
     cl_chk(buffer_q.finish());
     tiles_shape.push_back(FDF_N_TILES);
@@ -353,7 +353,7 @@ bool FDAS::retrieve_tiles(FDAS::TilesType &tiles, FDAS::ShapeType &tiles_shape) 
 
 bool FDAS::retrieve_FOP(FDAS::FOPType &fop, FDAS::ShapeType &fop_shape) {
     fop.resize(FOP_SZ);
-    cl::CommandQueue buffer_q(*context, default_device);
+    cl::CommandQueue buffer_q(*context, default_device, CL_QUEUE_PROFILING_ENABLE);
     cl_chk(buffer_q.enqueueReadBuffer(*fop_buffer, true, 0, sizeof(cl_float) * FOP_SZ, fop.data()));
     cl_chk(buffer_q.finish());
     fop_shape.push_back(N_FILTERS);
@@ -367,7 +367,7 @@ bool FDAS::retrieve_harmonic_planes(FDAS::HPType &harmonic_planes, FDAS::ShapeTy
         return false;
 
     harmonic_planes.resize(HMS_PLANES_SZ);
-    cl::CommandQueue buffer_q(*context, default_device);
+    cl::CommandQueue buffer_q(*context, default_device, CL_QUEUE_PROFILING_ENABLE);
     cl_chk(buffer_q.enqueueReadBuffer(*harmonic_planes_buffer, true, 0, sizeof(cl_float) * HMS_PLANES_SZ, harmonic_planes.data()));
     cl_chk(buffer_q.finish());
     harmonic_planes_shape.push_back(HMS_N_PLANES - 1);
@@ -382,7 +382,7 @@ bool FDAS::retrieve_candidates(FDAS::DetLocType &detection_location, FDAS::Shape
     detection_location.resize(N_CANDIDATES);
     detection_amplitude.resize(N_CANDIDATES);
 
-    cl::CommandQueue buffer_q(*context, default_device);
+    cl::CommandQueue buffer_q(*context, default_device, CL_QUEUE_PROFILING_ENABLE);
     cl_chk(buffer_q.enqueueReadBuffer(*detection_location_buffer, true, 0, sizeof(cl_uint) * N_CANDIDATES, detection_location.data()));
     cl_chk(buffer_q.enqueueReadBuffer(*detection_amplitude_buffer, true, 0, sizeof(cl_float) * N_CANDIDATES, detection_amplitude.data()));
     cl_chk(buffer_q.finish());
@@ -394,7 +394,7 @@ bool FDAS::retrieve_candidates(FDAS::DetLocType &detection_location, FDAS::Shape
 }
 
 bool FDAS::inject_FOP(FDAS::FOPType &fop, FDAS::ShapeType &fop_shape) {
-    cl::CommandQueue buffer_q(*context, default_device);
+    cl::CommandQueue buffer_q(*context, default_device, CL_QUEUE_PROFILING_ENABLE);
     cl_chk(buffer_q.enqueueWriteBuffer(*fop_buffer, true, 0, sizeof(cl_float) * FOP_SZ, fop.data()));
     cl_chk(buffer_q.finish());
 
