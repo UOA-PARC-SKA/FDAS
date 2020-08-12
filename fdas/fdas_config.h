@@ -23,7 +23,7 @@
 
 // Set how many filters are processed in parallel, and in consequence, how many batches are needed to apply all filters.
 // Currently, the batch size must evenly divide the total number of filters
-#define N_FILTERS_PARALLEL             (1)
+#define N_FILTERS_PARALLEL             (5)
 #define N_FILTER_BATCHES               (N_FILTERS / N_FILTERS_PARALLEL)
 
 #elif defined(FDAS_EMU)
