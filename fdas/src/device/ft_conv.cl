@@ -133,6 +133,7 @@ inline float power_norm(float2 a)
  *                     a)                    │                 b)                  │            c)
  */
 __attribute__((reqd_work_group_size(FFT_N_POINTS_PER_TERMINAL, 1, 1)))
+__attribute__((uses_global_work_offset(0)))
 kernel void tile_input(global float2 * restrict input)
 {
     // Buffer used to reorder the chunks in the current tile. Each chunk resides in its own memory bank.
@@ -205,6 +206,7 @@ kernel void tile_input(global float2 * restrict input)
  */
 __attribute__((autorun))
 __attribute__((max_global_work_dim(0)))
+__attribute__((uses_global_work_offset(0)))
 __attribute__((num_compute_units(1)))
 kernel void fft()
 {
@@ -269,6 +271,7 @@ kernel void fft()
  *  fft_out[3] ───────────────┘
  */
 __attribute__((reqd_work_group_size(FFT_N_POINTS_PER_TERMINAL, 1, 1)))
+__attribute__((uses_global_work_offset(0)))
 kernel void store_tiles(global float2 * restrict tiles)
 {
     uint tile = get_group_id(0);
@@ -291,6 +294,7 @@ kernel void store_tiles(global float2 * restrict tiles)
  * output channels without reordering.
  */
 __attribute__((reqd_work_group_size(FFT_N_POINTS_PER_TERMINAL, 1, 1)))
+__attribute__((uses_global_work_offset(0)))
 kernel void mux_and_mult(global float2 * restrict tiles,
                          global float2 * restrict templates)
 {
@@ -323,6 +327,7 @@ kernel void mux_and_mult(global float2 * restrict tiles,
  */
 __attribute__((autorun))
 __attribute__((max_global_work_dim(0)))
+__attribute__((uses_global_work_offset(0)))
 __attribute__((num_compute_units(N_FILTERS_PARALLEL)))
 kernel void ifft()
 {
@@ -386,6 +391,7 @@ kernel void ifft()
  * some of these accesses behind the scenes.
  */
 __attribute__((reqd_work_group_size(FFT_N_POINTS_PER_TERMINAL, 1, 1)))
+__attribute__((uses_global_work_offset(0)))
 kernel void square_and_discard(global float * restrict fop)
 {
     // Private buffer to collect the output from one step of the `ifft` instances

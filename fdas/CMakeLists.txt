@@ -18,7 +18,7 @@ target_link_libraries(fdas_gtest npy alteracl OpenCL elf gtest)
 add_executable(print_config
         src/host/print_config.cpp)
 
-set(AOC_FLAGS -v -report -g -profile -D FDAS_${FDAS_MODE})
+set(AOC_FLAGS -v -report -g -profile -fmax=300 -D FDAS_${FDAS_MODE})
 
 if (FDAS_MODE STREQUAL "EMU")
 add_custom_target(fdas_emu
@@ -33,7 +33,7 @@ add_custom_target(fdas_report
         COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/src/device device
         COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_SOURCE_DIR}/fdas_config.h device
         COMMAND ${CMAKE_COMMAND} -E make_directory bin
-        COMMAND aoc -c ${AOC_FLAGS} -o bin/fdas_rpt.aoco device/fdas.cl
+        COMMAND aoc -rtl ${AOC_FLAGS} -o bin/fdas_rpt.aocr device/fdas.cl
         COMMENT "Generating HLS report")
 
 if (FDAS_MODE STREQUAL "FPGA")

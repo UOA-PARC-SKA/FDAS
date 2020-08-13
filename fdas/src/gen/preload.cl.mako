@@ -23,6 +23,7 @@
 %>\
 
 __attribute__((max_global_work_dim(0)))
+__attribute__((uses_global_work_offset(0)))
 kernel void preload_${k}(global ${bundle_ty} * restrict fop,
                       const uint n_rows,
                       const uint base_row_offset,
@@ -54,7 +55,9 @@ kernel void preload_${k}(global ${bundle_ty} * restrict fop,
 }
 
 __attribute__((max_global_work_dim(0)))
-kernel void delay_${k}(const uint n_channel_bundles)
+__attribute__((uses_global_work_offset(0)))
+kernel void delay_${k}(global uint * restrict dummy,
+                       const uint n_channel_bundles)
 {
     ${bundle_ty} in[${group_sz}];
     ${bundle_ty} out[${group_sz}];

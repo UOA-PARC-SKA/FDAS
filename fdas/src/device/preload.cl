@@ -9,6 +9,7 @@ inline ulong fop_idx(int filter, uint bundle) {
 }
 
 __attribute__((max_global_work_dim(0)))
+__attribute__((uses_global_work_offset(0)))
 kernel void preload_1(global float * restrict fop,
                       const uint n_rows,
                       const uint base_row_offset,
@@ -51,7 +52,9 @@ kernel void preload_1(global float * restrict fop,
 }
 
 __attribute__((max_global_work_dim(0)))
-kernel void delay_1(const uint n_channel_bundles)
+__attribute__((uses_global_work_offset(0)))
+kernel void delay_1(global uint * restrict dummy,
+                       const uint n_channel_bundles)
 {
     float in[8];
     float out[8];
@@ -89,6 +92,7 @@ kernel void delay_1(const uint n_channel_bundles)
 }
 
 __attribute__((max_global_work_dim(0)))
+__attribute__((uses_global_work_offset(0)))
 kernel void preload_2(global float * restrict fop,
                       const uint n_rows,
                       const uint base_row_offset,
@@ -123,7 +127,9 @@ kernel void preload_2(global float * restrict fop,
 }
 
 __attribute__((max_global_work_dim(0)))
-kernel void delay_2(const uint n_channel_bundles)
+__attribute__((uses_global_work_offset(0)))
+kernel void delay_2(global uint * restrict dummy,
+                       const uint n_channel_bundles)
 {
     float in[8];
     float out[8];
@@ -167,6 +173,7 @@ kernel void delay_2(const uint n_channel_bundles)
 }
 
 __attribute__((max_global_work_dim(0)))
+__attribute__((uses_global_work_offset(0)))
 kernel void preload_3(global float * restrict fop,
                       const uint n_rows,
                       const uint base_row_offset,
@@ -201,7 +208,9 @@ kernel void preload_3(global float * restrict fop,
 }
 
 __attribute__((max_global_work_dim(0)))
-kernel void delay_3(const uint n_channel_bundles)
+__attribute__((uses_global_work_offset(0)))
+kernel void delay_3(global uint * restrict dummy,
+                       const uint n_channel_bundles)
 {
     float in[8];
     float out[8];
@@ -251,6 +260,7 @@ kernel void delay_3(const uint n_channel_bundles)
 }
 
 __attribute__((max_global_work_dim(0)))
+__attribute__((uses_global_work_offset(0)))
 kernel void preload_4(global float * restrict fop,
                       const uint n_rows,
                       const uint base_row_offset,
@@ -281,7 +291,9 @@ kernel void preload_4(global float * restrict fop,
 }
 
 __attribute__((max_global_work_dim(0)))
-kernel void delay_4(const uint n_channel_bundles)
+__attribute__((uses_global_work_offset(0)))
+kernel void delay_4(global uint * restrict dummy,
+                       const uint n_channel_bundles)
 {
     float in[8];
     float out[8];
@@ -337,6 +349,7 @@ kernel void delay_4(const uint n_channel_bundles)
 }
 
 __attribute__((max_global_work_dim(0)))
+__attribute__((uses_global_work_offset(0)))
 kernel void preload_5(global float * restrict fop,
                       const uint n_rows,
                       const uint base_row_offset,
@@ -369,7 +382,9 @@ kernel void preload_5(global float * restrict fop,
 }
 
 __attribute__((max_global_work_dim(0)))
-kernel void delay_5(const uint n_channel_bundles)
+__attribute__((uses_global_work_offset(0)))
+kernel void delay_5(global uint * restrict dummy,
+                       const uint n_channel_bundles)
 {
     float in[8];
     float out[8];
@@ -431,6 +446,7 @@ kernel void delay_5(const uint n_channel_bundles)
 }
 
 __attribute__((max_global_work_dim(0)))
+__attribute__((uses_global_work_offset(0)))
 kernel void preload_6(global float * restrict fop,
                       const uint n_rows,
                       const uint base_row_offset,
@@ -461,7 +477,9 @@ kernel void preload_6(global float * restrict fop,
 }
 
 __attribute__((max_global_work_dim(0)))
-kernel void delay_6(const uint n_channel_bundles)
+__attribute__((uses_global_work_offset(0)))
+kernel void delay_6(global uint * restrict dummy,
+                       const uint n_channel_bundles)
 {
     float in[8];
     float out[8];
@@ -529,6 +547,7 @@ kernel void delay_6(const uint n_channel_bundles)
 }
 
 __attribute__((max_global_work_dim(0)))
+__attribute__((uses_global_work_offset(0)))
 kernel void preload_7(global float * restrict fop,
                       const uint n_rows,
                       const uint base_row_offset,
@@ -559,7 +578,9 @@ kernel void preload_7(global float * restrict fop,
 }
 
 __attribute__((max_global_work_dim(0)))
-kernel void delay_7(const uint n_channel_bundles)
+__attribute__((uses_global_work_offset(0)))
+kernel void delay_7(global uint * restrict dummy,
+                       const uint n_channel_bundles)
 {
     float in[8];
     float out[8];
@@ -633,6 +654,7 @@ kernel void delay_7(const uint n_channel_bundles)
 }
 
 __attribute__((max_global_work_dim(0)))
+__attribute__((uses_global_work_offset(0)))
 kernel void preload_8(global float * restrict fop,
                       const uint n_rows,
                       const uint base_row_offset,
@@ -661,7 +683,9 @@ kernel void preload_8(global float * restrict fop,
 }
 
 __attribute__((max_global_work_dim(0)))
-kernel void delay_8(const uint n_channel_bundles)
+__attribute__((uses_global_work_offset(0)))
+kernel void delay_8(global uint * restrict dummy,
+                       const uint n_channel_bundles)
 {
     float in[8];
     float out[8];

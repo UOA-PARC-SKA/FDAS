@@ -304,16 +304,18 @@ bool FDAS::perform_harmonic_summing(const FDAS::ThreshType &thresholds, const FD
             cl_chk(preload_k.setArg<cl_uint>(3 + GenInfo::n_buffers[h], n_channel_bundles / k)); // important: n_channel_bundles must be divisible by all k
             cl_chk(preload_q.enqueueTask(preload_k, nullptr, &preload_evs[h][g]));
 
-            cl_chk(delay_k.setArg<cl_uint>(0, n_channel_bundles));
+            cl_chk(delay_k.setArg<cl::Buffer>(0, *fop_buffer));
+            cl_chk(delay_k.setArg<cl_uint>(1, n_channel_bundles));
             cl_chk(delay_q.enqueueTask(delay_k, nullptr, &delay_evs[h][g]));
         }
 
         auto &detect_k = *detect_kernels[h];
-        cl_chk(detect_k.setArg<cl_float>(0, thresholds[h]));
-        cl_chk(detect_k.setArg<cl_uint>(1, n_filters));
-        cl_chk(detect_k.setArg<cl_uint>(2, negative_filters));
-        cl_chk(detect_k.setArg<cl_uint>(3, n_filter_groups));
-        cl_chk(detect_k.setArg<cl_uint>(4, n_channel_bundles));
+        cl_chk(detect_k.setArg<cl::Buffer>(0, *fop_buffer));
+        cl_chk(detect_k.setArg<cl_float>(1, thresholds[h]));
+        cl_chk(detect_k.setArg<cl_uint>(2, n_filters));
+        cl_chk(detect_k.setArg<cl_uint>(3, negative_filters));
+        cl_chk(detect_k.setArg<cl_uint>(4, n_filter_groups));
+        cl_chk(detect_k.setArg<cl_uint>(5, n_channel_bundles));
 
         cl::CommandQueue detect_q(*context, default_device, CL_QUEUE_PROFILING_ENABLE);
         detect_queues.emplace_back(detect_q);

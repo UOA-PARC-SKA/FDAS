@@ -61,8 +61,8 @@ inline ulong fop_idx(int filter, uint bundle) {{
         detect_file.write(f"""
 // Auto-generated file -- see `hsum_codegen.py` and `detect.cl.mako`.
 channel {bundle_ty} detect_to_detect[{n_planes - 1}][{group_sz}] __attribute__((depth(0)));
-channel uint  detect_to_store_location[{n_planes}][{group_sz}][{bundle_sz}] __attribute__((depth(0)));
-channel float detect_to_store_amplitude[{n_planes}][{group_sz}][{bundle_sz}] __attribute__((depth(0)));
+channel uint  detect_to_store_location[{n_planes}][{group_sz * bundle_sz}] __attribute__((depth(0)));
+channel float detect_to_store_amplitude[{n_planes}][{group_sz * bundle_sz}] __attribute__((depth(0)));
 """)
         for h in range(n_planes):
             detect_file.write(detect_template.render(

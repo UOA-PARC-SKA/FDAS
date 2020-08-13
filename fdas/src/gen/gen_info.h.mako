@@ -4,7 +4,8 @@
 
 namespace GenInfo {
     static const cl_uint n_planes = ${n_planes};
-    static const cl_uint detection_sz = ${detection_sz};
+## FIXME: make use of "detection size" consistent
+    static const cl_uint detection_sz = ${detection_sz * group_sz * bundle_sz};
     static const cl_uint group_sz = ${group_sz};
     static const cl_uint bundle_sz = ${bundle_sz};
 

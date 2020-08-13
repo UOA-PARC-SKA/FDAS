@@ -3,7 +3,7 @@
 
 namespace GenInfo {
     static const cl_uint n_planes = 8;
-    static const cl_uint detection_sz = 64;
+    static const cl_uint detection_sz = 512;
     static const cl_uint group_sz = 8;
     static const cl_uint bundle_sz = 1;
 

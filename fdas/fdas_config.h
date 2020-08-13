@@ -96,7 +96,7 @@
 #define HMS_N_PLANES                   (8)
 
 // Maximum number of detections, i.e. pulsar candidates, recorded per harmonic plane
-#define HMS_DETECTION_SZ               (64)
+#define HMS_DETECTION_SZ               (512)
 
 // If true, explicitly write harmonic planes to memory, otherwise compare FOP amplitudes to thresholds on-the-fly
 #define HMS_STORE_PLANES               (false)
