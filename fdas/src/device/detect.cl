@@ -82,7 +82,7 @@ kernel void detect_1(global uint * restrict dummy,
                 amp[7] = cand[7] ? hsum[7] : -1.0f;
 
                 uint slot = next;
-                next = next < 63 ? next + 1 : 0;
+                next = (next + 1) & 63;
 
                 #pragma unroll
                 for (uint x = 0; x < 8; ++x) {
@@ -184,7 +184,7 @@ kernel void detect_2(global uint * restrict dummy,
                 amp[7] = cand[7] ? hsum[7] : -1.0f;
 
                 uint slot = next;
-                next = next < 63 ? next + 1 : 0;
+                next = (next + 1) & 63;
 
                 #pragma unroll
                 for (uint x = 0; x < 8; ++x) {
@@ -286,7 +286,7 @@ kernel void detect_3(global uint * restrict dummy,
                 amp[7] = cand[7] ? hsum[7] : -1.0f;
 
                 uint slot = next;
-                next = next < 63 ? next + 1 : 0;
+                next = (next + 1) & 63;
 
                 #pragma unroll
                 for (uint x = 0; x < 8; ++x) {
@@ -388,7 +388,7 @@ kernel void detect_4(global uint * restrict dummy,
                 amp[7] = cand[7] ? hsum[7] : -1.0f;
 
                 uint slot = next;
-                next = next < 63 ? next + 1 : 0;
+                next = (next + 1) & 63;
 
                 #pragma unroll
                 for (uint x = 0; x < 8; ++x) {
@@ -490,7 +490,7 @@ kernel void detect_5(global uint * restrict dummy,
                 amp[7] = cand[7] ? hsum[7] : -1.0f;
 
                 uint slot = next;
-                next = next < 63 ? next + 1 : 0;
+                next = (next + 1) & 63;
 
                 #pragma unroll
                 for (uint x = 0; x < 8; ++x) {
@@ -592,7 +592,7 @@ kernel void detect_6(global uint * restrict dummy,
                 amp[7] = cand[7] ? hsum[7] : -1.0f;
 
                 uint slot = next;
-                next = next < 63 ? next + 1 : 0;
+                next = (next + 1) & 63;
 
                 #pragma unroll
                 for (uint x = 0; x < 8; ++x) {
@@ -694,7 +694,7 @@ kernel void detect_7(global uint * restrict dummy,
                 amp[7] = cand[7] ? hsum[7] : -1.0f;
 
                 uint slot = next;
-                next = next < 63 ? next + 1 : 0;
+                next = (next + 1) & 63;
 
                 #pragma unroll
                 for (uint x = 0; x < 8; ++x) {
@@ -793,7 +793,7 @@ kernel void detect_8(global uint * restrict dummy,
                 amp[7] = cand[7] ? hsum[7] : -1.0f;
 
                 uint slot = next;
-                next = next < 63 ? next + 1 : 0;
+                next = (next + 1) & 63;
 
                 #pragma unroll
                 for (uint x = 0; x < 8; ++x) {

@@ -10,7 +10,7 @@ kernel void detect_${k}(global uint * restrict dummy,
 {
 <%
     bundle_idx = lambda i: f".s{i}" if bundle_sz > 1 else ""
-    assert detection_sz <= 64
+    assert detection_sz <= 64 and bin(detection_sz).count('1') == 1  # power of 2
 %>\
     uint location_buffer[${detection_sz}][${group_sz * bundle_sz}];
     float amplitude_buffer[${detection_sz}][${group_sz * bundle_sz}];
@@ -80,7 +80,7 @@ kernel void detect_${k}(global uint * restrict dummy,
             % endfor
 
                 uint slot = next;
-                next = next < ${detection_sz - 1} ? next + 1 : 0;
+                next = (next + 1) & ${detection_sz - 1};
 
                 #pragma unroll
                 for (uint x = 0; x < ${group_sz * bundle_sz}; ++x) {
