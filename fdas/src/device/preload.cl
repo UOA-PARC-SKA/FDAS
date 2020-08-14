@@ -1,16 +1,16 @@
 
 // Auto-generated file -- see `hsum_codegen.py` and `preload.cl.mako`.
 
-channel float preload_to_delay[8][8] __attribute__((depth(0)));
-channel float delay_to_detect[8][8] __attribute__((depth(0)));
+channel float4 preload_to_delay[8][8] __attribute__((depth(0)));
+channel float4 delay_to_detect[8][8] __attribute__((depth(0)));
 
 inline ulong fop_idx(int filter, uint bundle) {
-    return (filter + N_FILTERS_PER_ACCEL_SIGN) * (FDF_OUTPUT_SZ / 1) + bundle;
+    return (filter + N_FILTERS_PER_ACCEL_SIGN) * (FDF_OUTPUT_SZ / 4) + bundle;
 }
 
 __attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
-kernel void preload_1(global float * restrict fop,
+kernel void preload_1(global float4 * restrict fop,
                       const uint n_rows,
                       const uint base_row_offset,
                       const int filter_0,
@@ -23,8 +23,8 @@ kernel void preload_1(global float * restrict fop,
                       const int filter_7,
                       const uint n_channel_bundles)
 {
-    float load[8];
-    float out[8];
+    float4 load[8];
+    float4 out[8];
 
     for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
         load[0] = 0 < n_rows ? fop[fop_idx(filter_0, bundle)] : 0.0f;
@@ -56,8 +56,8 @@ __attribute__((uses_global_work_offset(0)))
 kernel void delay_1(global uint * restrict dummy,
                        const uint n_channel_bundles)
 {
-    float in[8];
-    float out[8];
+    float4 in[8];
+    float4 out[8];
 
     uint M = 0;
     for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
@@ -74,13 +74,19 @@ kernel void delay_1(global uint * restrict dummy,
             case 0:
                 #pragma unroll
                 for (uint p = 0; p < 8; ++p) {
-                    out[p] = in[p];
+                    out[p].s0 = in[p].s0;
+                    out[p].s1 = in[p].s1;
+                    out[p].s2 = in[p].s2;
+                    out[p].s3 = in[p].s3;
                 }
                 break;
             default:
                 #pragma unroll
                 for (uint p = 0; p < 8; ++p) {
-                    out[p] = 0.0f;
+                    out[p].s0 = 0.0f;
+                    out[p].s1 = 0.0f;
+                    out[p].s2 = 0.0f;
+                    out[p].s3 = 0.0f;
                 }
                 break;
         }
@@ -93,7 +99,7 @@ kernel void delay_1(global uint * restrict dummy,
 
 __attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
-kernel void preload_2(global float * restrict fop,
+kernel void preload_2(global float4 * restrict fop,
                       const uint n_rows,
                       const uint base_row_offset,
                       const int filter_0,
@@ -102,8 +108,8 @@ kernel void preload_2(global float * restrict fop,
                       const int filter_3,
                       const uint n_channel_bundles)
 {
-    float load[4];
-    float out[8];
+    float4 load[4];
+    float4 out[8];
 
     for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
         load[0] = 0 < n_rows ? fop[fop_idx(filter_0, bundle)] : 0.0f;
@@ -131,8 +137,8 @@ __attribute__((uses_global_work_offset(0)))
 kernel void delay_2(global uint * restrict dummy,
                        const uint n_channel_bundles)
 {
-    float in[8];
-    float out[8];
+    float4 in[8];
+    float4 out[8];
 
     uint M = 0;
     for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
@@ -149,19 +155,28 @@ kernel void delay_2(global uint * restrict dummy,
             case 0:
                 #pragma unroll
                 for (uint p = 0; p < 8; ++p) {
-                    out[p] = in[p];
+                    out[p].s0 = in[p].s0;
+                    out[p].s1 = in[p].s0;
+                    out[p].s2 = in[p].s1;
+                    out[p].s3 = in[p].s1;
                 }
                 break;
             case 1:
                 #pragma unroll
                 for (uint p = 0; p < 8; ++p) {
-                    out[p] = in[p];
+                    out[p].s0 = in[p].s2;
+                    out[p].s1 = in[p].s2;
+                    out[p].s2 = in[p].s3;
+                    out[p].s3 = in[p].s3;
                 }
                 break;
             default:
                 #pragma unroll
                 for (uint p = 0; p < 8; ++p) {
-                    out[p] = 0.0f;
+                    out[p].s0 = 0.0f;
+                    out[p].s1 = 0.0f;
+                    out[p].s2 = 0.0f;
+                    out[p].s3 = 0.0f;
                 }
                 break;
         }
@@ -174,7 +189,7 @@ kernel void delay_2(global uint * restrict dummy,
 
 __attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
-kernel void preload_3(global float * restrict fop,
+kernel void preload_3(global float4 * restrict fop,
                       const uint n_rows,
                       const uint base_row_offset,
                       const int filter_0,
@@ -183,8 +198,8 @@ kernel void preload_3(global float * restrict fop,
                       const int filter_3,
                       const uint n_channel_bundles)
 {
-    float load[4];
-    float out[8];
+    float4 load[4];
+    float4 out[8];
 
     for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
         load[0] = 0 < n_rows ? fop[fop_idx(filter_0, bundle)] : 0.0f;
@@ -212,8 +227,8 @@ __attribute__((uses_global_work_offset(0)))
 kernel void delay_3(global uint * restrict dummy,
                        const uint n_channel_bundles)
 {
-    float in[8];
-    float out[8];
+    float4 in[8];
+    float4 out[8];
 
     uint M = 0;
     for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
@@ -230,25 +245,37 @@ kernel void delay_3(global uint * restrict dummy,
             case 0:
                 #pragma unroll
                 for (uint p = 0; p < 8; ++p) {
-                    out[p] = in[p];
+                    out[p].s0 = in[p].s0;
+                    out[p].s1 = in[p].s0;
+                    out[p].s2 = in[p].s0;
+                    out[p].s3 = in[p].s1;
                 }
                 break;
             case 1:
                 #pragma unroll
                 for (uint p = 0; p < 8; ++p) {
-                    out[p] = in[p];
+                    out[p].s0 = in[p].s1;
+                    out[p].s1 = in[p].s1;
+                    out[p].s2 = in[p].s2;
+                    out[p].s3 = in[p].s2;
                 }
                 break;
             case 2:
                 #pragma unroll
                 for (uint p = 0; p < 8; ++p) {
-                    out[p] = in[p];
+                    out[p].s0 = in[p].s2;
+                    out[p].s1 = in[p].s3;
+                    out[p].s2 = in[p].s3;
+                    out[p].s3 = in[p].s3;
                 }
                 break;
             default:
                 #pragma unroll
                 for (uint p = 0; p < 8; ++p) {
-                    out[p] = 0.0f;
+                    out[p].s0 = 0.0f;
+                    out[p].s1 = 0.0f;
+                    out[p].s2 = 0.0f;
+                    out[p].s3 = 0.0f;
                 }
                 break;
         }
@@ -261,15 +288,15 @@ kernel void delay_3(global uint * restrict dummy,
 
 __attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
-kernel void preload_4(global float * restrict fop,
+kernel void preload_4(global float4 * restrict fop,
                       const uint n_rows,
                       const uint base_row_offset,
                       const int filter_0,
                       const int filter_1,
                       const uint n_channel_bundles)
 {
-    float load[2];
-    float out[8];
+    float4 load[2];
+    float4 out[8];
 
     for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
         load[0] = 0 < n_rows ? fop[fop_idx(filter_0, bundle)] : 0.0f;
@@ -295,8 +322,8 @@ __attribute__((uses_global_work_offset(0)))
 kernel void delay_4(global uint * restrict dummy,
                        const uint n_channel_bundles)
 {
-    float in[8];
-    float out[8];
+    float4 in[8];
+    float4 out[8];
 
     uint M = 0;
     for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
@@ -313,31 +340,46 @@ kernel void delay_4(global uint * restrict dummy,
             case 0:
                 #pragma unroll
                 for (uint p = 0; p < 8; ++p) {
-                    out[p] = in[p];
+                    out[p].s0 = in[p].s0;
+                    out[p].s1 = in[p].s0;
+                    out[p].s2 = in[p].s0;
+                    out[p].s3 = in[p].s0;
                 }
                 break;
             case 1:
                 #pragma unroll
                 for (uint p = 0; p < 8; ++p) {
-                    out[p] = in[p];
+                    out[p].s0 = in[p].s1;
+                    out[p].s1 = in[p].s1;
+                    out[p].s2 = in[p].s1;
+                    out[p].s3 = in[p].s1;
                 }
                 break;
             case 2:
                 #pragma unroll
                 for (uint p = 0; p < 8; ++p) {
-                    out[p] = in[p];
+                    out[p].s0 = in[p].s2;
+                    out[p].s1 = in[p].s2;
+                    out[p].s2 = in[p].s2;
+                    out[p].s3 = in[p].s2;
                 }
                 break;
             case 3:
                 #pragma unroll
                 for (uint p = 0; p < 8; ++p) {
-                    out[p] = in[p];
+                    out[p].s0 = in[p].s3;
+                    out[p].s1 = in[p].s3;
+                    out[p].s2 = in[p].s3;
+                    out[p].s3 = in[p].s3;
                 }
                 break;
             default:
                 #pragma unroll
                 for (uint p = 0; p < 8; ++p) {
-                    out[p] = 0.0f;
+                    out[p].s0 = 0.0f;
+                    out[p].s1 = 0.0f;
+                    out[p].s2 = 0.0f;
+                    out[p].s3 = 0.0f;
                 }
                 break;
         }
@@ -350,7 +392,7 @@ kernel void delay_4(global uint * restrict dummy,
 
 __attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
-kernel void preload_5(global float * restrict fop,
+kernel void preload_5(global float4 * restrict fop,
                       const uint n_rows,
                       const uint base_row_offset,
                       const int filter_0,
@@ -358,8 +400,8 @@ kernel void preload_5(global float * restrict fop,
                       const int filter_2,
                       const uint n_channel_bundles)
 {
-    float load[3];
-    float out[8];
+    float4 load[3];
+    float4 out[8];
 
     for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
         load[0] = 0 < n_rows ? fop[fop_idx(filter_0, bundle)] : 0.0f;
@@ -386,8 +428,8 @@ __attribute__((uses_global_work_offset(0)))
 kernel void delay_5(global uint * restrict dummy,
                        const uint n_channel_bundles)
 {
-    float in[8];
-    float out[8];
+    float4 in[8];
+    float4 out[8];
 
     uint M = 0;
     for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
@@ -404,37 +446,55 @@ kernel void delay_5(global uint * restrict dummy,
             case 0:
                 #pragma unroll
                 for (uint p = 0; p < 8; ++p) {
-                    out[p] = in[p];
+                    out[p].s0 = in[p].s0;
+                    out[p].s1 = in[p].s0;
+                    out[p].s2 = in[p].s0;
+                    out[p].s3 = in[p].s0;
                 }
                 break;
             case 1:
                 #pragma unroll
                 for (uint p = 0; p < 8; ++p) {
-                    out[p] = in[p];
+                    out[p].s0 = in[p].s0;
+                    out[p].s1 = in[p].s1;
+                    out[p].s2 = in[p].s1;
+                    out[p].s3 = in[p].s1;
                 }
                 break;
             case 2:
                 #pragma unroll
                 for (uint p = 0; p < 8; ++p) {
-                    out[p] = in[p];
+                    out[p].s0 = in[p].s1;
+                    out[p].s1 = in[p].s1;
+                    out[p].s2 = in[p].s2;
+                    out[p].s3 = in[p].s2;
                 }
                 break;
             case 3:
                 #pragma unroll
                 for (uint p = 0; p < 8; ++p) {
-                    out[p] = in[p];
+                    out[p].s0 = in[p].s2;
+                    out[p].s1 = in[p].s2;
+                    out[p].s2 = in[p].s2;
+                    out[p].s3 = in[p].s3;
                 }
                 break;
             case 4:
                 #pragma unroll
                 for (uint p = 0; p < 8; ++p) {
-                    out[p] = in[p];
+                    out[p].s0 = in[p].s3;
+                    out[p].s1 = in[p].s3;
+                    out[p].s2 = in[p].s3;
+                    out[p].s3 = in[p].s3;
                 }
                 break;
             default:
                 #pragma unroll
                 for (uint p = 0; p < 8; ++p) {
-                    out[p] = 0.0f;
+                    out[p].s0 = 0.0f;
+                    out[p].s1 = 0.0f;
+                    out[p].s2 = 0.0f;
+                    out[p].s3 = 0.0f;
                 }
                 break;
         }
@@ -447,15 +507,15 @@ kernel void delay_5(global uint * restrict dummy,
 
 __attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
-kernel void preload_6(global float * restrict fop,
+kernel void preload_6(global float4 * restrict fop,
                       const uint n_rows,
                       const uint base_row_offset,
                       const int filter_0,
                       const int filter_1,
                       const uint n_channel_bundles)
 {
-    float load[2];
-    float out[8];
+    float4 load[2];
+    float4 out[8];
 
     for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
         load[0] = 0 < n_rows ? fop[fop_idx(filter_0, bundle)] : 0.0f;
@@ -481,8 +541,8 @@ __attribute__((uses_global_work_offset(0)))
 kernel void delay_6(global uint * restrict dummy,
                        const uint n_channel_bundles)
 {
-    float in[8];
-    float out[8];
+    float4 in[8];
+    float4 out[8];
 
     uint M = 0;
     for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
@@ -499,43 +559,64 @@ kernel void delay_6(global uint * restrict dummy,
             case 0:
                 #pragma unroll
                 for (uint p = 0; p < 8; ++p) {
-                    out[p] = in[p];
+                    out[p].s0 = in[p].s0;
+                    out[p].s1 = in[p].s0;
+                    out[p].s2 = in[p].s0;
+                    out[p].s3 = in[p].s0;
                 }
                 break;
             case 1:
                 #pragma unroll
                 for (uint p = 0; p < 8; ++p) {
-                    out[p] = in[p];
+                    out[p].s0 = in[p].s0;
+                    out[p].s1 = in[p].s0;
+                    out[p].s2 = in[p].s1;
+                    out[p].s3 = in[p].s1;
                 }
                 break;
             case 2:
                 #pragma unroll
                 for (uint p = 0; p < 8; ++p) {
-                    out[p] = in[p];
+                    out[p].s0 = in[p].s1;
+                    out[p].s1 = in[p].s1;
+                    out[p].s2 = in[p].s1;
+                    out[p].s3 = in[p].s1;
                 }
                 break;
             case 3:
                 #pragma unroll
                 for (uint p = 0; p < 8; ++p) {
-                    out[p] = in[p];
+                    out[p].s0 = in[p].s2;
+                    out[p].s1 = in[p].s2;
+                    out[p].s2 = in[p].s2;
+                    out[p].s3 = in[p].s2;
                 }
                 break;
             case 4:
                 #pragma unroll
                 for (uint p = 0; p < 8; ++p) {
-                    out[p] = in[p];
+                    out[p].s0 = in[p].s2;
+                    out[p].s1 = in[p].s2;
+                    out[p].s2 = in[p].s3;
+                    out[p].s3 = in[p].s3;
                 }
                 break;
             case 5:
                 #pragma unroll
                 for (uint p = 0; p < 8; ++p) {
-                    out[p] = in[p];
+                    out[p].s0 = in[p].s3;
+                    out[p].s1 = in[p].s3;
+                    out[p].s2 = in[p].s3;
+                    out[p].s3 = in[p].s3;
                 }
                 break;
             default:
                 #pragma unroll
                 for (uint p = 0; p < 8; ++p) {
-                    out[p] = 0.0f;
+                    out[p].s0 = 0.0f;
+                    out[p].s1 = 0.0f;
+                    out[p].s2 = 0.0f;
+                    out[p].s3 = 0.0f;
                 }
                 break;
         }
@@ -548,15 +629,15 @@ kernel void delay_6(global uint * restrict dummy,
 
 __attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
-kernel void preload_7(global float * restrict fop,
+kernel void preload_7(global float4 * restrict fop,
                       const uint n_rows,
                       const uint base_row_offset,
                       const int filter_0,
                       const int filter_1,
                       const uint n_channel_bundles)
 {
-    float load[2];
-    float out[8];
+    float4 load[2];
+    float4 out[8];
 
     for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
         load[0] = 0 < n_rows ? fop[fop_idx(filter_0, bundle)] : 0.0f;
@@ -582,8 +663,8 @@ __attribute__((uses_global_work_offset(0)))
 kernel void delay_7(global uint * restrict dummy,
                        const uint n_channel_bundles)
 {
-    float in[8];
-    float out[8];
+    float4 in[8];
+    float4 out[8];
 
     uint M = 0;
     for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
@@ -600,49 +681,73 @@ kernel void delay_7(global uint * restrict dummy,
             case 0:
                 #pragma unroll
                 for (uint p = 0; p < 8; ++p) {
-                    out[p] = in[p];
+                    out[p].s0 = in[p].s0;
+                    out[p].s1 = in[p].s0;
+                    out[p].s2 = in[p].s0;
+                    out[p].s3 = in[p].s0;
                 }
                 break;
             case 1:
                 #pragma unroll
                 for (uint p = 0; p < 8; ++p) {
-                    out[p] = in[p];
+                    out[p].s0 = in[p].s0;
+                    out[p].s1 = in[p].s0;
+                    out[p].s2 = in[p].s0;
+                    out[p].s3 = in[p].s1;
                 }
                 break;
             case 2:
                 #pragma unroll
                 for (uint p = 0; p < 8; ++p) {
-                    out[p] = in[p];
+                    out[p].s0 = in[p].s1;
+                    out[p].s1 = in[p].s1;
+                    out[p].s2 = in[p].s1;
+                    out[p].s3 = in[p].s1;
                 }
                 break;
             case 3:
                 #pragma unroll
                 for (uint p = 0; p < 8; ++p) {
-                    out[p] = in[p];
+                    out[p].s0 = in[p].s1;
+                    out[p].s1 = in[p].s1;
+                    out[p].s2 = in[p].s2;
+                    out[p].s3 = in[p].s2;
                 }
                 break;
             case 4:
                 #pragma unroll
                 for (uint p = 0; p < 8; ++p) {
-                    out[p] = in[p];
+                    out[p].s0 = in[p].s2;
+                    out[p].s1 = in[p].s2;
+                    out[p].s2 = in[p].s2;
+                    out[p].s3 = in[p].s2;
                 }
                 break;
             case 5:
                 #pragma unroll
                 for (uint p = 0; p < 8; ++p) {
-                    out[p] = in[p];
+                    out[p].s0 = in[p].s2;
+                    out[p].s1 = in[p].s3;
+                    out[p].s2 = in[p].s3;
+                    out[p].s3 = in[p].s3;
                 }
                 break;
             case 6:
                 #pragma unroll
                 for (uint p = 0; p < 8; ++p) {
-                    out[p] = in[p];
+                    out[p].s0 = in[p].s3;
+                    out[p].s1 = in[p].s3;
+                    out[p].s2 = in[p].s3;
+                    out[p].s3 = in[p].s3;
                 }
                 break;
             default:
                 #pragma unroll
                 for (uint p = 0; p < 8; ++p) {
-                    out[p] = 0.0f;
+                    out[p].s0 = 0.0f;
+                    out[p].s1 = 0.0f;
+                    out[p].s2 = 0.0f;
+                    out[p].s3 = 0.0f;
                 }
                 break;
         }
@@ -655,14 +760,14 @@ kernel void delay_7(global uint * restrict dummy,
 
 __attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
-kernel void preload_8(global float * restrict fop,
+kernel void preload_8(global float4 * restrict fop,
                       const uint n_rows,
                       const uint base_row_offset,
                       const int filter_0,
                       const uint n_channel_bundles)
 {
-    float load[1];
-    float out[8];
+    float4 load[1];
+    float4 out[8];
 
     for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
         load[0] = 0 < n_rows ? fop[fop_idx(filter_0, bundle)] : 0.0f;
@@ -687,8 +792,8 @@ __attribute__((uses_global_work_offset(0)))
 kernel void delay_8(global uint * restrict dummy,
                        const uint n_channel_bundles)
 {
-    float in[8];
-    float out[8];
+    float4 in[8];
+    float4 out[8];
 
     uint M = 0;
     for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
@@ -705,55 +810,82 @@ kernel void delay_8(global uint * restrict dummy,
             case 0:
                 #pragma unroll
                 for (uint p = 0; p < 8; ++p) {
-                    out[p] = in[p];
+                    out[p].s0 = in[p].s0;
+                    out[p].s1 = in[p].s0;
+                    out[p].s2 = in[p].s0;
+                    out[p].s3 = in[p].s0;
                 }
                 break;
             case 1:
                 #pragma unroll
                 for (uint p = 0; p < 8; ++p) {
-                    out[p] = in[p];
+                    out[p].s0 = in[p].s0;
+                    out[p].s1 = in[p].s0;
+                    out[p].s2 = in[p].s0;
+                    out[p].s3 = in[p].s0;
                 }
                 break;
             case 2:
                 #pragma unroll
                 for (uint p = 0; p < 8; ++p) {
-                    out[p] = in[p];
+                    out[p].s0 = in[p].s1;
+                    out[p].s1 = in[p].s1;
+                    out[p].s2 = in[p].s1;
+                    out[p].s3 = in[p].s1;
                 }
                 break;
             case 3:
                 #pragma unroll
                 for (uint p = 0; p < 8; ++p) {
-                    out[p] = in[p];
+                    out[p].s0 = in[p].s1;
+                    out[p].s1 = in[p].s1;
+                    out[p].s2 = in[p].s1;
+                    out[p].s3 = in[p].s1;
                 }
                 break;
             case 4:
                 #pragma unroll
                 for (uint p = 0; p < 8; ++p) {
-                    out[p] = in[p];
+                    out[p].s0 = in[p].s2;
+                    out[p].s1 = in[p].s2;
+                    out[p].s2 = in[p].s2;
+                    out[p].s3 = in[p].s2;
                 }
                 break;
             case 5:
                 #pragma unroll
                 for (uint p = 0; p < 8; ++p) {
-                    out[p] = in[p];
+                    out[p].s0 = in[p].s2;
+                    out[p].s1 = in[p].s2;
+                    out[p].s2 = in[p].s2;
+                    out[p].s3 = in[p].s2;
                 }
                 break;
             case 6:
                 #pragma unroll
                 for (uint p = 0; p < 8; ++p) {
-                    out[p] = in[p];
+                    out[p].s0 = in[p].s3;
+                    out[p].s1 = in[p].s3;
+                    out[p].s2 = in[p].s3;
+                    out[p].s3 = in[p].s3;
                 }
                 break;
             case 7:
                 #pragma unroll
                 for (uint p = 0; p < 8; ++p) {
-                    out[p] = in[p];
+                    out[p].s0 = in[p].s3;
+                    out[p].s1 = in[p].s3;
+                    out[p].s2 = in[p].s3;
+                    out[p].s3 = in[p].s3;
                 }
                 break;
             default:
                 #pragma unroll
                 for (uint p = 0; p < 8; ++p) {
-                    out[p] = 0.0f;
+                    out[p].s0 = 0.0f;
+                    out[p].s1 = 0.0f;
+                    out[p].s2 = 0.0f;
+                    out[p].s3 = 0.0f;
                 }
                 break;
         }
