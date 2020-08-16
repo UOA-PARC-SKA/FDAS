@@ -37,20 +37,26 @@ kernel void detect_${k}(global uint * restrict dummy,
 
             ${bundle_ty} hsum[${group_sz}];
 
+        % if k == 1:
             #pragma unroll
             for (uint p = 0; p < ${group_sz}; ++p) {
-            % if k == 1:
                 ${bundle_ty} from_fop = READ_CHANNEL(delay_to_detect[${k - 1}][p]);
                 hsum[p] = from_fop;
-            %else:
-                ${bundle_ty} from_sp = READ_CHANNEL(delay_to_detect[${k - 1}][p]);
-                ${bundle_ty} from_prev_hp = READ_CHANNEL(detect_to_detect[${k - 2}][p]);
-                hsum[p] = from_prev_hp + from_sp;
-            % endif
-            %if k < n_planes:
-                WRITE_CHANNEL(detect_to_detect[${k - 1}][p], hsum[p]);
-            % endif
             }
+        %else:
+            #pragma unroll
+            for (uint p = 0; p < ${group_sz}; ++p) {
+                ${bundle_ty} from_prev_hp = READ_CHANNEL(detect_to_detect[${k - 2}][p]);
+                ${bundle_ty} from_sp = READ_CHANNEL(delay_to_detect[${k - 1}][p]);
+                hsum[p] = from_prev_hp + from_sp;
+            }
+        % endif
+
+        %if k < n_planes:
+            #pragma unroll
+            for (uint p = 0; p < ${group_sz}; ++p)
+                WRITE_CHANNEL(detect_to_detect[${k - 1}][p], hsum[p]);
+        %endif
 
             bool cand[${group_sz * bundle_sz}];
 

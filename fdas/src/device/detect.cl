@@ -42,8 +42,11 @@ kernel void detect_1(global uint * restrict dummy,
             for (uint p = 0; p < 8; ++p) {
                 float2 from_fop = READ_CHANNEL(delay_to_detect[0][p]);
                 hsum[p] = from_fop;
-                WRITE_CHANNEL(detect_to_detect[0][p], hsum[p]);
             }
+
+            #pragma unroll
+            for (uint p = 0; p < 8; ++p)
+                WRITE_CHANNEL(detect_to_detect[0][p], hsum[p]);
 
             bool cand[16];
 
@@ -162,11 +165,14 @@ kernel void detect_2(global uint * restrict dummy,
 
             #pragma unroll
             for (uint p = 0; p < 8; ++p) {
-                float2 from_sp = READ_CHANNEL(delay_to_detect[1][p]);
                 float2 from_prev_hp = READ_CHANNEL(detect_to_detect[0][p]);
+                float2 from_sp = READ_CHANNEL(delay_to_detect[1][p]);
                 hsum[p] = from_prev_hp + from_sp;
-                WRITE_CHANNEL(detect_to_detect[1][p], hsum[p]);
             }
+
+            #pragma unroll
+            for (uint p = 0; p < 8; ++p)
+                WRITE_CHANNEL(detect_to_detect[1][p], hsum[p]);
 
             bool cand[16];
 
@@ -285,11 +291,14 @@ kernel void detect_3(global uint * restrict dummy,
 
             #pragma unroll
             for (uint p = 0; p < 8; ++p) {
-                float2 from_sp = READ_CHANNEL(delay_to_detect[2][p]);
                 float2 from_prev_hp = READ_CHANNEL(detect_to_detect[1][p]);
+                float2 from_sp = READ_CHANNEL(delay_to_detect[2][p]);
                 hsum[p] = from_prev_hp + from_sp;
-                WRITE_CHANNEL(detect_to_detect[2][p], hsum[p]);
             }
+
+            #pragma unroll
+            for (uint p = 0; p < 8; ++p)
+                WRITE_CHANNEL(detect_to_detect[2][p], hsum[p]);
 
             bool cand[16];
 
@@ -408,11 +417,14 @@ kernel void detect_4(global uint * restrict dummy,
 
             #pragma unroll
             for (uint p = 0; p < 8; ++p) {
-                float2 from_sp = READ_CHANNEL(delay_to_detect[3][p]);
                 float2 from_prev_hp = READ_CHANNEL(detect_to_detect[2][p]);
+                float2 from_sp = READ_CHANNEL(delay_to_detect[3][p]);
                 hsum[p] = from_prev_hp + from_sp;
-                WRITE_CHANNEL(detect_to_detect[3][p], hsum[p]);
             }
+
+            #pragma unroll
+            for (uint p = 0; p < 8; ++p)
+                WRITE_CHANNEL(detect_to_detect[3][p], hsum[p]);
 
             bool cand[16];
 
@@ -531,11 +543,14 @@ kernel void detect_5(global uint * restrict dummy,
 
             #pragma unroll
             for (uint p = 0; p < 8; ++p) {
-                float2 from_sp = READ_CHANNEL(delay_to_detect[4][p]);
                 float2 from_prev_hp = READ_CHANNEL(detect_to_detect[3][p]);
+                float2 from_sp = READ_CHANNEL(delay_to_detect[4][p]);
                 hsum[p] = from_prev_hp + from_sp;
-                WRITE_CHANNEL(detect_to_detect[4][p], hsum[p]);
             }
+
+            #pragma unroll
+            for (uint p = 0; p < 8; ++p)
+                WRITE_CHANNEL(detect_to_detect[4][p], hsum[p]);
 
             bool cand[16];
 
@@ -654,11 +669,14 @@ kernel void detect_6(global uint * restrict dummy,
 
             #pragma unroll
             for (uint p = 0; p < 8; ++p) {
-                float2 from_sp = READ_CHANNEL(delay_to_detect[5][p]);
                 float2 from_prev_hp = READ_CHANNEL(detect_to_detect[4][p]);
+                float2 from_sp = READ_CHANNEL(delay_to_detect[5][p]);
                 hsum[p] = from_prev_hp + from_sp;
-                WRITE_CHANNEL(detect_to_detect[5][p], hsum[p]);
             }
+
+            #pragma unroll
+            for (uint p = 0; p < 8; ++p)
+                WRITE_CHANNEL(detect_to_detect[5][p], hsum[p]);
 
             bool cand[16];
 
@@ -777,11 +795,14 @@ kernel void detect_7(global uint * restrict dummy,
 
             #pragma unroll
             for (uint p = 0; p < 8; ++p) {
-                float2 from_sp = READ_CHANNEL(delay_to_detect[6][p]);
                 float2 from_prev_hp = READ_CHANNEL(detect_to_detect[5][p]);
+                float2 from_sp = READ_CHANNEL(delay_to_detect[6][p]);
                 hsum[p] = from_prev_hp + from_sp;
-                WRITE_CHANNEL(detect_to_detect[6][p], hsum[p]);
             }
+
+            #pragma unroll
+            for (uint p = 0; p < 8; ++p)
+                WRITE_CHANNEL(detect_to_detect[6][p], hsum[p]);
 
             bool cand[16];
 
@@ -900,10 +921,11 @@ kernel void detect_8(global uint * restrict dummy,
 
             #pragma unroll
             for (uint p = 0; p < 8; ++p) {
-                float2 from_sp = READ_CHANNEL(delay_to_detect[7][p]);
                 float2 from_prev_hp = READ_CHANNEL(detect_to_detect[6][p]);
+                float2 from_sp = READ_CHANNEL(delay_to_detect[7][p]);
                 hsum[p] = from_prev_hp + from_sp;
             }
+
 
             bool cand[16];
 
