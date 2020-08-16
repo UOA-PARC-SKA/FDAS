@@ -1,7 +1,8 @@
 
 __attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
-kernel void detect_${k}(global uint * restrict dummy,
+kernel void detect_${k}(global uint * restrict detection_location,
+                     global float * restrict detection_amplitude,
                      float threshold,
                      uint n_filters,
                      uint negative_filters,
@@ -97,8 +98,10 @@ kernel void detect_${k}(global uint * restrict dummy,
         bool is_valid = (valid & (1l << d)) > 0;
         #pragma unroll
         for (uint x = 0; x < ${group_sz * bundle_sz}; ++x) {
-            WRITE_CHANNEL(detect_to_store_location[${k - 1}][x], is_valid ? location_buffer[d][x] : HMS_INVALID_LOCATION);
-            WRITE_CHANNEL(detect_to_store_amplitude[${k - 1}][x], is_valid ? amplitude_buffer[d][x] : -1.0f);
+##            WRITE_CHANNEL(detect_to_store_location[${k - 1}][x], is_valid ? location_buffer[d][x] : HMS_INVALID_LOCATION);
+##            WRITE_CHANNEL(detect_to_store_amplitude[${k - 1}][x], is_valid ? amplitude_buffer[d][x] : -1.0f);
+            detection_location[${(k-1) * detection_sz * group_sz * bundle_sz} + d * ${group_sz * bundle_sz} + x] = is_valid ? location_buffer[d][x] : HMS_INVALID_LOCATION;
+            detection_amplitude[${(k-1) * detection_sz * group_sz * bundle_sz} + d * ${group_sz * bundle_sz} + x] = is_valid ? amplitude_buffer[d][x] : -1.0f;
         }
     }
 }

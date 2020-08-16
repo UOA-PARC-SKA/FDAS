@@ -132,7 +132,7 @@ bool FDAS::initialise_accelerator(std::string bitstream_file_name,
         name = "detect_" + std::to_string(h + 1);
         cl_chkref(detect_kernels[h].reset(new cl::Kernel(*program, name.c_str(), &status)));
     }
-    cl_chkref(store_cands_kernel.reset(new cl::Kernel(*program, "store_cands", &status)));
+//    cl_chkref(store_cands_kernel.reset(new cl::Kernel(*program, "store_cands", &status)));
 
     // Buffers
     size_t total_allocated = 0;
@@ -310,21 +310,22 @@ bool FDAS::perform_harmonic_summing(const FDAS::ThreshType &thresholds, const FD
         }
 
         auto &detect_k = *detect_kernels[h];
-        cl_chk(detect_k.setArg<cl::Buffer>(0, *fop_buffer));
-        cl_chk(detect_k.setArg<cl_float>(1, thresholds[h]));
-        cl_chk(detect_k.setArg<cl_uint>(2, n_filters));
-        cl_chk(detect_k.setArg<cl_uint>(3, negative_filters));
-        cl_chk(detect_k.setArg<cl_uint>(4, n_filter_groups));
-        cl_chk(detect_k.setArg<cl_uint>(5, n_channel_bundles));
+        cl_chk(detect_k.setArg<cl::Buffer>(0, *detection_location_buffer));
+        cl_chk(detect_k.setArg<cl::Buffer>(1, *detection_amplitude_buffer));
+        cl_chk(detect_k.setArg<cl_float>(2, thresholds[h]));
+        cl_chk(detect_k.setArg<cl_uint>(3, n_filters));
+        cl_chk(detect_k.setArg<cl_uint>(4, negative_filters));
+        cl_chk(detect_k.setArg<cl_uint>(5, n_filter_groups));
+        cl_chk(detect_k.setArg<cl_uint>(6, n_channel_bundles));
 
         cl::CommandQueue detect_q(*context, default_device, CL_QUEUE_PROFILING_ENABLE);
         detect_queues.emplace_back(detect_q);
         cl_chk(detect_q.enqueueTask(detect_k, nullptr, &detect_evs[h]));
     }
 
-    cl_chk(store_cands_kernel->setArg<cl::Buffer>(0, *detection_location_buffer));
-    cl_chk(store_cands_kernel->setArg<cl::Buffer>(1, *detection_amplitude_buffer));
-    cl_chk(store_cands_queue.enqueueTask(*store_cands_kernel, nullptr, &store_cands_ev));
+//    cl_chk(store_cands_kernel->setArg<cl::Buffer>(0, *detection_location_buffer));
+//    cl_chk(store_cands_kernel->setArg<cl::Buffer>(1, *detection_amplitude_buffer));
+//    cl_chk(store_cands_queue.enqueueTask(*store_cands_kernel, nullptr, &store_cands_ev));
 
     for (auto &q : preload_queues)
         cl_chk(q.finish());
@@ -335,9 +336,9 @@ bool FDAS::perform_harmonic_summing(const FDAS::ThreshType &thresholds, const FD
     for (auto &q : detect_queues)
         cl_chk(q.finish());
 
-    cl_chk(store_cands_queue.finish());
+//    cl_chk(store_cands_queue.finish());
 
-    print_duration("Harmonic summing (1/2 FOP)", preload_evs[0][0], store_cands_ev);
+    print_duration("Harmonic summing (1/2 FOP)", preload_evs[0][0], detect_evs[n_planes - 1]);
 
     return true;
 }

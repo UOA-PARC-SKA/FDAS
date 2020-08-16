@@ -11,5 +11,5 @@
 #define WRITE_CHANNEL(ch, x) write_channel_altera(ch, x)
 #endif
 
-#include "ft_conv.cl"
+// #include "ft_conv.cl"
 #include "hsum.cl"
