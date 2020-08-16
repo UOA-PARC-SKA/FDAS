@@ -10,61 +10,61 @@ kernel void store_cands(global uint * restrict detection_location,
     for (uint h = 0; h < 8; ++h) {
         #pragma unroll 1
         for (uint d = 0; d < 64; ++d) {
-            uint loc[32];
-            float amp[32];
+            uint loc[16];
+            float amp[16];
             switch (h) {
                 case 0:
                     #pragma unroll
-                    for (uint x = 0; x < 32; ++x) {
+                    for (uint x = 0; x < 16; ++x) {
                         loc[x] = READ_CHANNEL(detect_to_store_location[0][x]);
                         amp[x] = READ_CHANNEL(detect_to_store_amplitude[0][x]);
                     }
                     break;
                 case 1:
                     #pragma unroll
-                    for (uint x = 0; x < 32; ++x) {
+                    for (uint x = 0; x < 16; ++x) {
                         loc[x] = READ_CHANNEL(detect_to_store_location[1][x]);
                         amp[x] = READ_CHANNEL(detect_to_store_amplitude[1][x]);
                     }
                     break;
                 case 2:
                     #pragma unroll
-                    for (uint x = 0; x < 32; ++x) {
+                    for (uint x = 0; x < 16; ++x) {
                         loc[x] = READ_CHANNEL(detect_to_store_location[2][x]);
                         amp[x] = READ_CHANNEL(detect_to_store_amplitude[2][x]);
                     }
                     break;
                 case 3:
                     #pragma unroll
-                    for (uint x = 0; x < 32; ++x) {
+                    for (uint x = 0; x < 16; ++x) {
                         loc[x] = READ_CHANNEL(detect_to_store_location[3][x]);
                         amp[x] = READ_CHANNEL(detect_to_store_amplitude[3][x]);
                     }
                     break;
                 case 4:
                     #pragma unroll
-                    for (uint x = 0; x < 32; ++x) {
+                    for (uint x = 0; x < 16; ++x) {
                         loc[x] = READ_CHANNEL(detect_to_store_location[4][x]);
                         amp[x] = READ_CHANNEL(detect_to_store_amplitude[4][x]);
                     }
                     break;
                 case 5:
                     #pragma unroll
-                    for (uint x = 0; x < 32; ++x) {
+                    for (uint x = 0; x < 16; ++x) {
                         loc[x] = READ_CHANNEL(detect_to_store_location[5][x]);
                         amp[x] = READ_CHANNEL(detect_to_store_amplitude[5][x]);
                     }
                     break;
                 case 6:
                     #pragma unroll
-                    for (uint x = 0; x < 32; ++x) {
+                    for (uint x = 0; x < 16; ++x) {
                         loc[x] = READ_CHANNEL(detect_to_store_location[6][x]);
                         amp[x] = READ_CHANNEL(detect_to_store_amplitude[6][x]);
                     }
                     break;
                 case 7:
                     #pragma unroll
-                    for (uint x = 0; x < 32; ++x) {
+                    for (uint x = 0; x < 16; ++x) {
                         loc[x] = READ_CHANNEL(detect_to_store_location[7][x]);
                         amp[x] = READ_CHANNEL(detect_to_store_amplitude[7][x]);
                     }
@@ -74,9 +74,9 @@ kernel void store_cands(global uint * restrict detection_location,
             }
 
             #pragma unroll
-            for (uint x = 0; x < 32; ++x) {
-                detection_location[h * 2048 + d * 32 + x] = loc[x];
-                detection_amplitude[h * 2048 + d * 32 + x] = amp[x];
+            for (uint x = 0; x < 16; ++x) {
+                detection_location[h * 1024 + d * 16 + x] = loc[x];
+                detection_amplitude[h * 1024 + d * 16 + x] = amp[x];
             }
         }
     }
