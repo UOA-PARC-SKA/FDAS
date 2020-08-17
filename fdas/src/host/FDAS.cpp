@@ -116,10 +116,12 @@ bool FDAS::initialise_accelerator(std::string bitstream_file_name,
     bitstream.shrink_to_fit();
 
     // Kernels
+/*
     cl_chkref(tile_input_kernel.reset(new cl::Kernel(*program, "tile_input", &status)));
     cl_chkref(store_tiles_kernel.reset(new cl::Kernel(*program, "store_tiles", &status)));
     cl_chkref(mux_and_mult_kernel.reset(new cl::Kernel(*program, "mux_and_mult", &status)));
     cl_chkref(square_and_discard_kernel.reset(new cl::Kernel(*program, "square_and_discard", &status)));
+*/
 
     preload_kernels.resize(HMS_N_PLANES);
     delay_kernels.resize(HMS_N_PLANES);
