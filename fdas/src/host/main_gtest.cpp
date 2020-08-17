@@ -74,6 +74,7 @@ protected:
     }
 };
 
+/*
 TEST_P(FDASTest, FT_Convolution) {
     FDAS pipeline(std::cerr);
     ASSERT_TRUE(pipeline.initialise_accelerator(bitstream_file, FDAS::choose_first_platform, FDAS::choose_accelerator_devices));
@@ -99,6 +100,7 @@ TEST_P(FDASTest, FT_Convolution) {
     ));
     npy::SaveArrayAsNumpy(fop_file(), false, fop_shape.size(), fop_shape.data(), fop);
 }
+*/
 
 TEST_P(FDASTest, Harmonic_Summing) {
     FDAS pipeline(std::cerr);
