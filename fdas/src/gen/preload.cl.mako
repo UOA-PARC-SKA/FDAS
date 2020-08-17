@@ -1,7 +1,7 @@
 <%
     from hsum_codegen import get_output_mapping
 
-    bundle_idx = lambda i: f".s{i}" if bundle_sz > 1 else ""
+    bundle_idx = lambda i: f".s{i:X}" if bundle_sz > 1 else ""
 
     out_map = get_output_mapping(group_sz, k)
     n_buffers = max(out_map[-1].keys()) + 1

@@ -29,8 +29,8 @@ def main():
     n_planes = 8
     detection_sz = 64  # divisible by group_sz * bundle_sz
 
-    group_sz = 11
-    bundle_sz = 2
+    group_sz = 2
+    bundle_sz = 8
     bundle_ty = "float" if bundle_sz == 1 else f"float{bundle_sz}"
 
     preload_template = Template(filename='preload.cl.mako')

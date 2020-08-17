@@ -10,7 +10,7 @@ kernel void detect_${k}(global uint * restrict detection_location,
                      uint n_channel_bundles)
 {
 <%
-    bundle_idx = lambda i: f".s{i}" if bundle_sz > 1 else ""
+    bundle_idx = lambda i: f".s{i:X}" if bundle_sz > 1 else ""
     assert detection_sz <= 64 and bin(detection_sz).count('1') == 1  # power of 2
 %>\
     uint location_buffer[${detection_sz}][${group_sz * bundle_sz}];
