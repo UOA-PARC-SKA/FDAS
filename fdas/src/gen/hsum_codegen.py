@@ -35,7 +35,6 @@ def main():
 
     preload_template = Template(filename='preload.cl.mako')
     detect_template = Template(filename='detect.cl.mako')
-    store_cands_template = Template(filename='store_cands.cl.mako')
     gen_info_template = Template(filename='gen_info.h.mako')
 
     with open("../device/preload.cl", 'wt') as preload_file:
@@ -73,16 +72,6 @@ channel float detect_to_store_amplitude[{n_planes}][{group_sz * bundle_sz}] __at
                 bundle_ty=bundle_ty,
                 k=h + 1
             ))
-    with open("../device/store_cands.cl", 'wt') as store_cands_file:
-        store_cands_file.write(f"""
-// Auto-generated file -- see `hsum_codegen.py` and `store_cands.cl.mako`.
-""")
-        store_cands_file.write(store_cands_template.render(
-            n_planes=n_planes,
-            detection_sz=detection_sz,
-            group_sz=group_sz,
-            bundle_sz=bundle_sz
-        ))
 
     with open("../host/gen_info.h", 'wt') as gen_info_file:
         gen_info_file.write(f"""
