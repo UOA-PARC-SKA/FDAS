@@ -1,5 +1,25 @@
+/*
+ * FDAS -- Fourier Domain Acceleration Search, FPGA-accelerated with OpenCL
+ * Copyright (C) 2020  Parallel and Reconfigurable Computing Lab,
+ *                     Dept. of Electrical, Computer, and Software Engineering,
+ *                     University of Auckland, New Zealand
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
 
 // Auto-generated file -- see `hsum_codegen.py` and `detect.cl.mako`.
+
 channel float8 detect_to_detect[7][2] __attribute__((depth(0)));
 channel uint  detect_to_store_location[8][16] __attribute__((depth(0)));
 channel float detect_to_store_amplitude[8][16] __attribute__((depth(0)));

@@ -1,3 +1,24 @@
+#!/usr/bin/env python3
+
+# FDAS -- Fourier Domain Acceleration Search, FPGA-accelerated with OpenCL
+# Copyright (C) 2020  Parallel and Reconfigurable Computing Lab,
+#                     Dept. of Electrical, Computer, and Software Engineering,
+#                     University of Auckland, New Zealand
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+
 from math import gcd
 from collections import defaultdict
 from mako.template import Template
@@ -37,8 +58,29 @@ def main():
     detect_template = Template(filename='detect.cl.mako')
     gen_info_template = Template(filename='gen_info.h.mako')
 
+    copyright_header = """/*
+ * FDAS -- Fourier Domain Acceleration Search, FPGA-accelerated with OpenCL
+ * Copyright (C) 2020  Parallel and Reconfigurable Computing Lab,
+ *                     Dept. of Electrical, Computer, and Software Engineering,
+ *                     University of Auckland, New Zealand
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+"""
+
     with open("../device/preload.cl", 'wt') as preload_file:
-        preload_file.write(f"""
+        preload_file.write(f"""{copyright_header}
 // Auto-generated file -- see `hsum_codegen.py` and `preload.cl.mako`.
 
 channel {bundle_ty} preload_to_delay[{n_planes}][{group_sz}] __attribute__((depth(0)));
@@ -57,8 +99,9 @@ inline ulong fop_idx(int filter, uint bundle) {{
             ))
 
     with open("../device/detect.cl", 'wt') as detect_file:
-        detect_file.write(f"""
+        detect_file.write(f"""{copyright_header}
 // Auto-generated file -- see `hsum_codegen.py` and `detect.cl.mako`.
+
 channel {bundle_ty} detect_to_detect[{n_planes - 1}][{group_sz}] __attribute__((depth(0)));
 channel uint  detect_to_store_location[{n_planes}][{group_sz * bundle_sz}] __attribute__((depth(0)));
 channel float detect_to_store_amplitude[{n_planes}][{group_sz * bundle_sz}] __attribute__((depth(0)));
@@ -74,7 +117,7 @@ channel float detect_to_store_amplitude[{n_planes}][{group_sz * bundle_sz}] __at
             ))
 
     with open("../host/gen_info.h", 'wt') as gen_info_file:
-        gen_info_file.write(f"""
+        gen_info_file.write(f"""{copyright_header}
 // Auto-generated file -- see `hsum_codegen.py` and `gen_info.h.mako`.
 """)
         gen_info_file.write(gen_info_template.render(
