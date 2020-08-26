@@ -16,7 +16,7 @@
 ## You should have received a copy of the GNU General Public License
 ## along with this program.  If not, see <https://www.gnu.org/licenses/>.
 <%
-    from hsum_codegen import get_output_mapping
+    from cl_codegen import get_output_mapping
 
     bundle_idx = lambda i: f".s{i:X}" if bundle_sz > 1 else ""
 
