@@ -93,7 +93,7 @@ protected:
 
 TEST_P(FDASTest, FT_Convolution) {
     FDAS pipeline(std::cerr);
-    ASSERT_TRUE(pipeline.initialise_accelerator(bitstream_file, FDAS::choose_first_platform, FDAS::choose_accelerator_devices));
+    ASSERT_TRUE(pipeline.initialise_accelerator(bitstream_file, FDAS::choose_first_platform, FDAS::choose_accelerator_devices, input.size()));
 
     ASSERT_TRUE(pipeline.perform_ft_convolution(input, input_shape, templates, templates_shape));
 
@@ -119,7 +119,7 @@ TEST_P(FDASTest, FT_Convolution) {
 
 TEST_P(FDASTest, Harmonic_Summing) {
     FDAS pipeline(std::cerr);
-    ASSERT_TRUE(pipeline.initialise_accelerator(bitstream_file, FDAS::choose_first_platform, FDAS::choose_accelerator_devices));
+    ASSERT_TRUE(pipeline.initialise_accelerator(bitstream_file, FDAS::choose_first_platform, FDAS::choose_accelerator_devices, input.size()));
 
     ASSERT_TRUE(pipeline.inject_FOP(fop_ref, fop_ref_shape));
 

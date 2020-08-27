@@ -26,7 +26,6 @@
 
 namespace GenInfo {
 namespace Input {
-    static const cl_ulong n_channels                = ${n_channels}L; // TODO: this (and everything derived from it) doesn't need to be statically known
     static const cl_uint  n_filters                 = ${n_filters};
     static const cl_uint  n_taps                    = ${n_taps};
     static const cl_uint  n_filters_per_accel_sign  = ${n_filters_per_accel_sign};
@@ -43,17 +42,8 @@ namespace FDF {
     static const cl_uint  tile_sz                   = ${fdf_tile_sz};
     static const cl_uint  tile_overlap              = ${fdf_tile_overlap};
     static const cl_uint  tile_payload              = ${fdf_tile_payload};
-    static const cl_uint  n_tiles                   = ${fdf_n_tiles};
-    static const cl_ulong input_sz                  = ${fdf_input_sz}L;
-    static const cl_ulong padded_input_sz           = ${fdf_padded_input_sz}L;
-    static const cl_ulong tiled_input_sz            = ${fdf_tiled_input_sz}L;
-    static const cl_ulong output_sz                 = ${fdf_output_sz}L;
-    static const cl_ulong templates_sz              = ${fdf_templates_sz}L;
 
     static const cl_uint  group_sz                  = ${fdf_group_sz};
-}
-namespace FOP {
-    static const cl_ulong sz                        = ${fop_sz}L;
 }
 namespace HMS {
     static const cl_uint  n_planes                  = ${hms_n_planes};

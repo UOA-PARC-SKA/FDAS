@@ -52,11 +52,9 @@ def main():
     # Input parameters
     mode = 'emu'
     if mode == 'fpga':
-        n_channels = 2 ** 22
         n_filters_per_accel_sign = 42
         n_taps = 421
     elif mode == 'emu':
-        n_channels = 62176
         n_filters_per_accel_sign = 10
         n_taps = 106
     else:
@@ -79,19 +77,7 @@ def main():
     fdf_tile_overlap = n_taps - 1
     fdf_tile_payload = fdf_tile_sz - fdf_tile_overlap
 
-    fdf_n_tiles = n_channels // fdf_tile_payload
-
-    fdf_input_sz = fdf_n_tiles * fdf_tile_payload
-    fdf_padded_input_sz = fdf_tile_payload + fdf_input_sz
-    fdf_tiled_input_sz = fdf_n_tiles * fdf_tile_sz
-
-    fdf_output_sz = fdf_input_sz
-    fdf_templates_sz = n_filters * fdf_tile_sz
-
     fdf_group_sz = 5 if mode == 'fpga' else 3
-
-    # Filter-output plane
-    fop_sz = n_filters * fdf_output_sz
 
     # Harmonic summing
     hms_n_planes = 8

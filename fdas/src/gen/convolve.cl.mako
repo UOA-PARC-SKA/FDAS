@@ -22,7 +22,8 @@ kernel void mux_and_mult(global float2 * restrict tiles,
 
 __attribute__((reqd_work_group_size(${fft_n_points_per_terminal}, 1, 1)))
 __attribute__((uses_global_work_offset(0)))
-kernel void square_and_discard(global float * restrict fop)
+kernel void square_and_discard(global float * restrict fop,
+                               const uint fop_row_sz) // temporary!
 {
     float buf[${fdf_group_sz}][${fft_n_parallel}];
 
@@ -45,7 +46,7 @@ kernel void square_and_discard(global float * restrict fop)
 
             int element = p * ${fft_n_points_per_terminal} + step - ${fdf_tile_overlap};
             if (element >= 0)
-                fop[(batch + f) * ${fdf_output_sz} + tile * ${fdf_tile_payload} + element] = buf[f][q];
+                fop[(batch + f) * fop_row_sz + tile * ${fdf_tile_payload} + element] = buf[f][q];
         }
     }
 }

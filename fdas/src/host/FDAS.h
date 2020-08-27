@@ -46,7 +46,10 @@ public:
 public:
     FDAS(std::ostream &log) : log(log) {}
 
-    bool initialise_accelerator(std::string bitstream_file_name, const std::function<bool(const std::string &, const std::string &)> &platform_selector, const std::function<bool(int, int, const std::string &)> &device_selector);
+    bool initialise_accelerator(std::string bitstream_file_name,
+                                const std::function<bool(const std::string &, const std::string &)> &platform_selector,
+                                const std::function<bool(int, int, const std::string &)> &device_selector,
+                                const cl_uint n_input_channels);
 
     bool perform_ft_convolution(const InputType &input, const ShapeType &input_shape,
                                 const TemplatesType &templates, const ShapeType &templates_shape);
@@ -69,6 +72,14 @@ public:
     static bool acl1_on_x240(int device_num, int device_type, const std::string &device_name) { return device_num == 1 && device_type == CL_DEVICE_TYPE_ACCELERATOR; }
 
 private:
+    cl_uint n_tiles;
+    cl_uint input_sz;
+    cl_uint padded_input_sz;
+    cl_uint tiled_input_sz;
+    cl_uint templates_sz;
+    cl_uint fop_row_sz;
+    cl_uint fop_sz;
+
     cl::Platform platform;
     cl::Device default_device;
     std::vector<cl::Device> devices;

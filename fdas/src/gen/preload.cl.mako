@@ -45,7 +45,7 @@ kernel void preload_${k}(global ${hms_bundle_ty} * restrict fop,
                       const uint n_rows,
                       const uint base_row_rem,
                   % for r in range(n_buffers):
-                      const ulong filter_offset_${r},
+                      const uint filter_offset_${r},
                   % endfor
                       const uint n_channel_bundles)
 {

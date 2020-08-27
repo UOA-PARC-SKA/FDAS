@@ -25,7 +25,6 @@
 
 namespace GenInfo {
 namespace Input {
-    static const cl_ulong n_channels                = 62176L; // TODO: this (and everything derived from it) doesn't need to be statically known
     static const cl_uint  n_filters                 = 21;
     static const cl_uint  n_taps                    = 106;
     static const cl_uint  n_filters_per_accel_sign  = 10;
@@ -42,17 +41,8 @@ namespace FDF {
     static const cl_uint  tile_sz                   = 2048;
     static const cl_uint  tile_overlap              = 105;
     static const cl_uint  tile_payload              = 1943;
-    static const cl_uint  n_tiles                   = 32;
-    static const cl_ulong input_sz                  = 62176L;
-    static const cl_ulong padded_input_sz           = 64119L;
-    static const cl_ulong tiled_input_sz            = 65536L;
-    static const cl_ulong output_sz                 = 62176L;
-    static const cl_ulong templates_sz              = 43008L;
 
     static const cl_uint  group_sz                  = 3;
-}
-namespace FOP {
-    static const cl_ulong sz                        = 1305696L;
 }
 namespace HMS {
     static const cl_uint  n_planes                  = 8;

@@ -250,7 +250,8 @@ kernel void mux_and_mult(global float2 * restrict tiles,
 
 __attribute__((reqd_work_group_size(512, 1, 1)))
 __attribute__((uses_global_work_offset(0)))
-kernel void square_and_discard(global float * restrict fop)
+kernel void square_and_discard(global float * restrict fop,
+                               const uint fop_row_sz) // temporary!
 {
     float buf[3][4];
 
@@ -273,7 +274,7 @@ kernel void square_and_discard(global float * restrict fop)
 
             int element = p * 512 + step - 105;
             if (element >= 0)
-                fop[(batch + f) * 62176 + tile * 1943 + element] = buf[f][q];
+                fop[(batch + f) * fop_row_sz + tile * 1943 + element] = buf[f][q];
         }
     }
 }
@@ -283,14 +284,14 @@ __attribute__((uses_global_work_offset(0)))
 kernel void preload_1(global float2 * restrict fop,
                       const uint n_rows,
                       const uint base_row_rem,
-                      const ulong filter_offset_0,
-                      const ulong filter_offset_1,
-                      const ulong filter_offset_2,
-                      const ulong filter_offset_3,
-                      const ulong filter_offset_4,
-                      const ulong filter_offset_5,
-                      const ulong filter_offset_6,
-                      const ulong filter_offset_7,
+                      const uint filter_offset_0,
+                      const uint filter_offset_1,
+                      const uint filter_offset_2,
+                      const uint filter_offset_3,
+                      const uint filter_offset_4,
+                      const uint filter_offset_5,
+                      const uint filter_offset_6,
+                      const uint filter_offset_7,
                       const uint n_channel_bundles)
 {
     float2 load[8];
@@ -368,10 +369,10 @@ __attribute__((uses_global_work_offset(0)))
 kernel void preload_2(global float2 * restrict fop,
                       const uint n_rows,
                       const uint base_row_rem,
-                      const ulong filter_offset_0,
-                      const ulong filter_offset_1,
-                      const ulong filter_offset_2,
-                      const ulong filter_offset_3,
+                      const uint filter_offset_0,
+                      const uint filter_offset_1,
+                      const uint filter_offset_2,
+                      const uint filter_offset_3,
                       const uint n_channel_bundles)
 {
     float2 load[4];
@@ -452,10 +453,10 @@ __attribute__((uses_global_work_offset(0)))
 kernel void preload_3(global float2 * restrict fop,
                       const uint n_rows,
                       const uint base_row_rem,
-                      const ulong filter_offset_0,
-                      const ulong filter_offset_1,
-                      const ulong filter_offset_2,
-                      const ulong filter_offset_3,
+                      const uint filter_offset_0,
+                      const uint filter_offset_1,
+                      const uint filter_offset_2,
+                      const uint filter_offset_3,
                       const uint n_channel_bundles)
 {
     float2 load[4];
@@ -543,8 +544,8 @@ __attribute__((uses_global_work_offset(0)))
 kernel void preload_4(global float2 * restrict fop,
                       const uint n_rows,
                       const uint base_row_rem,
-                      const ulong filter_offset_0,
-                      const ulong filter_offset_1,
+                      const uint filter_offset_0,
+                      const uint filter_offset_1,
                       const uint n_channel_bundles)
 {
     float2 load[2];
@@ -637,9 +638,9 @@ __attribute__((uses_global_work_offset(0)))
 kernel void preload_5(global float2 * restrict fop,
                       const uint n_rows,
                       const uint base_row_rem,
-                      const ulong filter_offset_0,
-                      const ulong filter_offset_1,
-                      const ulong filter_offset_2,
+                      const uint filter_offset_0,
+                      const uint filter_offset_1,
+                      const uint filter_offset_2,
                       const uint n_channel_bundles)
 {
     float2 load[3];
@@ -740,8 +741,8 @@ __attribute__((uses_global_work_offset(0)))
 kernel void preload_6(global float2 * restrict fop,
                       const uint n_rows,
                       const uint base_row_rem,
-                      const ulong filter_offset_0,
-                      const ulong filter_offset_1,
+                      const uint filter_offset_0,
+                      const uint filter_offset_1,
                       const uint n_channel_bundles)
 {
     float2 load[2];
@@ -848,8 +849,8 @@ __attribute__((uses_global_work_offset(0)))
 kernel void preload_7(global float2 * restrict fop,
                       const uint n_rows,
                       const uint base_row_rem,
-                      const ulong filter_offset_0,
-                      const ulong filter_offset_1,
+                      const uint filter_offset_0,
+                      const uint filter_offset_1,
                       const uint n_channel_bundles)
 {
     float2 load[2];
@@ -963,7 +964,7 @@ __attribute__((uses_global_work_offset(0)))
 kernel void preload_8(global float2 * restrict fop,
                       const uint n_rows,
                       const uint base_row_rem,
-                      const ulong filter_offset_0,
+                      const uint filter_offset_0,
                       const uint n_channel_bundles)
 {
     float2 load[1];
