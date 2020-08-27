@@ -74,7 +74,6 @@ public:
 private:
     cl_uint n_tiles;
     cl_uint input_sz;
-    cl_uint padded_input_sz;
     cl_uint tiled_input_sz;
     cl_uint templates_sz;
     cl_uint fop_row_sz;
@@ -88,7 +87,8 @@ private:
     std::unique_ptr<cl::Program> program;
 
     std::vector<std::unique_ptr<cl::Kernel>> fft_kernels;
-    std::unique_ptr<cl::Kernel> tile_input_kernel;
+    std::unique_ptr<cl::Kernel> load_input_kernel;
+    std::unique_ptr<cl::Kernel> tile_kernel;
     std::unique_ptr<cl::Kernel> store_tiles_kernel;
     std::unique_ptr<cl::Kernel> mux_and_mult_kernel;
     std::unique_ptr<cl::Kernel> square_and_discard_kernel;

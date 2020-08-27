@@ -10,6 +10,9 @@
 #endif
 
 <% depth_attr = "__attribute__((depth(0)))" %>\
+
+channel float2 load_to_tile[${fft_n_parallel}] ${depth_attr};
+
 channel float2 fft_in[${fft_n_parallel}] ${depth_attr};
 channel float2 fft_out[${fft_n_parallel}] ${depth_attr};
 

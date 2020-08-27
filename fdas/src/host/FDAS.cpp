@@ -142,7 +142,8 @@ bool FDAS::initialise_accelerator(std::string bitstream_file_name,
         auto name = "fft_" + std::to_string(i);
         cl_chkref(fft_kernels[i].reset(new cl::Kernel(*program, name.c_str(), &status)));
     }
-    cl_chkref(tile_input_kernel.reset(new cl::Kernel(*program, "tile_input", &status)));
+    cl_chkref(load_input_kernel.reset(new cl::Kernel(*program, "load_input", &status)));
+    cl_chkref(tile_kernel.reset(new cl::Kernel(*program, "tile", &status)));
     cl_chkref(store_tiles_kernel.reset(new cl::Kernel(*program, "store_tiles", &status)));
     cl_chkref(mux_and_mult_kernel.reset(new cl::Kernel(*program, "mux_and_mult", &status)));
     cl_chkref(square_and_discard_kernel.reset(new cl::Kernel(*program, "square_and_discard", &status)));
@@ -162,7 +163,6 @@ bool FDAS::initialise_accelerator(std::string bitstream_file_name,
     // Buffers
     n_tiles = n_input_channels / FDF::tile_payload;
     input_sz = n_tiles * FDF::tile_payload;
-    padded_input_sz = FDF::tile_overlap + input_sz;
     tiled_input_sz = n_tiles * FDF::tile_sz;
     templates_sz = Input::n_filters * FDF::tile_sz;
     fop_row_sz = input_sz;
@@ -170,7 +170,7 @@ bool FDAS::initialise_accelerator(std::string bitstream_file_name,
 
     size_t total_allocated = 0;
 
-    cl_chkref(input_buffer.reset(new cl::Buffer(*context, CL_MEM_READ_ONLY, sizeof(cl_float2) * padded_input_sz, nullptr, &status)));
+    cl_chkref(input_buffer.reset(new cl::Buffer(*context, CL_MEM_READ_ONLY, sizeof(cl_float2) * input_sz, nullptr, &status)));
     total_allocated += input_buffer->getInfo<CL_MEM_SIZE>();
 
     cl_chkref(tiles_buffer.reset(new cl::Buffer(*context, CL_MEM_READ_WRITE, sizeof(cl_float2) * tiled_input_sz, nullptr, &status)));
@@ -232,7 +232,8 @@ bool FDAS::perform_ft_convolution(const FDAS::InputType &input, const FDAS::Shap
         fft_queues.emplace_back(fft_q);
     }
 
-    cl::CommandQueue tile_input_q(*context, default_device, CL_QUEUE_PROFILING_ENABLE);
+    cl::CommandQueue load_input_q(*context, default_device, CL_QUEUE_PROFILING_ENABLE);
+    cl::CommandQueue tile_q(*context, default_device, CL_QUEUE_PROFILING_ENABLE);
     cl::CommandQueue store_tiles_q(*context, default_device, CL_QUEUE_PROFILING_ENABLE);
     cl::CommandQueue mux_and_mult_q(*context, default_device, CL_QUEUE_PROFILING_ENABLE);
     cl::CommandQueue square_and_discard_q(*context, default_device, CL_QUEUE_PROFILING_ENABLE);
@@ -245,7 +246,9 @@ bool FDAS::perform_ft_convolution(const FDAS::InputType &input, const FDAS::Shap
     cl::NDRange conv_global(FFT::n_points_per_terminal * n_tiles, Input::n_filters / FDF::group_sz);
 
     // Set static kernel arguments
-    cl_chk(tile_input_kernel->setArg<cl::Buffer>(0, *input_buffer));
+    cl_chk(load_input_kernel->setArg<cl::Buffer>(0, *input_buffer));
+    cl_chk(load_input_kernel->setArg<cl_uint>(1, input_sz));
+    cl_chk(tile_kernel->setArg<cl_uint>(0, n_tiles));
     cl_chk(store_tiles_kernel->setArg<cl::Buffer>(0, *tiles_buffer));
     cl_chk(mux_and_mult_kernel->setArg<cl::Buffer>(0, *tiles_buffer));
     cl_chk(mux_and_mult_kernel->setArg<cl::Buffer>(1, *templates_buffer));
@@ -254,17 +257,15 @@ bool FDAS::perform_ft_convolution(const FDAS::InputType &input, const FDAS::Shap
 
 
     // Copy input to device
-    cl_float2 zeros[FDF::tile_overlap];
-    memset(zeros, 0x0, sizeof(cl_float2) * FDF::tile_overlap);
-    cl_chk(buffer_q.enqueueWriteBuffer(*input_buffer, true, 0, sizeof(cl_float2) * FDF::tile_overlap, zeros));
-    cl_chk(buffer_q.enqueueWriteBuffer(*input_buffer, true, sizeof(cl_float2) * FDF::tile_overlap, sizeof(cl_float2) * input_sz, input.data()));
+    cl_chk(buffer_q.enqueueWriteBuffer(*input_buffer, true, 0, sizeof(cl_float2) * input_sz, input.data()));
     cl_chk(buffer_q.enqueueWriteBuffer(*templates_buffer, true, 0, sizeof(cl_float2) * templates_sz, templates.data()));
     cl_chk(buffer_q.finish());
 
-    cl::Event tile_input_ev, store_tiles_ev, mux_and_mult_ev, square_and_discard_ev;
+    cl::Event load_input_ev, tile_ev, store_tiles_ev, mux_and_mult_ev, square_and_discard_ev;
     cl::Event fft_evs[FDF::group_sz];
 
-    cl_chk(tile_input_q.enqueueNDRangeKernel(*tile_input_kernel, cl::NullRange, prep_global, prep_local, nullptr, &tile_input_ev));
+    cl_chk(load_input_q.enqueueTask(*load_input_kernel, nullptr, &load_input_ev));
+    cl_chk(tile_q.enqueueTask(*tile_kernel, nullptr, &tile_ev));
 
     auto& fwd_fft_k = *fft_kernels[0];
     auto& fwd_fft_q = fft_queues[0];
@@ -274,10 +275,11 @@ bool FDAS::perform_ft_convolution(const FDAS::InputType &input, const FDAS::Shap
 
     cl_chk(store_tiles_q.enqueueNDRangeKernel(*store_tiles_kernel, cl::NullRange, prep_global, prep_local, nullptr, &store_tiles_ev));
 
-    tile_input_q.finish();
+    load_input_q.finish();
+    tile_q.finish();
     fwd_fft_q.finish();
     store_tiles_q.finish();
-    print_duration("Preparation", tile_input_ev, store_tiles_ev);
+    print_duration("Preparation", load_input_ev, store_tiles_ev);
 
     cl_chk(mux_and_mult_q.enqueueNDRangeKernel(*mux_and_mult_kernel, cl::NullRange, conv_global, conv_local, nullptr, &mux_and_mult_ev));
 

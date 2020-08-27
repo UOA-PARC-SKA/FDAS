@@ -46,6 +46,15 @@ def lcm(vals):
     return lcm([x, lcm(xs)])
 
 
+def bit_rev(x, bits):
+    y = 0
+    for i in range(bits):
+        y <<= 1
+        y |= x & 1
+        x >>= 1
+    return y
+
+
 def main():
     # TODO: build an ArgumentParser around this
 

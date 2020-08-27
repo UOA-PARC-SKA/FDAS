@@ -47,7 +47,7 @@ kernel void fft_${i}(const uint n_tiles)
                 % endif
                 }
             } else {
-                data.i0 = data.i1 = data.i2 = data.i3 = 0.0f;
+                data.i0 = data.i1 = data.i2 = data.i3 = 0;
             }
 
             data = fft_step(data, s, fft_delay_elements, ${"is_inverse" if both_directions else "1"}, ${fft_n_points_log});

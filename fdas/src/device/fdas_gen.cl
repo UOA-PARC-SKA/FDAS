@@ -28,6 +28,9 @@
 #define WRITE_CHANNEL(ch, x) write_channel_altera(ch, x)
 #endif
 
+
+channel float2 load_to_tile[4] __attribute__((depth(0)));
+
 channel float2 fft_in[4] __attribute__((depth(0)));
 channel float2 fft_out[4] __attribute__((depth(0)));
 
@@ -108,7 +111,7 @@ kernel void fft_0(const uint n_tiles, const uint is_inverse)
                         data.i[p] = READ_CHANNEL(ifft_in[0][p]);
                 }
             } else {
-                data.i0 = data.i1 = data.i2 = data.i3 = 0.0f;
+                data.i0 = data.i1 = data.i2 = data.i3 = 0;
             }
 
             data = fft_step(data, s, fft_delay_elements, is_inverse, 11);
@@ -146,7 +149,7 @@ kernel void fft_1(const uint n_tiles)
                     data.i[p] = READ_CHANNEL(ifft_in[1][p]);
                 }
             } else {
-                data.i0 = data.i1 = data.i2 = data.i3 = 0.0f;
+                data.i0 = data.i1 = data.i2 = data.i3 = 0;
             }
 
             data = fft_step(data, s, fft_delay_elements, 1, 11);
@@ -184,7 +187,7 @@ kernel void fft_2(const uint n_tiles)
                     data.i[p] = READ_CHANNEL(ifft_in[2][p]);
                 }
             } else {
-                data.i0 = data.i1 = data.i2 = data.i3 = 0.0f;
+                data.i0 = data.i1 = data.i2 = data.i3 = 0;
             }
 
             data = fft_step(data, s, fft_delay_elements, 1, 11);
@@ -192,27 +195,97 @@ kernel void fft_2(const uint n_tiles)
     }
 }
 
-__attribute__((reqd_work_group_size(512, 1, 1)))
+
+__attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
-kernel void tile_input(global float2 * restrict input)
+kernel void load_input(global float * restrict input,
+                       const uint input_sz)
 {
-    local float2 __attribute__((bank_bits(10,9))) buf[4][512];
+    for (uint i = 0; i < input_sz / 4; ++i) {
+        float8 load = vload8(i, input);
+        WRITE_CHANNEL(load_to_tile[0], load.s01);
+        WRITE_CHANNEL(load_to_tile[1], load.s23);
+        WRITE_CHANNEL(load_to_tile[2], load.s45);
+        WRITE_CHANNEL(load_to_tile[3], load.s67);
+    }
+}
 
-    uint tile = get_group_id(0);
-    uint step = get_local_id(0);
-    uint chunk = step / 128;
-    uint chunk_rev = bit_reversed(chunk, 2);
-    uint bundle = step % 128;
+__attribute__((max_global_work_dim(0)))
+__attribute__((uses_global_work_offset(0)))
+kernel void tile(const uint n_tiles) {
+    float8 overlap_sr[28];
+    float2 __attribute__((bank_bits(9))) chunk_buf_0[2][512];
+    float2 __attribute__((bank_bits(9))) chunk_buf_1[2][512];
+    float2 __attribute__((bank_bits(9))) chunk_buf_2[2][512];
+    float2 __attribute__((bank_bits(9))) chunk_buf_3[2][512];
 
-    #pragma unroll
-    for (uint p = 0; p < 4; ++p)
-        buf[chunk_rev][bundle * 4 + p] = input[tile * 1940 + chunk * 512 + bundle * 4 + p];
+    #pragma loop_coalesce
+    for (uint t = 0; t < n_tiles + 1; ++t) {
+        for (uint s = 0; s < 512; ++s) {
+            if (t >= 1) {
+                WRITE_CHANNEL(fft_in[0], chunk_buf_0[1 - (t & 1)][s]);
+                WRITE_CHANNEL(fft_in[1], chunk_buf_2[1 - (t & 1)][s]);
+                WRITE_CHANNEL(fft_in[2], chunk_buf_1[1 - (t & 1)][s]);
+                WRITE_CHANNEL(fft_in[3], chunk_buf_3[1 - (t & 1)][s]);
+            }
 
-    barrier(CLK_LOCAL_MEM_FENCE);
+            if (t < n_tiles) {
+                float2 input[4];
+                if (s < 27) {
+                    input[0] = t >= 1 ? overlap_sr[0].s01 : 0;
+                    input[1] = t >= 1 ? overlap_sr[0].s23 : 0;
+                    input[2] = t >= 1 ? overlap_sr[0].s45 : 0;
+                    input[3] = t >= 1 ? overlap_sr[0].s67 : 0;
+                }
+                else {
+                    #pragma unroll
+                    for (uint p = 0; p < 4; ++p)
+                        input[p] = READ_CHANNEL(load_to_tile[p]);
+                }
 
-    #pragma unroll
-    for (uint p = 0; p < 4; ++p)
-        WRITE_CHANNEL(fft_in[p], buf[p][step]);
+                uint chunk = s / 128;
+                uint bundle = s % 128;
+
+                switch (chunk) {
+                    case 0:
+                        #pragma unroll
+                        for (uint p = 0; p < 4; ++p)
+                            chunk_buf_0[t & 1][bundle * 4 + p] = input[p];
+                        break;
+                    case 1:
+                        #pragma unroll
+                        for (uint p = 0; p < 4; ++p)
+                            chunk_buf_1[t & 1][bundle * 4 + p] = input[p];
+                        break;
+                    case 2:
+                        #pragma unroll
+                        for (uint p = 0; p < 4; ++p)
+                            chunk_buf_2[t & 1][bundle * 4 + p] = input[p];
+                        break;
+                    case 3:
+                        #pragma unroll
+                        for (uint p = 0; p < 4; ++p)
+                            chunk_buf_3[t & 1][bundle * 4 + p] = input[p];
+                        break;
+                    default:
+                        break;
+                }
+
+                if (s >= 485) {
+                    float8 ins_val;
+                    ins_val.s01 = input[0];
+                    ins_val.s23 = input[1];
+                    ins_val.s45 = input[2];
+                    ins_val.s67 = input[3];
+                    overlap_sr[27] = ins_val;
+                }
+            }
+
+            #pragma unroll
+            for (uint x = 0; x < 27; ++x)
+                overlap_sr[x] = overlap_sr[x + 1];
+        }
+    }
 }
 
 __attribute__((reqd_work_group_size(512, 1, 1)))
