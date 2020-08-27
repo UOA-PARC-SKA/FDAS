@@ -43,9 +43,9 @@ __attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
 kernel void preload_${k}(global ${hms_bundle_ty} * restrict fop,
                       const uint n_rows,
-                      const uint base_row_offset,
+                      const uint base_row_rem,
                   % for r in range(n_buffers):
-                      const int filter_${r},
+                      const ulong filter_offset_${r},
                   % endfor
                       const uint n_channel_bundles)
 {
@@ -54,14 +54,14 @@ kernel void preload_${k}(global ${hms_bundle_ty} * restrict fop,
 
     for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
     % for r in range(n_buffers):
-        load[${r}] = ${r} < n_rows ? fop[fop_idx(filter_${r}, bundle)] : 0.0f;
+        load[${r}] = ${r} < n_rows ? fop[filter_offset_${r} + bundle] : 0.0f;
     % endfor
 
     % for p in range(hms_group_sz):
     % if len(buffers_for_output[p]) == 1:
         out[${p}] = load[${buffers_for_output[p][0]}];
     % else:
-        out[${p}] = base_row_offset < ${buffers_for_output[p][2]} ? load[${buffers_for_output[p][0]}] : load[${buffers_for_output[p][1]}];
+        out[${p}] = base_row_rem < ${buffers_for_output[p][2]} ? load[${buffers_for_output[p][0]}] : load[${buffers_for_output[p][1]}];
     % endif
     % endfor
 

@@ -66,10 +66,6 @@ inline float power_norm(float2 a)
     return (a.x * a.x + a.y * a.y) / 4194304;
 }
 
-inline ulong fop_idx(int filter, uint bundle) {
-    return (filter + 10) * 7772 + bundle;
-}
-
 inline uint encode_location(uint k, int f, uint c) {
     return (((k - 1) & 0x7) << 29) | (((f + 10) & 0x7f) << 22) | (c & 0x3fffff);
 }
@@ -286,17 +282,17 @@ __attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
 kernel void preload_1(global float8 * restrict fop,
                       const uint n_rows,
-                      const uint base_row_offset,
-                      const int filter_0,
-                      const int filter_1,
+                      const uint base_row_rem,
+                      const ulong filter_offset_0,
+                      const ulong filter_offset_1,
                       const uint n_channel_bundles)
 {
     float8 load[2];
     float8 out[2];
 
     for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
-        load[0] = 0 < n_rows ? fop[fop_idx(filter_0, bundle)] : 0.0f;
-        load[1] = 1 < n_rows ? fop[fop_idx(filter_1, bundle)] : 0.0f;
+        load[0] = 0 < n_rows ? fop[filter_offset_0 + bundle] : 0.0f;
+        load[1] = 1 < n_rows ? fop[filter_offset_1 + bundle] : 0.0f;
 
         out[0] = load[0];
         out[1] = load[1];
@@ -365,15 +361,15 @@ __attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
 kernel void preload_2(global float8 * restrict fop,
                       const uint n_rows,
-                      const uint base_row_offset,
-                      const int filter_0,
+                      const uint base_row_rem,
+                      const ulong filter_offset_0,
                       const uint n_channel_bundles)
 {
     float8 load[1];
     float8 out[2];
 
     for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
-        load[0] = 0 < n_rows ? fop[fop_idx(filter_0, bundle)] : 0.0f;
+        load[0] = 0 < n_rows ? fop[filter_offset_0 + bundle] : 0.0f;
 
         out[0] = load[0];
         out[1] = load[0];
@@ -455,20 +451,20 @@ __attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
 kernel void preload_3(global float8 * restrict fop,
                       const uint n_rows,
-                      const uint base_row_offset,
-                      const int filter_0,
-                      const int filter_1,
+                      const uint base_row_rem,
+                      const ulong filter_offset_0,
+                      const ulong filter_offset_1,
                       const uint n_channel_bundles)
 {
     float8 load[2];
     float8 out[2];
 
     for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
-        load[0] = 0 < n_rows ? fop[fop_idx(filter_0, bundle)] : 0.0f;
-        load[1] = 1 < n_rows ? fop[fop_idx(filter_1, bundle)] : 0.0f;
+        load[0] = 0 < n_rows ? fop[filter_offset_0 + bundle] : 0.0f;
+        load[1] = 1 < n_rows ? fop[filter_offset_1 + bundle] : 0.0f;
 
         out[0] = load[0];
-        out[1] = base_row_offset < 2 ? load[0] : load[1];
+        out[1] = base_row_rem < 2 ? load[0] : load[1];
 
         #pragma unroll
         for (uint p = 0; p < 2; ++p)
@@ -560,15 +556,15 @@ __attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
 kernel void preload_4(global float8 * restrict fop,
                       const uint n_rows,
-                      const uint base_row_offset,
-                      const int filter_0,
+                      const uint base_row_rem,
+                      const ulong filter_offset_0,
                       const uint n_channel_bundles)
 {
     float8 load[1];
     float8 out[2];
 
     for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
-        load[0] = 0 < n_rows ? fop[fop_idx(filter_0, bundle)] : 0.0f;
+        load[0] = 0 < n_rows ? fop[filter_offset_0 + bundle] : 0.0f;
 
         out[0] = load[0];
         out[1] = load[0];
@@ -676,20 +672,20 @@ __attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
 kernel void preload_5(global float8 * restrict fop,
                       const uint n_rows,
-                      const uint base_row_offset,
-                      const int filter_0,
-                      const int filter_1,
+                      const uint base_row_rem,
+                      const ulong filter_offset_0,
+                      const ulong filter_offset_1,
                       const uint n_channel_bundles)
 {
     float8 load[2];
     float8 out[2];
 
     for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
-        load[0] = 0 < n_rows ? fop[fop_idx(filter_0, bundle)] : 0.0f;
-        load[1] = 1 < n_rows ? fop[fop_idx(filter_1, bundle)] : 0.0f;
+        load[0] = 0 < n_rows ? fop[filter_offset_0 + bundle] : 0.0f;
+        load[1] = 1 < n_rows ? fop[filter_offset_1 + bundle] : 0.0f;
 
         out[0] = load[0];
-        out[1] = base_row_offset < 4 ? load[0] : load[1];
+        out[1] = base_row_rem < 4 ? load[0] : load[1];
 
         #pragma unroll
         for (uint p = 0; p < 2; ++p)
@@ -807,15 +803,15 @@ __attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
 kernel void preload_6(global float8 * restrict fop,
                       const uint n_rows,
-                      const uint base_row_offset,
-                      const int filter_0,
+                      const uint base_row_rem,
+                      const ulong filter_offset_0,
                       const uint n_channel_bundles)
 {
     float8 load[1];
     float8 out[2];
 
     for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
-        load[0] = 0 < n_rows ? fop[fop_idx(filter_0, bundle)] : 0.0f;
+        load[0] = 0 < n_rows ? fop[filter_offset_0 + bundle] : 0.0f;
 
         out[0] = load[0];
         out[1] = load[0];
@@ -949,20 +945,20 @@ __attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
 kernel void preload_7(global float8 * restrict fop,
                       const uint n_rows,
-                      const uint base_row_offset,
-                      const int filter_0,
-                      const int filter_1,
+                      const uint base_row_rem,
+                      const ulong filter_offset_0,
+                      const ulong filter_offset_1,
                       const uint n_channel_bundles)
 {
     float8 load[2];
     float8 out[2];
 
     for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
-        load[0] = 0 < n_rows ? fop[fop_idx(filter_0, bundle)] : 0.0f;
-        load[1] = 1 < n_rows ? fop[fop_idx(filter_1, bundle)] : 0.0f;
+        load[0] = 0 < n_rows ? fop[filter_offset_0 + bundle] : 0.0f;
+        load[1] = 1 < n_rows ? fop[filter_offset_1 + bundle] : 0.0f;
 
         out[0] = load[0];
-        out[1] = base_row_offset < 6 ? load[0] : load[1];
+        out[1] = base_row_rem < 6 ? load[0] : load[1];
 
         #pragma unroll
         for (uint p = 0; p < 2; ++p)
@@ -1106,15 +1102,15 @@ __attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
 kernel void preload_8(global float8 * restrict fop,
                       const uint n_rows,
-                      const uint base_row_offset,
-                      const int filter_0,
+                      const uint base_row_rem,
+                      const ulong filter_offset_0,
                       const uint n_channel_bundles)
 {
     float8 load[1];
     float8 out[2];
 
     for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
-        load[0] = 0 < n_rows ? fop[fop_idx(filter_0, bundle)] : 0.0f;
+        load[0] = 0 < n_rows ? fop[filter_offset_0 + bundle] : 0.0f;
 
         out[0] = load[0];
         out[1] = load[0];

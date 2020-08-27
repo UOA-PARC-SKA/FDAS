@@ -24,10 +24,6 @@ inline float power_norm(float2 a)
     return (a.x * a.x + a.y * a.y) / ${fft_n_points ** 2};
 }
 
-inline ulong fop_idx(int filter, uint bundle) {
-    return (filter + ${n_filters_per_accel_sign}) * ${fdf_output_sz // hms_bundle_sz} + bundle;
-}
-
 inline uint encode_location(uint k, int f, uint c) {
     return (((k - 1) & 0x7) << 29) | (((f + ${n_filters_per_accel_sign}) & 0x7f) << 22) | (c & 0x3fffff);
 }

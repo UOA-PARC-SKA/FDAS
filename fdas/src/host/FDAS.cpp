@@ -322,18 +322,20 @@ bool FDAS::perform_harmonic_summing(const FDAS::ThreshType &thresholds, const FD
 
         for (int g = 0; g < n_filter_groups; ++g) {
             int base_row = g * HMS::group_sz / k;
-            int base_row_offset = g * HMS::group_sz % k;
+            int base_row_rem = g * HMS::group_sz % k;
             int n_rows = HMS::first_offset_to_use_last_buffer[h] > 0 ?
-                    HMS::n_buffers[h] - (base_row_offset < HMS::first_offset_to_use_last_buffer[h]) :
+                    HMS::n_buffers[h] - (base_row_rem < HMS::first_offset_to_use_last_buffer[h]) :
                     n_rows = HMS::n_buffers[h];
             if (base_row + n_rows >= n_filters)
                 n_rows = n_filters - base_row;
 
             cl_chk(preload_k.setArg<cl::Buffer>(0, *fop_buffer));
             cl_chk(preload_k.setArg<cl_uint>(1, n_rows));
-            cl_chk(preload_k.setArg<cl_uint>(2, base_row_offset));
+            cl_chk(preload_k.setArg<cl_uint>(2, base_row_rem));
             for (int r = 0; r < HMS::n_buffers[h]; ++r) {
-                cl_chk(preload_k.setArg<cl_int>(3 + r, negative_filters ? -base_row - r : base_row + r));
+                cl_int filter = negative_filters ? -base_row - r : base_row + r;
+                cl_ulong filter_offset = (filter + Input::n_filters_per_accel_sign) * FDF::output_sz / HMS::bundle_sz;
+                cl_chk(preload_k.setArg<cl_ulong>(3 + r, filter_offset));
             }
             cl_chk(preload_k.setArg<cl_uint>(3 + HMS::n_buffers[h], n_channel_bundles / k)); // important: n_channel_bundles must be divisible by all k
             cl_chk(preload_q.enqueueTask(preload_k, nullptr, &preload_evs[h][g]));
