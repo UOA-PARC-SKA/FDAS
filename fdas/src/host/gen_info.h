@@ -39,8 +39,8 @@ namespace FFT {
 }
 namespace FDF {
     static const cl_uint  tile_sz                   = 2048;
-    static const cl_uint  tile_overlap              = 105;
-    static const cl_uint  tile_payload              = 1943;
+    static const cl_uint  tile_overlap              = 108;
+    static const cl_uint  tile_payload              = 1940;
 
     static const cl_uint  group_sz                  = 3;
 }

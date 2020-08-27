@@ -19,7 +19,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 
-from math import gcd
+from math import gcd, ceil
 from collections import defaultdict
 from mako.template import Template
 
@@ -74,7 +74,7 @@ def main():
 
     # Frequency-domain FIR filter implementation with overlap-save algorithm
     fdf_tile_sz = fft_n_points
-    fdf_tile_overlap = n_taps - 1
+    fdf_tile_overlap = int(ceil((n_taps - 1) / fft_n_parallel)) * fft_n_parallel  # ease input tiling
     fdf_tile_payload = fdf_tile_sz - fdf_tile_overlap
 
     fdf_group_sz = 5 if mode == 'fpga' else 3

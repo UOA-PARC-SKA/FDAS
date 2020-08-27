@@ -206,7 +206,7 @@ kernel void tile_input(global float2 * restrict input)
 
     #pragma unroll
     for (uint p = 0; p < 4; ++p)
-        buf[chunk_rev][bundle * 4 + p] = input[tile * 1943 + chunk * 512 + bundle * 4 + p];
+        buf[chunk_rev][bundle * 4 + p] = input[tile * 1940 + chunk * 512 + bundle * 4 + p];
 
     barrier(CLK_LOCAL_MEM_FENCE);
 
@@ -272,9 +272,9 @@ kernel void square_and_discard(global float * restrict fop,
         for (uint p = 0; p < 4; ++p) {
             uint q = bit_reversed(p, 2);
 
-            int element = p * 512 + step - 105;
+            int element = p * 512 + step - 108;
             if (element >= 0)
-                fop[(batch + f) * fop_row_sz + tile * 1943 + element] = buf[f][q];
+                fop[(batch + f) * fop_row_sz + tile * 1940 + element] = buf[f][q];
         }
     }
 }
