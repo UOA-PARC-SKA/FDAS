@@ -10,13 +10,14 @@ kernel void mux_and_mult(global float2 * restrict tiles,
 
     #pragma unroll
     for (uint f = 0; f < ${fdf_group_sz}; ++f) {
+        float2x4 data;
         #pragma unroll
         for (uint p = 0; p < ${fft_n_parallel}; ++p) {
             float2 value = tiles[tile * ${fdf_tile_sz} + step * ${fft_n_parallel} + p];
             float2 coeff = templates[(batch + f) * ${fdf_tile_sz} + step * ${fft_n_parallel} + p];
-            float2 prod = complex_mult(value, coeff);
-            WRITE_CHANNEL(ifft_in[f][p], prod);
+            data.i[p] = complex_mult(value, coeff);
         }
+        WRITE_CHANNEL(ifft_in[f], data);
     }
 }
 
@@ -33,9 +34,10 @@ kernel void square_and_discard(global float * restrict fop,
 
     #pragma unroll
     for (uint f = 0; f < ${fdf_group_sz}; ++f) {
+        float2x4 data = READ_CHANNEL(ifft_out[f]);
         #pragma unroll
         for (uint p = 0; p < ${fft_n_parallel}; ++p)
-            buf[f][p] = power_norm(READ_CHANNEL(ifft_out[f][p]));
+            buf[f][p] = power_norm(data.i[p]);
     }
 
     #pragma unroll

@@ -17,6 +17,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+#include "fft_4p.cl"
 
 #if defined(INTELFPGA_CL)
 #pragma OPENCL EXTENSION cl_intel_channels : enable
@@ -28,14 +29,13 @@
 #define WRITE_CHANNEL(ch, x) write_channel_altera(ch, x)
 #endif
 
+channel float2x4 load_to_tile __attribute__((depth(0)));
 
-channel float2 load_to_tile[4] __attribute__((depth(0)));
+channel float2x4 fft_in __attribute__((depth(0)));
+channel float2x4 fft_out __attribute__((depth(0)));
 
-channel float2 fft_in[4] __attribute__((depth(0)));
-channel float2 fft_out[4] __attribute__((depth(0)));
-
-channel float2 ifft_in[3][4] __attribute__((depth(0)));
-channel float2 ifft_out[3][4] __attribute__((depth(0)));
+channel float2x4 ifft_in[3] __attribute__((depth(0)));
+channel float2x4 ifft_out[3] __attribute__((depth(0)));
 
 channel float2 preload_to_delay[8][8] __attribute__((depth(0)));
 channel float2 delay_to_detect[8][8] __attribute__((depth(0)));
@@ -73,13 +73,13 @@ inline uint encode_location(uint k, int f, uint c) {
     return (((k - 1) & 0x7) << 29) | (((f + 10) & 0x7f) << 22) | (c & 0x3fffff);
 }
 
-#include "fft_4p.cl"
-
 __attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
 kernel void fft_0(const uint n_tiles, const uint is_inverse)
 {
-    float2 __attribute__((bank_bits(11))) buf[2][512][4];
+    const float2x4 zeros = {0, 0, 0, 0};
+
+    float2x4 __attribute__((bank_bits(9))) buf[2][512];
     float2 fft_delay_elements[2080];
     float2x4 data;
 
@@ -87,31 +87,22 @@ kernel void fft_0(const uint n_tiles, const uint is_inverse)
     for (uint t = 0; t < n_tiles + 2; ++t) {
         for (uint s = 0; s < 512; ++s) {
             if (t >= 1) {
-                #pragma unroll
-                for (uint p = 0; p < 4; ++p) {
-                    buf[1 - (t & 1)][bit_reversed(s, 9)][p] = data.i[p];
-                }
+                buf[1 - (t & 1)][bit_reversed(s, 9)] = data;
             }
             if (t >= 2) {
-                #pragma unroll
-                for (uint p = 0; p < 4; ++p) {
-                    if (! is_inverse)
-                        WRITE_CHANNEL(fft_out[p], buf[t & 1][s][p]);
-                    else
-                        WRITE_CHANNEL(ifft_out[0][p], buf[t & 1][s][p]);
-                }
+                if (! is_inverse)
+                    WRITE_CHANNEL(fft_out, buf[t & 1][s]);
+                else
+                    WRITE_CHANNEL(ifft_out[0], buf[t & 1][s]);
             }
 
             if (t < n_tiles) {
-                #pragma unroll
-                for (uint p = 0; p < 4; ++p) {
-                    if (! is_inverse)
-                        data.i[p] = READ_CHANNEL(fft_in[p]);
-                    else
-                        data.i[p] = READ_CHANNEL(ifft_in[0][p]);
-                }
+                if (! is_inverse)
+                    data = READ_CHANNEL(fft_in);
+                else
+                    data = READ_CHANNEL(ifft_in[0]);
             } else {
-                data.i0 = data.i1 = data.i2 = data.i3 = 0;
+                data = zeros;
             }
 
             data = fft_step(data, s, fft_delay_elements, is_inverse, 11);
@@ -123,7 +114,9 @@ __attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
 kernel void fft_1(const uint n_tiles)
 {
-    float2 __attribute__((bank_bits(11))) buf[2][512][4];
+    const float2x4 zeros = {0, 0, 0, 0};
+
+    float2x4 __attribute__((bank_bits(9))) buf[2][512];
     float2 fft_delay_elements[2080];
     float2x4 data;
 
@@ -131,25 +124,16 @@ kernel void fft_1(const uint n_tiles)
     for (uint t = 0; t < n_tiles + 2; ++t) {
         for (uint s = 0; s < 512; ++s) {
             if (t >= 1) {
-                #pragma unroll
-                for (uint p = 0; p < 4; ++p) {
-                    buf[1 - (t & 1)][bit_reversed(s, 9)][p] = data.i[p];
-                }
+                buf[1 - (t & 1)][bit_reversed(s, 9)] = data;
             }
             if (t >= 2) {
-                #pragma unroll
-                for (uint p = 0; p < 4; ++p) {
-                    WRITE_CHANNEL(ifft_out[1][p], buf[t & 1][s][p]);
-                }
+                WRITE_CHANNEL(ifft_out[1], buf[t & 1][s]);
             }
 
             if (t < n_tiles) {
-                #pragma unroll
-                for (uint p = 0; p < 4; ++p) {
-                    data.i[p] = READ_CHANNEL(ifft_in[1][p]);
-                }
+                data = READ_CHANNEL(ifft_in[1]);
             } else {
-                data.i0 = data.i1 = data.i2 = data.i3 = 0;
+                data = zeros;
             }
 
             data = fft_step(data, s, fft_delay_elements, 1, 11);
@@ -161,7 +145,9 @@ __attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
 kernel void fft_2(const uint n_tiles)
 {
-    float2 __attribute__((bank_bits(11))) buf[2][512][4];
+    const float2x4 zeros = {0, 0, 0, 0};
+
+    float2x4 __attribute__((bank_bits(9))) buf[2][512];
     float2 fft_delay_elements[2080];
     float2x4 data;
 
@@ -169,25 +155,16 @@ kernel void fft_2(const uint n_tiles)
     for (uint t = 0; t < n_tiles + 2; ++t) {
         for (uint s = 0; s < 512; ++s) {
             if (t >= 1) {
-                #pragma unroll
-                for (uint p = 0; p < 4; ++p) {
-                    buf[1 - (t & 1)][bit_reversed(s, 9)][p] = data.i[p];
-                }
+                buf[1 - (t & 1)][bit_reversed(s, 9)] = data;
             }
             if (t >= 2) {
-                #pragma unroll
-                for (uint p = 0; p < 4; ++p) {
-                    WRITE_CHANNEL(ifft_out[2][p], buf[t & 1][s][p]);
-                }
+                WRITE_CHANNEL(ifft_out[2], buf[t & 1][s]);
             }
 
             if (t < n_tiles) {
-                #pragma unroll
-                for (uint p = 0; p < 4; ++p) {
-                    data.i[p] = READ_CHANNEL(ifft_in[2][p]);
-                }
+                data = READ_CHANNEL(ifft_in[2]);
             } else {
-                data.i0 = data.i1 = data.i2 = data.i3 = 0;
+                data = zeros;
             }
 
             data = fft_step(data, s, fft_delay_elements, 1, 11);
@@ -198,22 +175,20 @@ kernel void fft_2(const uint n_tiles)
 
 __attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
-kernel void load_input(global float * restrict input,
+kernel void load_input(global float2x4 * restrict input,
                        const uint input_sz)
 {
     for (uint i = 0; i < input_sz / 4; ++i) {
-        float8 load = vload8(i, input);
-        WRITE_CHANNEL(load_to_tile[0], load.s01);
-        WRITE_CHANNEL(load_to_tile[1], load.s23);
-        WRITE_CHANNEL(load_to_tile[2], load.s45);
-        WRITE_CHANNEL(load_to_tile[3], load.s67);
+        float2x4 load = input[i];
+        WRITE_CHANNEL(load_to_tile, load);
     }
 }
 
 __attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
-kernel void tile(const uint n_tiles) {
-    float8 overlap_sr[28];
+kernel void tile(const uint n_tiles)
+{
+    float2x4 overlap_sr[28];
     float2 __attribute__((bank_bits(9))) chunk_buf_0[2][512];
     float2 __attribute__((bank_bits(9))) chunk_buf_1[2][512];
     float2 __attribute__((bank_bits(9))) chunk_buf_2[2][512];
@@ -223,24 +198,22 @@ kernel void tile(const uint n_tiles) {
     for (uint t = 0; t < n_tiles + 1; ++t) {
         for (uint s = 0; s < 512; ++s) {
             if (t >= 1) {
-                WRITE_CHANNEL(fft_in[0], chunk_buf_0[1 - (t & 1)][s]);
-                WRITE_CHANNEL(fft_in[1], chunk_buf_2[1 - (t & 1)][s]);
-                WRITE_CHANNEL(fft_in[2], chunk_buf_1[1 - (t & 1)][s]);
-                WRITE_CHANNEL(fft_in[3], chunk_buf_3[1 - (t & 1)][s]);
+                float2x4 data;
+                data.i[0] = chunk_buf_0[1 - (t & 1)][s];
+                data.i[2] = chunk_buf_1[1 - (t & 1)][s];
+                data.i[1] = chunk_buf_2[1 - (t & 1)][s];
+                data.i[3] = chunk_buf_3[1 - (t & 1)][s];
+                WRITE_CHANNEL(fft_in, data);
             }
 
+            float2x4 input = {0, 0, 0, 0};
             if (t < n_tiles) {
-                float2 input[4];
                 if (s < 27) {
-                    input[0] = t >= 1 ? overlap_sr[0].s01 : 0;
-                    input[1] = t >= 1 ? overlap_sr[0].s23 : 0;
-                    input[2] = t >= 1 ? overlap_sr[0].s45 : 0;
-                    input[3] = t >= 1 ? overlap_sr[0].s67 : 0;
+                    if (t >= 1)
+                        input = overlap_sr[0];
                 }
                 else {
-                    #pragma unroll
-                    for (uint p = 0; p < 4; ++p)
-                        input[p] = READ_CHANNEL(load_to_tile[p]);
+                    input = READ_CHANNEL(load_to_tile);
                 }
 
                 uint chunk = s / 128;
@@ -250,36 +223,29 @@ kernel void tile(const uint n_tiles) {
                     case 0:
                         #pragma unroll
                         for (uint p = 0; p < 4; ++p)
-                            chunk_buf_0[t & 1][bundle * 4 + p] = input[p];
+                            chunk_buf_0[t & 1][bundle * 4 + p] = input.i[p];
                         break;
                     case 1:
                         #pragma unroll
                         for (uint p = 0; p < 4; ++p)
-                            chunk_buf_1[t & 1][bundle * 4 + p] = input[p];
+                            chunk_buf_1[t & 1][bundle * 4 + p] = input.i[p];
                         break;
                     case 2:
                         #pragma unroll
                         for (uint p = 0; p < 4; ++p)
-                            chunk_buf_2[t & 1][bundle * 4 + p] = input[p];
+                            chunk_buf_2[t & 1][bundle * 4 + p] = input.i[p];
                         break;
                     case 3:
                         #pragma unroll
                         for (uint p = 0; p < 4; ++p)
-                            chunk_buf_3[t & 1][bundle * 4 + p] = input[p];
+                            chunk_buf_3[t & 1][bundle * 4 + p] = input.i[p];
                         break;
                     default:
                         break;
                 }
-
-                if (s >= 485) {
-                    float8 ins_val;
-                    ins_val.s01 = input[0];
-                    ins_val.s23 = input[1];
-                    ins_val.s45 = input[2];
-                    ins_val.s67 = input[3];
-                    overlap_sr[27] = ins_val;
-                }
             }
+
+            overlap_sr[27] = input;
 
             #pragma unroll
             for (uint x = 0; x < 27; ++x)
@@ -288,16 +254,18 @@ kernel void tile(const uint n_tiles) {
     }
 }
 
-__attribute__((reqd_work_group_size(512, 1, 1)))
+__attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
-kernel void store_tiles(global float2 * restrict tiles)
+kernel void store_tiles(global float2x4 * restrict tiles,
+                        const uint n_tiles)
 {
-    uint tile = get_group_id(0);
-    uint step = get_local_id(0);
-
-    #pragma unroll
-    for (uint p = 0; p < 4; ++p)
-       tiles[tile * 2048 + step * 4 + p] = READ_CHANNEL(fft_out[p]);
+    #pragma loop_coalesce
+    for (uint t = 0; t < n_tiles; ++t) {
+        for (uint s = 0; s < 512; ++s) {
+            float2x4 data = READ_CHANNEL(fft_out);
+            tiles[t * 512 + s] = data;
+        }
+    }
 }
 
 __attribute__((reqd_work_group_size(512, 1, 1)))
@@ -311,13 +279,14 @@ kernel void mux_and_mult(global float2 * restrict tiles,
 
     #pragma unroll
     for (uint f = 0; f < 3; ++f) {
+        float2x4 data;
         #pragma unroll
         for (uint p = 0; p < 4; ++p) {
             float2 value = tiles[tile * 2048 + step * 4 + p];
             float2 coeff = templates[(batch + f) * 2048 + step * 4 + p];
-            float2 prod = complex_mult(value, coeff);
-            WRITE_CHANNEL(ifft_in[f][p], prod);
+            data.i[p] = complex_mult(value, coeff);
         }
+        WRITE_CHANNEL(ifft_in[f], data);
     }
 }
 
@@ -334,9 +303,10 @@ kernel void square_and_discard(global float * restrict fop,
 
     #pragma unroll
     for (uint f = 0; f < 3; ++f) {
+        float2x4 data = READ_CHANNEL(ifft_out[f]);
         #pragma unroll
         for (uint p = 0; p < 4; ++p)
-            buf[f][p] = power_norm(READ_CHANNEL(ifft_out[f][p]));
+            buf[f][p] = power_norm(data.i[p]);
     }
 
     #pragma unroll

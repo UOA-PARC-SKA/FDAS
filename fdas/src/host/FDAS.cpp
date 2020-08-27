@@ -239,9 +239,6 @@ bool FDAS::perform_ft_convolution(const FDAS::InputType &input, const FDAS::Shap
     cl::CommandQueue square_and_discard_q(*context, default_device, CL_QUEUE_PROFILING_ENABLE);
 
     // NDRange configuration
-    cl::NDRange prep_local(FFT::n_points_per_terminal);
-    cl::NDRange prep_global(FFT::n_points_per_terminal * n_tiles);
-
     cl::NDRange conv_local(FFT::n_points_per_terminal, 1);
     cl::NDRange conv_global(FFT::n_points_per_terminal * n_tiles, Input::n_filters / FDF::group_sz);
 
@@ -250,11 +247,11 @@ bool FDAS::perform_ft_convolution(const FDAS::InputType &input, const FDAS::Shap
     cl_chk(load_input_kernel->setArg<cl_uint>(1, input_sz));
     cl_chk(tile_kernel->setArg<cl_uint>(0, n_tiles));
     cl_chk(store_tiles_kernel->setArg<cl::Buffer>(0, *tiles_buffer));
+    cl_chk(store_tiles_kernel->setArg<cl_uint>(1, n_tiles));
     cl_chk(mux_and_mult_kernel->setArg<cl::Buffer>(0, *tiles_buffer));
     cl_chk(mux_and_mult_kernel->setArg<cl::Buffer>(1, *templates_buffer));
     cl_chk(square_and_discard_kernel->setArg<cl::Buffer>(0, *fop_buffer));
     cl_chk(square_and_discard_kernel->setArg<cl_uint>(1, fop_row_sz));
-
 
     // Copy input to device
     cl_chk(buffer_q.enqueueWriteBuffer(*input_buffer, true, 0, sizeof(cl_float2) * input_sz, input.data()));
@@ -273,7 +270,7 @@ bool FDAS::perform_ft_convolution(const FDAS::InputType &input, const FDAS::Shap
     cl_chk(fwd_fft_k.setArg<cl_uint>(1, false));
     cl_chk(fwd_fft_q.enqueueTask(fwd_fft_k, nullptr, &fft_evs[0]));
 
-    cl_chk(store_tiles_q.enqueueNDRangeKernel(*store_tiles_kernel, cl::NullRange, prep_global, prep_local, nullptr, &store_tiles_ev));
+    cl_chk(store_tiles_q.enqueueTask(*store_tiles_kernel, nullptr, &store_tiles_ev));
 
     load_input_q.finish();
     tile_q.finish();

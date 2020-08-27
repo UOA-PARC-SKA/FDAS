@@ -135,6 +135,7 @@ def main():
 
     with open("../device/fdas_gen.cl", 'wt') as fdas_file:
         fdas_file.write(copyright_header)
+        fdas_file.write('#include "fft_4p.cl"\n')
         fdas_file.write(channels_template.render(**fdas_configuration))
         fdas_file.write(utils_template.render(**fdas_configuration))
         for i in range(fdf_group_sz):

@@ -27,5 +27,3 @@ inline float power_norm(float2 a)
 inline uint encode_location(uint k, int f, uint c) {
     return (((k - 1) & 0x7) << 29) | (((f + ${n_filters_per_accel_sign}) & 0x7f) << 22) | (c & 0x3fffff);
 }
-
-#include "fft_4p.cl"
