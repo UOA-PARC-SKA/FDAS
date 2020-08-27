@@ -353,8 +353,7 @@ bool FDAS::perform_harmonic_summing(const FDAS::ThreshType &thresholds, const FD
             cl_chk(preload_k.setArg<cl_uint>(3 + HMS::n_buffers[h], n_channel_bundles / k)); // important: n_channel_bundles must be divisible by all k
             cl_chk(preload_q.enqueueTask(preload_k, nullptr, &preload_evs[h][g]));
 
-            cl_chk(delay_k.setArg<cl::Buffer>(0, *fop_buffer));
-            cl_chk(delay_k.setArg<cl_uint>(1, n_channel_bundles));
+            cl_chk(delay_k.setArg<cl_uint>(0, n_channel_bundles));
             cl_chk(delay_q.enqueueTask(delay_k, nullptr, &delay_evs[h][g]));
         }
 

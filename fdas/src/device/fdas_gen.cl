@@ -397,8 +397,7 @@ kernel void preload_1(global float2 * restrict fop,
 
 __attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
-kernel void delay_1(global uint * restrict dummy,
-                       const uint n_channel_bundles)
+kernel void delay_1(const uint n_channel_bundles)
 {
     float2 in[8];
     float2 out[8];
@@ -474,8 +473,7 @@ kernel void preload_2(global float2 * restrict fop,
 
 __attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
-kernel void delay_2(global uint * restrict dummy,
-                       const uint n_channel_bundles)
+kernel void delay_2(const uint n_channel_bundles)
 {
     float2 in[8];
     float2 out[8];
@@ -558,8 +556,7 @@ kernel void preload_3(global float2 * restrict fop,
 
 __attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
-kernel void delay_3(global uint * restrict dummy,
-                       const uint n_channel_bundles)
+kernel void delay_3(const uint n_channel_bundles)
 {
     float2 in[8];
     float2 out[8];
@@ -645,8 +642,7 @@ kernel void preload_4(global float2 * restrict fop,
 
 __attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
-kernel void delay_4(global uint * restrict dummy,
-                       const uint n_channel_bundles)
+kernel void delay_4(const uint n_channel_bundles)
 {
     float2 in[8];
     float2 out[8];
@@ -741,8 +737,7 @@ kernel void preload_5(global float2 * restrict fop,
 
 __attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
-kernel void delay_5(global uint * restrict dummy,
-                       const uint n_channel_bundles)
+kernel void delay_5(const uint n_channel_bundles)
 {
     float2 in[8];
     float2 out[8];
@@ -842,8 +837,7 @@ kernel void preload_6(global float2 * restrict fop,
 
 __attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
-kernel void delay_6(global uint * restrict dummy,
-                       const uint n_channel_bundles)
+kernel void delay_6(const uint n_channel_bundles)
 {
     float2 in[8];
     float2 out[8];
@@ -950,8 +944,7 @@ kernel void preload_7(global float2 * restrict fop,
 
 __attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
-kernel void delay_7(global uint * restrict dummy,
-                       const uint n_channel_bundles)
+kernel void delay_7(const uint n_channel_bundles)
 {
     float2 in[8];
     float2 out[8];
@@ -1063,8 +1056,7 @@ kernel void preload_8(global float2 * restrict fop,
 
 __attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
-kernel void delay_8(global uint * restrict dummy,
-                       const uint n_channel_bundles)
+kernel void delay_8(const uint n_channel_bundles)
 {
     float2 in[8];
     float2 out[8];

@@ -73,8 +73,7 @@ kernel void preload_${k}(global ${hms_bundle_ty} * restrict fop,
 
 __attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
-kernel void delay_${k}(global uint * restrict dummy,
-                       const uint n_channel_bundles)
+kernel void delay_${k}(const uint n_channel_bundles)
 {
     ${hms_bundle_ty} in[${hms_group_sz}];
     ${hms_bundle_ty} out[${hms_group_sz}];
