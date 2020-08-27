@@ -47,13 +47,72 @@ def lcm(vals):
 
 
 def main():
-    n_planes = 8
-    detection_sz = 64  # divisible by group_sz * bundle_sz
+    # TODO: build an ArgumentParser around this
 
-    group_sz = 2
-    bundle_sz = 8
-    bundle_ty = "float" if bundle_sz == 1 else f"float{bundle_sz}"
+    # Input parameters
+    mode = 'emu'
+    if mode == 'fpga':
+        n_channels = 2 ** 22
+        n_filters_per_accel_sign = 42
+        n_taps = 421
+    elif mode == 'emu':
+        n_channels = 62176
+        n_filters_per_accel_sign = 10
+        n_taps = 106
+    else:
+        raise RuntimeError(f"unknown mode: {mode}")
 
+    n_filters = n_filters_per_accel_sign + 1 + n_filters_per_accel_sign
+
+    # FFT engine configuration
+    fft_n_points_log = 11
+    fft_n_points = 2 ** fft_n_points_log
+
+    fft_n_parallel_log = 2
+    fft_n_parallel = 2 ** fft_n_parallel_log
+
+    fft_n_points_per_terminal_log = fft_n_points_log - fft_n_parallel_log
+    fft_n_points_per_terminal = 2 ** fft_n_points_per_terminal_log
+
+    # Frequency-domain FIR filter implementation with overlap-save algorithm
+    fdf_tile_sz = fft_n_points
+    fdf_tile_overlap = n_taps - 1
+    fdf_tile_payload = fdf_tile_sz - fdf_tile_overlap
+
+    fdf_n_tiles = n_channels // fdf_tile_payload
+
+    fdf_input_sz = fdf_n_tiles * fdf_tile_payload
+    fdf_padded_input_sz = fdf_tile_payload + fdf_input_sz
+    fdf_tiled_input_sz = fdf_n_tiles * fdf_tile_sz
+
+    fdf_output_sz = fdf_input_sz
+    fdf_templates_sz = n_filters * fdf_tile_sz
+
+    fdf_group_sz = 5 if mode == 'fpga' else 3
+
+    # Filter-output plane
+    fop_sz = n_filters * fdf_output_sz
+
+    # Harmonic summing
+    hms_n_planes = 8
+    hms_detection_sz = 64
+
+    hms_group_sz = 2
+    hms_bundle_sz = 8
+    hms_bundle_ty = "float" if hms_bundle_sz == 1 else f"float{hms_bundle_sz}"
+
+    # Output
+    n_candidates = hms_n_planes * hms_detection_sz * hms_group_sz * hms_bundle_sz
+
+    fdas_configuration = dict(**locals())
+
+    # -- end of config ---
+
+    channels_template = Template(filename='channels.cl.mako')
+    utils_template = Template(filename='utils.cl.mako')
+    fft_template = Template(filename='fft.cl.mako')
+    tile_input_template = Template(filename='tile_input.cl.mako')
+    convolve_template = Template(filename='convolve.cl.mako')
     preload_template = Template(filename='preload.cl.mako')
     detect_template = Template(filename='detect.cl.mako')
     gen_info_template = Template(filename='gen_info.h.mako')
@@ -79,53 +138,23 @@ def main():
  */
 """
 
-    with open("../device/preload.cl", 'wt') as preload_file:
-        preload_file.write(f"""{copyright_header}
-// Auto-generated file -- see `hsum_codegen.py` and `preload.cl.mako`.
+    with open("../device/fdas_gen.cl", 'wt') as fdas_file:
+        fdas_file.write(copyright_header)
+        fdas_file.write(channels_template.render(**fdas_configuration))
+        fdas_file.write(utils_template.render(**fdas_configuration))
+        for i in range(fdf_group_sz):
+            fdas_file.write(fft_template.render(i=i, both_directions=i == 0, **fdas_configuration))
+        fdas_file.write(tile_input_template.render(**fdas_configuration))
+        fdas_file.write(convolve_template.render(**fdas_configuration))
+        for h in range(hms_n_planes):
+            fdas_file.write(preload_template.render(k=h + 1, **fdas_configuration))
+        for h in range(hms_n_planes):
+            fdas_file.write(detect_template.render(k=h + 1, **fdas_configuration))
 
-channel {bundle_ty} preload_to_delay[{n_planes}][{group_sz}] __attribute__((depth(0)));
-channel {bundle_ty} delay_to_detect[{n_planes}][{group_sz}] __attribute__((depth(0)));
-
-inline ulong fop_idx(int filter, uint bundle) {{
-    return (filter + N_FILTERS_PER_ACCEL_SIGN) * (FDF_OUTPUT_SZ / {bundle_sz}) + bundle;
-}}
-""")
-        for h in range(n_planes):
-            preload_file.write(preload_template.render(
-                group_sz=group_sz,
-                bundle_sz=bundle_sz,
-                bundle_ty=bundle_ty,
-                k=h + 1
-            ))
-
-    with open("../device/detect.cl", 'wt') as detect_file:
-        detect_file.write(f"""{copyright_header}
-// Auto-generated file -- see `hsum_codegen.py` and `detect.cl.mako`.
-
-channel {bundle_ty} detect_to_detect[{n_planes - 1}][{group_sz}] __attribute__((depth(0)));
-channel uint  detect_to_store_location[{n_planes}][{group_sz * bundle_sz}] __attribute__((depth(0)));
-channel float detect_to_store_amplitude[{n_planes}][{group_sz * bundle_sz}] __attribute__((depth(0)));
-""")
-        for h in range(n_planes):
-            detect_file.write(detect_template.render(
-                n_planes=n_planes,
-                detection_sz=detection_sz,
-                group_sz=group_sz,
-                bundle_sz=bundle_sz,
-                bundle_ty=bundle_ty,
-                k=h + 1
-            ))
 
     with open("../host/gen_info.h", 'wt') as gen_info_file:
-        gen_info_file.write(f"""{copyright_header}
-// Auto-generated file -- see `hsum_codegen.py` and `gen_info.h.mako`.
-""")
-        gen_info_file.write(gen_info_template.render(
-            n_planes=n_planes,
-            detection_sz=detection_sz,
-            group_sz=group_sz,
-            bundle_sz=bundle_sz
-        ))
+        gen_info_file.write(copyright_header)
+        gen_info_file.write(gen_info_template.render(**fdas_configuration))
 
 
 if __name__ == '__main__':

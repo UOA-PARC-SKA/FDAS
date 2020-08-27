@@ -23,12 +23,13 @@
 #include <iomanip>
 
 #include "FDAS.h"
-
-#include "fdas_config.h"
+#include "gen_info.h"
 
 using std::endl;
 using std::setprecision;
 using std::fixed;
+
+using namespace GenInfo;
 
 #define cl_chk(cmd) \
     do { \
@@ -135,17 +136,20 @@ bool FDAS::initialise_accelerator(std::string bitstream_file_name,
     bitstream.shrink_to_fit();
 
     // Kernels
-/*
+    fft_kernels.resize(FDF::group_sz);
+    for (int i = 0; i < FDF::group_sz; ++i) {
+        auto name = "fft_" + std::to_string(i);
+        cl_chkref(fft_kernels[i].reset(new cl::Kernel(*program, name.c_str(), &status)));
+    }
     cl_chkref(tile_input_kernel.reset(new cl::Kernel(*program, "tile_input", &status)));
     cl_chkref(store_tiles_kernel.reset(new cl::Kernel(*program, "store_tiles", &status)));
     cl_chkref(mux_and_mult_kernel.reset(new cl::Kernel(*program, "mux_and_mult", &status)));
     cl_chkref(square_and_discard_kernel.reset(new cl::Kernel(*program, "square_and_discard", &status)));
-*/
 
-    preload_kernels.resize(HMS_N_PLANES);
-    delay_kernels.resize(HMS_N_PLANES);
-    detect_kernels.resize(HMS_N_PLANES);
-    for (int h = 0; h < HMS_N_PLANES; ++h) {
+    preload_kernels.resize(HMS::n_planes);
+    delay_kernels.resize(HMS::n_planes);
+    detect_kernels.resize(HMS::n_planes);
+    for (int h = 0; h < HMS::n_planes; ++h) {
         auto name = "preload_" + std::to_string(h + 1);
         cl_chkref(preload_kernels[h].reset(new cl::Kernel(*program, name.c_str(), &status)));
         name = "delay_" + std::to_string(h + 1);
@@ -153,32 +157,26 @@ bool FDAS::initialise_accelerator(std::string bitstream_file_name,
         name = "detect_" + std::to_string(h + 1);
         cl_chkref(detect_kernels[h].reset(new cl::Kernel(*program, name.c_str(), &status)));
     }
-//    cl_chkref(store_cands_kernel.reset(new cl::Kernel(*program, "store_cands", &status)));
 
     // Buffers
     size_t total_allocated = 0;
 
-    cl_chkref(input_buffer.reset(new cl::Buffer(*context, CL_MEM_READ_ONLY, sizeof(cl_float2) * FDF_PADDED_INPUT_SZ, nullptr, &status)));
+    cl_chkref(input_buffer.reset(new cl::Buffer(*context, CL_MEM_READ_ONLY, sizeof(cl_float2) * FDF::padded_input_sz, nullptr, &status)));
     total_allocated += input_buffer->getInfo<CL_MEM_SIZE>();
 
-    cl_chkref(tiles_buffer.reset(new cl::Buffer(*context, CL_MEM_READ_WRITE, sizeof(cl_float2) * FDF_TILED_INPUT_SZ, nullptr, &status)));
+    cl_chkref(tiles_buffer.reset(new cl::Buffer(*context, CL_MEM_READ_WRITE, sizeof(cl_float2) * FDF::tiled_input_sz, nullptr, &status)));
     total_allocated += tiles_buffer->getInfo<CL_MEM_SIZE>();
 
-    cl_chkref(templates_buffer.reset(new cl::Buffer(*context, CL_MEM_READ_ONLY, sizeof(cl_float2) * FDF_TEMPLATES_SZ, nullptr, &status)));
+    cl_chkref(templates_buffer.reset(new cl::Buffer(*context, CL_MEM_READ_ONLY, sizeof(cl_float2) * FDF::templates_sz, nullptr, &status)));
     total_allocated += templates_buffer->getInfo<CL_MEM_SIZE>();
 
-    cl_chkref(fop_buffer.reset(new cl::Buffer(*context, CL_MEM_READ_WRITE, sizeof(cl_float) * FOP_SZ, nullptr, &status)));
+    cl_chkref(fop_buffer.reset(new cl::Buffer(*context, CL_MEM_READ_WRITE, sizeof(cl_float) * FOP::sz, nullptr, &status)));
     total_allocated += fop_buffer->getInfo<CL_MEM_SIZE>();
 
-    if (HMS_STORE_PLANES) {
-        cl_chkref(harmonic_planes_buffer.reset(new cl::Buffer(*context, CL_MEM_WRITE_ONLY, sizeof(cl_float) * HMS_PLANES_SZ, nullptr, &status)));
-        total_allocated += harmonic_planes_buffer->getInfo<CL_MEM_SIZE>();
-    }
-
-    cl_chkref(detection_location_buffer.reset(new cl::Buffer(*context, CL_MEM_WRITE_ONLY, sizeof(cl_uint) * N_CANDIDATES, nullptr, &status)));
+    cl_chkref(detection_location_buffer.reset(new cl::Buffer(*context, CL_MEM_WRITE_ONLY, sizeof(cl_uint) * Output::n_candidates, nullptr, &status)));
     total_allocated += detection_location_buffer->getInfo<CL_MEM_SIZE>();
 
-    cl_chkref(detection_amplitude_buffer.reset(new cl::Buffer(*context, CL_MEM_WRITE_ONLY, sizeof(cl_float) * N_CANDIDATES, nullptr, &status)));
+    cl_chkref(detection_amplitude_buffer.reset(new cl::Buffer(*context, CL_MEM_WRITE_ONLY, sizeof(cl_float) * Output::n_candidates, nullptr, &status)));
     total_allocated += detection_amplitude_buffer->getInfo<CL_MEM_SIZE>();
 
     log << "[INFO] Allocated "
@@ -196,12 +194,12 @@ bool FDAS::check_dimensions(const FDAS::ShapeType &input_shape, const FDAS::Shap
         return false;
     }
 
-    if (input_shape[0] < FDF_INPUT_SZ) {
+    if (input_shape[0] < FDF::input_sz) {
         log << "[ERROR] Not enough input points" << endl;
         return false;
     }
 
-    if (templates_shape.size() != 2 || templates_shape[0] != N_FILTERS || templates_shape[1] != FDF_TILE_SZ) {
+    if (templates_shape.size() != 2 || templates_shape[0] != Input::n_filters || templates_shape[1] != FDF::tile_sz) {
         log << "[ERROR] Malformed filter templates" << endl;
         return false;
     }
@@ -219,45 +217,70 @@ bool FDAS::perform_ft_convolution(const FDAS::InputType &input, const FDAS::Shap
     // Instantiate command queues, one per kernel, plus one for I/O operations. Multi-device support is NYI
     cl::CommandQueue buffer_q(*context, default_device, CL_QUEUE_PROFILING_ENABLE);
 
+    std::vector<cl::CommandQueue> fft_queues;
+    for (int i = 0; i < FDF::group_sz; ++i) {
+        cl::CommandQueue fft_q(*context, default_device, CL_QUEUE_PROFILING_ENABLE);
+        fft_queues.emplace_back(fft_q);
+    }
+
     cl::CommandQueue tile_input_q(*context, default_device, CL_QUEUE_PROFILING_ENABLE);
     cl::CommandQueue store_tiles_q(*context, default_device, CL_QUEUE_PROFILING_ENABLE);
     cl::CommandQueue mux_and_mult_q(*context, default_device, CL_QUEUE_PROFILING_ENABLE);
     cl::CommandQueue square_and_discard_q(*context, default_device, CL_QUEUE_PROFILING_ENABLE);
 
     // NDRange configuration
-    cl::NDRange prep_local(FFT_N_POINTS_PER_TERMINAL);
-    cl::NDRange prep_global(FFT_N_POINTS_PER_TERMINAL * FDF_N_TILES);
+    cl::NDRange prep_local(FFT::n_points_per_terminal);
+    cl::NDRange prep_global(FFT::n_points_per_terminal * FDF::n_tiles);
 
-    cl::NDRange conv_local(FFT_N_POINTS_PER_TERMINAL, 1);
-    cl::NDRange conv_global(FFT_N_POINTS_PER_TERMINAL * FDF_N_TILES, N_FILTER_BATCHES);
+    cl::NDRange conv_local(FFT::n_points_per_terminal, 1);
+    cl::NDRange conv_global(FFT::n_points_per_terminal * FDF::n_tiles, Input::n_filters / FDF::group_sz);
 
     // Set static kernel arguments
     cl_chk(tile_input_kernel->setArg<cl::Buffer>(0, *input_buffer));
     cl_chk(store_tiles_kernel->setArg<cl::Buffer>(0, *tiles_buffer));
-
     cl_chk(mux_and_mult_kernel->setArg<cl::Buffer>(0, *tiles_buffer));
     cl_chk(mux_and_mult_kernel->setArg<cl::Buffer>(1, *templates_buffer));
-
     cl_chk(square_and_discard_kernel->setArg<cl::Buffer>(0, *fop_buffer));
 
     // Copy input to device
-    cl_float2 zeros[FDF_TILE_OVERLAP];
-    memset(zeros, 0x0, sizeof(cl_float2) * FDF_TILE_OVERLAP);
-    cl_chk(buffer_q.enqueueWriteBuffer(*input_buffer, true, 0, sizeof(cl_float2) * FDF_TILE_OVERLAP, zeros));
-    cl_chk(buffer_q.enqueueWriteBuffer(*input_buffer, true, sizeof(cl_float2) * FDF_TILE_OVERLAP, sizeof(cl_float2) * FDF_INPUT_SZ, input.data()));
-    cl_chk(buffer_q.enqueueWriteBuffer(*templates_buffer, true, 0, sizeof(cl_float2) * FDF_TEMPLATES_SZ, templates.data()));
+    cl_float2 zeros[FDF::tile_overlap];
+    memset(zeros, 0x0, sizeof(cl_float2) * FDF::tile_overlap);
+    cl_chk(buffer_q.enqueueWriteBuffer(*input_buffer, true, 0, sizeof(cl_float2) * FDF::tile_overlap, zeros));
+    cl_chk(buffer_q.enqueueWriteBuffer(*input_buffer, true, sizeof(cl_float2) * FDF::tile_overlap, sizeof(cl_float2) * FDF::input_sz, input.data()));
+    cl_chk(buffer_q.enqueueWriteBuffer(*templates_buffer, true, 0, sizeof(cl_float2) * FDF::templates_sz, templates.data()));
     cl_chk(buffer_q.finish());
 
     cl::Event tile_input_ev, store_tiles_ev, mux_and_mult_ev, square_and_discard_ev;
+    cl::Event fft_evs[FDF::group_sz];
+
     cl_chk(tile_input_q.enqueueNDRangeKernel(*tile_input_kernel, cl::NullRange, prep_global, prep_local, nullptr, &tile_input_ev));
+
+    auto& fwd_fft_k = *fft_kernels[0];
+    auto& fwd_fft_q = fft_queues[0];
+    cl_chk(fwd_fft_k.setArg<cl_uint>(0, FDF::n_tiles));
+    cl_chk(fwd_fft_k.setArg<cl_uint>(1, false));
+    cl_chk(fwd_fft_q.enqueueTask(fwd_fft_k, nullptr, &fft_evs[0]));
+
     cl_chk(store_tiles_q.enqueueNDRangeKernel(*store_tiles_kernel, cl::NullRange, prep_global, prep_local, nullptr, &store_tiles_ev));
+
     tile_input_q.finish();
+    fwd_fft_q.finish();
     store_tiles_q.finish();
     print_duration("Preparation", tile_input_ev, store_tiles_ev);
 
     cl_chk(mux_and_mult_q.enqueueNDRangeKernel(*mux_and_mult_kernel, cl::NullRange, conv_global, conv_local, nullptr, &mux_and_mult_ev));
+
+    fwd_fft_k.setArg<cl_uint>(1, true);
+    for (int i = 0; i < FDF::group_sz; ++i) {
+        cl_chk(fft_kernels[i]->setArg<cl_uint>(0, Input::n_filters / FDF::group_sz * FDF::n_tiles));
+        fft_queues[i].enqueueTask(*fft_kernels[i], nullptr, &fft_evs[i]);
+    }
+
     cl_chk(square_and_discard_q.enqueueNDRangeKernel(*square_and_discard_kernel, cl::NullRange, conv_global, conv_local, nullptr, &square_and_discard_ev));
+
     mux_and_mult_q.finish();
+    for (int i = 0; i < FDF::group_sz; ++i)
+        fft_queues[i].finish();
     square_and_discard_q.finish();
 
     print_duration("FT convolution and IFFT", mux_and_mult_ev, square_and_discard_ev);
@@ -265,25 +288,17 @@ bool FDAS::perform_ft_convolution(const FDAS::InputType &input, const FDAS::Shap
     return true;
 }
 
-#include "gen_info.h"
-
 bool FDAS::perform_harmonic_summing(const FDAS::ThreshType &thresholds, const FDAS::ShapeType &thresholds_shape) {
-    if (thresholds_shape.size() != 1 && thresholds_shape[0] < HMS_N_PLANES) {
+    if (thresholds_shape.size() != 1 && thresholds_shape[0] < HMS::n_planes) {
         log << "[ERROR] Not enough threshold values given" << endl;
         return false;
     }
 
-    if (HMS_N_PLANES != GenInfo::n_planes
-        || HMS_DETECTION_SZ != GenInfo::detection_sz) {
-        log << "[ERROR] Inconsistent parameters" << endl;
-        return false;
-    }
-
-    const int n_planes = HMS_N_PLANES;
-    const int n_filters = N_FILTERS_PER_ACCEL_SIGN + 1;
-    const int n_filter_groups = (int) ceil(1.0 * n_filters / GenInfo::group_sz);
-    const int n_channels = FDF_OUTPUT_SZ / GenInfo::bundle_sz / GenInfo::lcm * GenInfo::bundle_sz * GenInfo::lcm;
-    const int n_channel_bundles = n_channels / GenInfo::bundle_sz;
+    const int n_planes = HMS::n_planes;
+    const int n_filters = Input::n_filters_per_accel_sign + 1;
+    const int n_filter_groups = (int) ceil(1.0 * n_filters / HMS::group_sz);
+    const int n_channels = FDF::output_sz / HMS::bundle_sz / HMS::lcm * HMS::bundle_sz * HMS::lcm;
+    const int n_channel_bundles = n_channels / HMS::bundle_sz;
     const bool negative_filters = false;
 
     log << "[INFO] HSUM: Considering " << n_channels << " channels per filter" << endl;
@@ -291,10 +306,8 @@ bool FDAS::perform_harmonic_summing(const FDAS::ThreshType &thresholds, const FD
     cl::Event preload_evs[n_planes][n_filter_groups];
     cl::Event delay_evs[n_planes][n_filter_groups];
     cl::Event detect_evs[n_planes];
-    cl::Event store_cands_ev;
 
     std::vector<cl::CommandQueue> preload_queues, delay_queues, detect_queues;
-    cl::CommandQueue store_cands_queue(*context, default_device, CL_QUEUE_PROFILING_ENABLE);
 
     for (int h = 0; h < n_planes; ++h) {
         auto k = h + 1;
@@ -308,21 +321,21 @@ bool FDAS::perform_harmonic_summing(const FDAS::ThreshType &thresholds, const FD
         auto &delay_k = *delay_kernels[h];
 
         for (int g = 0; g < n_filter_groups; ++g) {
-            int base_row = g * GenInfo::group_sz / k;
-            int base_row_offset = g * GenInfo::group_sz % k;
-            int n_rows = GenInfo::first_offset_to_use_last_buffer[h] > 0 ?
-                    GenInfo::n_buffers[h] - (base_row_offset < GenInfo::first_offset_to_use_last_buffer[h]) :
-                    n_rows = GenInfo::n_buffers[h];
+            int base_row = g * HMS::group_sz / k;
+            int base_row_offset = g * HMS::group_sz % k;
+            int n_rows = HMS::first_offset_to_use_last_buffer[h] > 0 ?
+                    HMS::n_buffers[h] - (base_row_offset < HMS::first_offset_to_use_last_buffer[h]) :
+                    n_rows = HMS::n_buffers[h];
             if (base_row + n_rows >= n_filters)
                 n_rows = n_filters - base_row;
 
             cl_chk(preload_k.setArg<cl::Buffer>(0, *fop_buffer));
             cl_chk(preload_k.setArg<cl_uint>(1, n_rows));
             cl_chk(preload_k.setArg<cl_uint>(2, base_row_offset));
-            for (int r = 0; r < GenInfo::n_buffers[h]; ++r) {
+            for (int r = 0; r < HMS::n_buffers[h]; ++r) {
                 cl_chk(preload_k.setArg<cl_int>(3 + r, negative_filters ? -base_row - r : base_row + r));
             }
-            cl_chk(preload_k.setArg<cl_uint>(3 + GenInfo::n_buffers[h], n_channel_bundles / k)); // important: n_channel_bundles must be divisible by all k
+            cl_chk(preload_k.setArg<cl_uint>(3 + HMS::n_buffers[h], n_channel_bundles / k)); // important: n_channel_bundles must be divisible by all k
             cl_chk(preload_q.enqueueTask(preload_k, nullptr, &preload_evs[h][g]));
 
             cl_chk(delay_k.setArg<cl::Buffer>(0, *fop_buffer));
@@ -344,10 +357,6 @@ bool FDAS::perform_harmonic_summing(const FDAS::ThreshType &thresholds, const FD
         cl_chk(detect_q.enqueueTask(detect_k, nullptr, &detect_evs[h]));
     }
 
-//    cl_chk(store_cands_kernel->setArg<cl::Buffer>(0, *detection_location_buffer));
-//    cl_chk(store_cands_kernel->setArg<cl::Buffer>(1, *detection_amplitude_buffer));
-//    cl_chk(store_cands_queue.enqueueTask(*store_cands_kernel, nullptr, &store_cands_ev));
-
     for (auto &q : preload_queues)
         cl_chk(q.finish());
 
@@ -357,69 +366,52 @@ bool FDAS::perform_harmonic_summing(const FDAS::ThreshType &thresholds, const FD
     for (auto &q : detect_queues)
         cl_chk(q.finish());
 
-//    cl_chk(store_cands_queue.finish());
-
     print_duration("Harmonic summing (1/2 FOP)", preload_evs[0][0], detect_evs[n_planes - 1]);
 
     return true;
 }
 
 bool FDAS::retrieve_tiles(FDAS::TilesType &tiles, FDAS::ShapeType &tiles_shape) {
-    tiles.resize(FDF_TILED_INPUT_SZ);
+    tiles.resize(FDF::tiled_input_sz);
     cl::CommandQueue buffer_q(*context, default_device, CL_QUEUE_PROFILING_ENABLE);
-    cl_chk(buffer_q.enqueueReadBuffer(*tiles_buffer, true, 0, sizeof(cl_float2) * FDF_TILED_INPUT_SZ, tiles.data()));
+    cl_chk(buffer_q.enqueueReadBuffer(*tiles_buffer, true, 0, sizeof(cl_float2) * FDF::tiled_input_sz, tiles.data()));
     cl_chk(buffer_q.finish());
-    tiles_shape.push_back(FDF_N_TILES);
-    tiles_shape.push_back(FDF_TILE_SZ);
+    tiles_shape.push_back(FDF::n_tiles);
+    tiles_shape.push_back(FDF::tile_sz);
 
     return true;
 }
 
 bool FDAS::retrieve_FOP(FDAS::FOPType &fop, FDAS::ShapeType &fop_shape) {
-    fop.resize(FOP_SZ);
+    fop.resize(FOP::sz);
     cl::CommandQueue buffer_q(*context, default_device, CL_QUEUE_PROFILING_ENABLE);
-    cl_chk(buffer_q.enqueueReadBuffer(*fop_buffer, true, 0, sizeof(cl_float) * FOP_SZ, fop.data()));
+    cl_chk(buffer_q.enqueueReadBuffer(*fop_buffer, true, 0, sizeof(cl_float) * FOP::sz, fop.data()));
     cl_chk(buffer_q.finish());
-    fop_shape.push_back(N_FILTERS);
-    fop_shape.push_back(FDF_OUTPUT_SZ);
-
-    return true;
-}
-
-bool FDAS::retrieve_harmonic_planes(FDAS::HPType &harmonic_planes, FDAS::ShapeType &harmonic_planes_shape) {
-    if (!HMS_STORE_PLANES)
-        return false;
-
-    harmonic_planes.resize(HMS_PLANES_SZ);
-    cl::CommandQueue buffer_q(*context, default_device, CL_QUEUE_PROFILING_ENABLE);
-    cl_chk(buffer_q.enqueueReadBuffer(*harmonic_planes_buffer, true, 0, sizeof(cl_float) * HMS_PLANES_SZ, harmonic_planes.data()));
-    cl_chk(buffer_q.finish());
-    harmonic_planes_shape.push_back(HMS_N_PLANES - 1);
-    harmonic_planes_shape.push_back(N_FILTERS);
-    harmonic_planes_shape.push_back(FDF_OUTPUT_SZ);
+    fop_shape.push_back(Input::n_filters);
+    fop_shape.push_back(FDF::output_sz);
 
     return true;
 }
 
 bool FDAS::retrieve_candidates(FDAS::DetLocType &detection_location, FDAS::ShapeType &detection_location_shape,
                                FDAS::DetAmplType &detection_amplitude, FDAS::ShapeType &detection_amplitude_shape) {
-    detection_location.resize(N_CANDIDATES);
-    detection_amplitude.resize(N_CANDIDATES);
+    detection_location.resize(Output::n_candidates);
+    detection_amplitude.resize(Output::n_candidates);
 
     cl::CommandQueue buffer_q(*context, default_device, CL_QUEUE_PROFILING_ENABLE);
-    cl_chk(buffer_q.enqueueReadBuffer(*detection_location_buffer, true, 0, sizeof(cl_uint) * N_CANDIDATES, detection_location.data()));
-    cl_chk(buffer_q.enqueueReadBuffer(*detection_amplitude_buffer, true, 0, sizeof(cl_float) * N_CANDIDATES, detection_amplitude.data()));
+    cl_chk(buffer_q.enqueueReadBuffer(*detection_location_buffer, true, 0, sizeof(cl_uint) * Output::n_candidates, detection_location.data()));
+    cl_chk(buffer_q.enqueueReadBuffer(*detection_amplitude_buffer, true, 0, sizeof(cl_float) * Output::n_candidates, detection_amplitude.data()));
     cl_chk(buffer_q.finish());
 
-    detection_location_shape.push_back(N_CANDIDATES);
-    detection_amplitude_shape.push_back(N_CANDIDATES);
+    detection_location_shape.push_back(Output::n_candidates);
+    detection_amplitude_shape.push_back(Output::n_candidates);
 
     return true;
 }
 
 bool FDAS::inject_FOP(FDAS::FOPType &fop, FDAS::ShapeType &fop_shape) {
     cl::CommandQueue buffer_q(*context, default_device, CL_QUEUE_PROFILING_ENABLE);
-    cl_chk(buffer_q.enqueueWriteBuffer(*fop_buffer, true, 0, sizeof(cl_float) * FOP_SZ, fop.data()));
+    cl_chk(buffer_q.enqueueWriteBuffer(*fop_buffer, true, 0, sizeof(cl_float) * FOP::sz, fop.data()));
     cl_chk(buffer_q.finish());
 
     return true;

@@ -25,7 +25,7 @@ add_custom_target(fdas_emu
         COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/src/device device
         COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_SOURCE_DIR}/fdas_config.h device
         COMMAND ${CMAKE_COMMAND} -E make_directory bin
-        COMMAND aoc -march=emulator ${AOC_FLAGS} -o bin/fdas_emu.aocx device/fdas.cl
+        COMMAND aoc -march=emulator ${AOC_FLAGS} -o bin/fdas_emu.aocx device/fdas_gen.cl
         COMMENT "Generating emulator image")
 endif()
 
@@ -33,7 +33,7 @@ add_custom_target(fdas_report
         COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/src/device device
         COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_SOURCE_DIR}/fdas_config.h device
         COMMAND ${CMAKE_COMMAND} -E make_directory bin
-        COMMAND aoc -rtl ${AOC_FLAGS} -o bin/fdas_rpt.aocr device/fdas.cl
+        COMMAND aoc -rtl ${AOC_FLAGS} -o bin/fdas_rpt.aocr device/fdas_gen.cl
         COMMENT "Generating HLS report")
 
 if (FDAS_MODE STREQUAL "FPGA")
@@ -41,6 +41,6 @@ add_custom_target(fdas_synth
         COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/src/device device
         COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_SOURCE_DIR}/fdas_config.h device
         COMMAND ${CMAKE_COMMAND} -E make_directory bin
-        COMMAND aoc ${AOC_FLAGS} -o bin/fdas.aocx device/fdas.cl
+        COMMAND aoc ${AOC_FLAGS} -o bin/fdas.aocx device/fdas_gen.cl
         COMMENT "Generating bitstream")
 endif()
