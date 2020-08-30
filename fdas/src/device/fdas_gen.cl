@@ -34,8 +34,8 @@ channel float2x4 load_to_tile __attribute__((depth(0)));
 channel float2x4 fft_in __attribute__((depth(0)));
 channel float2x4 fft_out __attribute__((depth(0)));
 
-channel float2x4 ifft_in[3] __attribute__((depth(0)));
-channel float2x4 ifft_out[3] __attribute__((depth(0)));
+channel float2x4 ifft_in[5] __attribute__((depth(0)));
+channel float2x4 ifft_out[5] __attribute__((depth(0)));
 
 channel float2 preload_to_delay[8][8] __attribute__((depth(0)));
 channel float2 delay_to_detect[8][8] __attribute__((depth(0)));
@@ -56,21 +56,32 @@ inline uint bit_reversed(uint x, uint bits)
     return y;
 }
 
-inline float2 complex_mult(float2 a, float2 b)
+inline float2x4 complex_mult4(float2x4 a, float2x4 b)
 {
-    float2 res;
-    res.x = a.x * b.x - a.y * b.y;
-    res.y = a.y * b.x + a.x * b.y;
+    float2x4 res;
+    res.i0.x = a.i0.x * b.i0.x - a.i0.y * b.i0.y;
+    res.i0.y = a.i0.y * b.i0.x + a.i0.x * b.i0.y;
+    res.i1.x = a.i1.x * b.i1.x - a.i1.y * b.i1.y;
+    res.i1.y = a.i1.y * b.i1.x + a.i1.x * b.i1.y;
+    res.i2.x = a.i2.x * b.i2.x - a.i2.y * b.i2.y;
+    res.i2.y = a.i2.y * b.i2.x + a.i2.x * b.i2.y;
+    res.i3.x = a.i3.x * b.i3.x - a.i3.y * b.i3.y;
+    res.i3.y = a.i3.y * b.i3.x + a.i3.x * b.i3.y;
     return res;
 }
 
-inline float power_norm(float2 a)
+inline float4 power_norm4(float2x4 a)
 {
-    return (a.x * a.x + a.y * a.y) / 4194304;
+    float4 res;
+    res.s0 = (a.i0.x * a.i0.x + a.i0.y * a.i0.y) / 4194304;
+    res.s1 = (a.i1.x * a.i1.x + a.i1.y * a.i1.y) / 4194304;
+    res.s2 = (a.i2.x * a.i2.x + a.i2.y * a.i2.y) / 4194304;
+    res.s3 = (a.i3.x * a.i3.x + a.i3.y * a.i3.y) / 4194304;
+    return res;
 }
 
 inline uint encode_location(uint k, int f, uint c) {
-    return (((k - 1) & 0x7) << 29) | (((f + 10) & 0x7f) << 22) | (c & 0x3fffff);
+    return (((k - 1) & 0x7) << 29) | (((f + 42) & 0x7f) << 22) | (c & 0x3fffff);
 }
 
 __attribute__((max_global_work_dim(0)))
@@ -84,19 +95,19 @@ kernel void fft_0(const uint n_tiles, const uint is_inverse)
     float2x4 data;
 
     #pragma loop_coalesce
-    for (uint t = 0; t < n_tiles + 2; ++t) {
-        for (uint s = 0; s < 512; ++s) {
-            if (t >= 1) {
-                buf[1 - (t & 1)][bit_reversed(s, 9)] = data;
+    for (uint tile = 0; tile < n_tiles + 2; ++tile) {
+        for (uint step = 0; step < 512; ++step) {
+            if (tile >= 1) {
+                buf[1 - (tile & 1)][bit_reversed(step, 9)] = data;
             }
-            if (t >= 2) {
+            if (tile >= 2) {
                 if (! is_inverse)
-                    WRITE_CHANNEL(fft_out, buf[t & 1][s]);
+                    WRITE_CHANNEL(fft_out, buf[tile & 1][step]);
                 else
-                    WRITE_CHANNEL(ifft_out[0], buf[t & 1][s]);
+                    WRITE_CHANNEL(ifft_out[0], buf[tile & 1][step]);
             }
 
-            if (t < n_tiles) {
+            if (tile < n_tiles) {
                 if (! is_inverse)
                     data = READ_CHANNEL(fft_in);
                 else
@@ -105,7 +116,7 @@ kernel void fft_0(const uint n_tiles, const uint is_inverse)
                 data = zeros;
             }
 
-            data = fft_step(data, s, fft_delay_elements, is_inverse, 11);
+            data = fft_step(data, step, fft_delay_elements, is_inverse, 11);
         }
     }
 }
@@ -121,22 +132,22 @@ kernel void fft_1(const uint n_tiles)
     float2x4 data;
 
     #pragma loop_coalesce
-    for (uint t = 0; t < n_tiles + 2; ++t) {
-        for (uint s = 0; s < 512; ++s) {
-            if (t >= 1) {
-                buf[1 - (t & 1)][bit_reversed(s, 9)] = data;
+    for (uint tile = 0; tile < n_tiles + 2; ++tile) {
+        for (uint step = 0; step < 512; ++step) {
+            if (tile >= 1) {
+                buf[1 - (tile & 1)][bit_reversed(step, 9)] = data;
             }
-            if (t >= 2) {
-                WRITE_CHANNEL(ifft_out[1], buf[t & 1][s]);
+            if (tile >= 2) {
+                WRITE_CHANNEL(ifft_out[1], buf[tile & 1][step]);
             }
 
-            if (t < n_tiles) {
+            if (tile < n_tiles) {
                 data = READ_CHANNEL(ifft_in[1]);
             } else {
                 data = zeros;
             }
 
-            data = fft_step(data, s, fft_delay_elements, 1, 11);
+            data = fft_step(data, step, fft_delay_elements, 1, 11);
         }
     }
 }
@@ -152,34 +163,95 @@ kernel void fft_2(const uint n_tiles)
     float2x4 data;
 
     #pragma loop_coalesce
-    for (uint t = 0; t < n_tiles + 2; ++t) {
-        for (uint s = 0; s < 512; ++s) {
-            if (t >= 1) {
-                buf[1 - (t & 1)][bit_reversed(s, 9)] = data;
+    for (uint tile = 0; tile < n_tiles + 2; ++tile) {
+        for (uint step = 0; step < 512; ++step) {
+            if (tile >= 1) {
+                buf[1 - (tile & 1)][bit_reversed(step, 9)] = data;
             }
-            if (t >= 2) {
-                WRITE_CHANNEL(ifft_out[2], buf[t & 1][s]);
+            if (tile >= 2) {
+                WRITE_CHANNEL(ifft_out[2], buf[tile & 1][step]);
             }
 
-            if (t < n_tiles) {
+            if (tile < n_tiles) {
                 data = READ_CHANNEL(ifft_in[2]);
             } else {
                 data = zeros;
             }
 
-            data = fft_step(data, s, fft_delay_elements, 1, 11);
+            data = fft_step(data, step, fft_delay_elements, 1, 11);
         }
     }
 }
 
+__attribute__((max_global_work_dim(0)))
+__attribute__((uses_global_work_offset(0)))
+kernel void fft_3(const uint n_tiles)
+{
+    const float2x4 zeros = {0, 0, 0, 0};
+
+    float2x4 __attribute__((bank_bits(9))) buf[2][512];
+    float2 fft_delay_elements[2080];
+    float2x4 data;
+
+    #pragma loop_coalesce
+    for (uint tile = 0; tile < n_tiles + 2; ++tile) {
+        for (uint step = 0; step < 512; ++step) {
+            if (tile >= 1) {
+                buf[1 - (tile & 1)][bit_reversed(step, 9)] = data;
+            }
+            if (tile >= 2) {
+                WRITE_CHANNEL(ifft_out[3], buf[tile & 1][step]);
+            }
+
+            if (tile < n_tiles) {
+                data = READ_CHANNEL(ifft_in[3]);
+            } else {
+                data = zeros;
+            }
+
+            data = fft_step(data, step, fft_delay_elements, 1, 11);
+        }
+    }
+}
+
+__attribute__((max_global_work_dim(0)))
+__attribute__((uses_global_work_offset(0)))
+kernel void fft_4(const uint n_tiles)
+{
+    const float2x4 zeros = {0, 0, 0, 0};
+
+    float2x4 __attribute__((bank_bits(9))) buf[2][512];
+    float2 fft_delay_elements[2080];
+    float2x4 data;
+
+    #pragma loop_coalesce
+    for (uint tile = 0; tile < n_tiles + 2; ++tile) {
+        for (uint step = 0; step < 512; ++step) {
+            if (tile >= 1) {
+                buf[1 - (tile & 1)][bit_reversed(step, 9)] = data;
+            }
+            if (tile >= 2) {
+                WRITE_CHANNEL(ifft_out[4], buf[tile & 1][step]);
+            }
+
+            if (tile < n_tiles) {
+                data = READ_CHANNEL(ifft_in[4]);
+            } else {
+                data = zeros;
+            }
+
+            data = fft_step(data, step, fft_delay_elements, 1, 11);
+        }
+    }
+}
 
 __attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
 kernel void load_input(global float2x4 * restrict input,
-                       const uint input_sz)
+                       const uint n_packs)
 {
-    for (uint i = 0; i < input_sz / 4; ++i) {
-        float2x4 load = input[i];
+    for (uint pack = 0; pack < n_packs; ++pack) {
+        float2x4 load = input[pack];
         WRITE_CHANNEL(load_to_tile, load);
     }
 }
@@ -188,67 +260,69 @@ __attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
 kernel void tile(const uint n_tiles)
 {
-    float2x4 overlap_sr[28];
+    const float2x4 zeros = {0, 0, 0, 0};
+
+    float2x4 overlap_sr[106];
     float2 __attribute__((bank_bits(9))) chunk_buf_0[2][512];
     float2 __attribute__((bank_bits(9))) chunk_buf_1[2][512];
     float2 __attribute__((bank_bits(9))) chunk_buf_2[2][512];
     float2 __attribute__((bank_bits(9))) chunk_buf_3[2][512];
 
     #pragma loop_coalesce
-    for (uint t = 0; t < n_tiles + 1; ++t) {
-        for (uint s = 0; s < 512; ++s) {
-            if (t >= 1) {
-                float2x4 data;
-                data.i[0] = chunk_buf_0[1 - (t & 1)][s];
-                data.i[2] = chunk_buf_1[1 - (t & 1)][s];
-                data.i[1] = chunk_buf_2[1 - (t & 1)][s];
-                data.i[3] = chunk_buf_3[1 - (t & 1)][s];
-                WRITE_CHANNEL(fft_in, data);
+    for (uint tile = 0; tile < n_tiles + 1; ++tile) {
+        for (uint step = 0; step < 512; ++step) {
+            if (tile >= 1) {
+                float2x4 output;
+                output.i[0] = chunk_buf_0[1 - (tile & 1)][step];
+                output.i[2] = chunk_buf_1[1 - (tile & 1)][step];
+                output.i[1] = chunk_buf_2[1 - (tile & 1)][step];
+                output.i[3] = chunk_buf_3[1 - (tile & 1)][step];
+                WRITE_CHANNEL(fft_in, output);
             }
 
-            float2x4 input = {0, 0, 0, 0};
-            if (t < n_tiles) {
-                if (s < 27) {
-                    if (t >= 1)
+            float2x4 input = zeros;
+            if (tile < n_tiles) {
+                if (step < 105) {
+                    if (tile >= 1)
                         input = overlap_sr[0];
                 }
                 else {
                     input = READ_CHANNEL(load_to_tile);
                 }
 
-                uint chunk = s / 128;
-                uint bundle = s % 128;
+                uint chunk = step / 128;
+                uint pack = step % 128;
 
                 switch (chunk) {
                     case 0:
                         #pragma unroll
                         for (uint p = 0; p < 4; ++p)
-                            chunk_buf_0[t & 1][bundle * 4 + p] = input.i[p];
+                            chunk_buf_0[tile & 1][pack * 4 + p] = input.i[p];
                         break;
                     case 1:
                         #pragma unroll
                         for (uint p = 0; p < 4; ++p)
-                            chunk_buf_1[t & 1][bundle * 4 + p] = input.i[p];
+                            chunk_buf_1[tile & 1][pack * 4 + p] = input.i[p];
                         break;
                     case 2:
                         #pragma unroll
                         for (uint p = 0; p < 4; ++p)
-                            chunk_buf_2[t & 1][bundle * 4 + p] = input.i[p];
+                            chunk_buf_2[tile & 1][pack * 4 + p] = input.i[p];
                         break;
                     case 3:
                         #pragma unroll
                         for (uint p = 0; p < 4; ++p)
-                            chunk_buf_3[t & 1][bundle * 4 + p] = input.i[p];
+                            chunk_buf_3[tile & 1][pack * 4 + p] = input.i[p];
                         break;
                     default:
                         break;
                 }
             }
 
-            overlap_sr[27] = input;
+            overlap_sr[105] = input;
 
             #pragma unroll
-            for (uint x = 0; x < 27; ++x)
+            for (uint x = 0; x < 105; ++x)
                 overlap_sr[x] = overlap_sr[x + 1];
         }
     }
@@ -260,64 +334,402 @@ kernel void store_tiles(global float2x4 * restrict tiles,
                         const uint n_tiles)
 {
     #pragma loop_coalesce
-    for (uint t = 0; t < n_tiles; ++t) {
-        for (uint s = 0; s < 512; ++s) {
-            float2x4 data = READ_CHANNEL(fft_out);
-            tiles[t * 512 + s] = data;
+    for (uint tile = 0; tile < n_tiles; ++tile) {
+        for (uint step = 0; step < 512; ++step) {
+            float2x4 read = READ_CHANNEL(fft_out);
+            tiles[tile * 512 + step] = read;
         }
     }
 }
 
-__attribute__((reqd_work_group_size(512, 1, 1)))
+__attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
-kernel void mux_and_mult(global float2 * restrict tiles,
-                         global float2 * restrict templates)
+kernel void mux_and_mult(global float2x4 * restrict tiles,
+                         global float2x4 * restrict templates,
+                         const uint n_tiles,
+                         const int filter_0,
+                         const int filter_1,
+                         const int filter_2,
+                         const int filter_3,
+                         const int filter_4,
+                         const uint n_filters)
 {
-    uint batch = get_group_id(1) * 3;
-    uint tile = get_group_id(0);
-    uint step = get_local_id(0);
+    const float2x4 zeros = {0, 0, 0, 0};
 
-    #pragma unroll
-    for (uint f = 0; f < 3; ++f) {
-        float2x4 data;
+    float2x4 template_buf_0[512];
+    float2x4 template_buf_1[512];
+    float2x4 template_buf_2[512];
+    float2x4 template_buf_3[512];
+    float2x4 template_buf_4[512];
+
+    for (uint pack = 0; pack < 512; ++pack) {
+        float2x4 tmpl_0 = 0 < n_filters ? templates[(42 + filter_0) * 512 + pack] : zeros;
+        float2x4 tmpl_1 = 1 < n_filters ? templates[(42 + filter_1) * 512 + pack] : zeros;
+        float2x4 tmpl_2 = 2 < n_filters ? templates[(42 + filter_2) * 512 + pack] : zeros;
+        float2x4 tmpl_3 = 3 < n_filters ? templates[(42 + filter_3) * 512 + pack] : zeros;
+        float2x4 tmpl_4 = 4 < n_filters ? templates[(42 + filter_4) * 512 + pack] : zeros;
+        template_buf_0[pack] = tmpl_0;
+        template_buf_1[pack] = tmpl_1;
+        template_buf_2[pack] = tmpl_2;
+        template_buf_3[pack] = tmpl_3;
+        template_buf_4[pack] = tmpl_4;
+    }
+
+    for (uint pack = 0; pack < n_tiles * 512; ++pack) {
+        float2x4 coeffs[5];
+        float2x4 prods[5];
+
+        float2x4 load = tiles[pack];
+        coeffs[0] = template_buf_0[pack % 512];
+        coeffs[1] = template_buf_1[pack % 512];
+        coeffs[2] = template_buf_2[pack % 512];
+        coeffs[3] = template_buf_3[pack % 512];
+        coeffs[4] = template_buf_4[pack % 512];
+        prods[0] = complex_mult4(load, coeffs[0]);
+        prods[1] = complex_mult4(load, coeffs[1]);
+        prods[2] = complex_mult4(load, coeffs[2]);
+        prods[3] = complex_mult4(load, coeffs[3]);
+        prods[4] = complex_mult4(load, coeffs[4]);
+
         #pragma unroll
-        for (uint p = 0; p < 4; ++p) {
-            float2 value = tiles[tile * 2048 + step * 4 + p];
-            float2 coeff = templates[(batch + f) * 2048 + step * 4 + p];
-            data.i[p] = complex_mult(value, coeff);
+        for (uint e = 0; e < 5; ++e) {
+            if (e < n_filters)
+                WRITE_CHANNEL(ifft_in[e], prods[e]);
         }
-        WRITE_CHANNEL(ifft_in[f], data);
     }
 }
 
-__attribute__((reqd_work_group_size(512, 1, 1)))
+__attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
-kernel void square_and_discard(global float * restrict fop,
-                               const uint fop_row_sz) // temporary!
+kernel void square_and_discard_0(global float4 * restrict fop,
+                                 const uint fop_offset,
+                                 const uint n_tiles)
 {
-    float buf[3][4];
+    const float4 zeros = {0, 0, 0, 0};
 
-    uint batch = get_group_id(1) * 3;
-    uint tile = get_group_id(0);
-    uint step = get_local_id(0);
+    float __attribute__((bank_bits(9))) chunk_buf_0[2][512];
+    float __attribute__((bank_bits(9))) chunk_buf_1[2][512];
+    float __attribute__((bank_bits(9))) chunk_buf_2[2][512];
+    float __attribute__((bank_bits(9))) chunk_buf_3[2][512];
 
-    #pragma unroll
-    for (uint f = 0; f < 3; ++f) {
-        float2x4 data = READ_CHANNEL(ifft_out[f]);
-        #pragma unroll
-        for (uint p = 0; p < 4; ++p)
-            buf[f][p] = power_norm(data.i[p]);
+    uint fop_idx = 0;
+    #pragma loop_coalesce
+    for (uint tile = 0; tile < n_tiles + 1; ++tile) {
+        for (uint step = 0; step < 512; ++step) {
+            if (tile >= 1 && step >= 105) {
+                uint chunk = step / 128;
+                uint pack = step % 128;
+
+                float4 store = zeros;
+                switch (chunk) {
+                    case 0:
+                        store.s0 = chunk_buf_0[1 - (tile & 1)][pack * 4 + 0];
+                        store.s1 = chunk_buf_0[1 - (tile & 1)][pack * 4 + 1];
+                        store.s2 = chunk_buf_0[1 - (tile & 1)][pack * 4 + 2];
+                        store.s3 = chunk_buf_0[1 - (tile & 1)][pack * 4 + 3];
+                        break;
+                    case 1:
+                        store.s0 = chunk_buf_1[1 - (tile & 1)][pack * 4 + 0];
+                        store.s1 = chunk_buf_1[1 - (tile & 1)][pack * 4 + 1];
+                        store.s2 = chunk_buf_1[1 - (tile & 1)][pack * 4 + 2];
+                        store.s3 = chunk_buf_1[1 - (tile & 1)][pack * 4 + 3];
+                        break;
+                    case 2:
+                        store.s0 = chunk_buf_2[1 - (tile & 1)][pack * 4 + 0];
+                        store.s1 = chunk_buf_2[1 - (tile & 1)][pack * 4 + 1];
+                        store.s2 = chunk_buf_2[1 - (tile & 1)][pack * 4 + 2];
+                        store.s3 = chunk_buf_2[1 - (tile & 1)][pack * 4 + 3];
+                        break;
+                    case 3:
+                        store.s0 = chunk_buf_3[1 - (tile & 1)][pack * 4 + 0];
+                        store.s1 = chunk_buf_3[1 - (tile & 1)][pack * 4 + 1];
+                        store.s2 = chunk_buf_3[1 - (tile & 1)][pack * 4 + 2];
+                        store.s3 = chunk_buf_3[1 - (tile & 1)][pack * 4 + 3];
+                        break;
+                    default:
+                        break;
+                }
+
+                fop[fop_offset + fop_idx] = store;
+                ++fop_idx;
+            }
+
+            if (tile < n_tiles) {
+                float2x4 read = READ_CHANNEL(ifft_out[0]);
+                float4 norm = power_norm4(read);
+                chunk_buf_0[tile & 1][step] = norm.s0;
+                chunk_buf_1[tile & 1][step] = norm.s2;
+                chunk_buf_2[tile & 1][step] = norm.s1;
+                chunk_buf_3[tile & 1][step] = norm.s3;
+            }
+        }
     }
+}
 
-    #pragma unroll
-    for (uint f = 0; f < 3; ++f) {
-        #pragma unroll
-        for (uint p = 0; p < 4; ++p) {
-            uint q = bit_reversed(p, 2);
+__attribute__((max_global_work_dim(0)))
+__attribute__((uses_global_work_offset(0)))
+kernel void square_and_discard_1(global float4 * restrict fop,
+                                 const uint fop_offset,
+                                 const uint n_tiles)
+{
+    const float4 zeros = {0, 0, 0, 0};
 
-            int element = p * 512 + step - 108;
-            if (element >= 0)
-                fop[(batch + f) * fop_row_sz + tile * 1940 + element] = buf[f][q];
+    float __attribute__((bank_bits(9))) chunk_buf_0[2][512];
+    float __attribute__((bank_bits(9))) chunk_buf_1[2][512];
+    float __attribute__((bank_bits(9))) chunk_buf_2[2][512];
+    float __attribute__((bank_bits(9))) chunk_buf_3[2][512];
+
+    uint fop_idx = 0;
+    #pragma loop_coalesce
+    for (uint tile = 0; tile < n_tiles + 1; ++tile) {
+        for (uint step = 0; step < 512; ++step) {
+            if (tile >= 1 && step >= 105) {
+                uint chunk = step / 128;
+                uint pack = step % 128;
+
+                float4 store = zeros;
+                switch (chunk) {
+                    case 0:
+                        store.s0 = chunk_buf_0[1 - (tile & 1)][pack * 4 + 0];
+                        store.s1 = chunk_buf_0[1 - (tile & 1)][pack * 4 + 1];
+                        store.s2 = chunk_buf_0[1 - (tile & 1)][pack * 4 + 2];
+                        store.s3 = chunk_buf_0[1 - (tile & 1)][pack * 4 + 3];
+                        break;
+                    case 1:
+                        store.s0 = chunk_buf_1[1 - (tile & 1)][pack * 4 + 0];
+                        store.s1 = chunk_buf_1[1 - (tile & 1)][pack * 4 + 1];
+                        store.s2 = chunk_buf_1[1 - (tile & 1)][pack * 4 + 2];
+                        store.s3 = chunk_buf_1[1 - (tile & 1)][pack * 4 + 3];
+                        break;
+                    case 2:
+                        store.s0 = chunk_buf_2[1 - (tile & 1)][pack * 4 + 0];
+                        store.s1 = chunk_buf_2[1 - (tile & 1)][pack * 4 + 1];
+                        store.s2 = chunk_buf_2[1 - (tile & 1)][pack * 4 + 2];
+                        store.s3 = chunk_buf_2[1 - (tile & 1)][pack * 4 + 3];
+                        break;
+                    case 3:
+                        store.s0 = chunk_buf_3[1 - (tile & 1)][pack * 4 + 0];
+                        store.s1 = chunk_buf_3[1 - (tile & 1)][pack * 4 + 1];
+                        store.s2 = chunk_buf_3[1 - (tile & 1)][pack * 4 + 2];
+                        store.s3 = chunk_buf_3[1 - (tile & 1)][pack * 4 + 3];
+                        break;
+                    default:
+                        break;
+                }
+
+                fop[fop_offset + fop_idx] = store;
+                ++fop_idx;
+            }
+
+            if (tile < n_tiles) {
+                float2x4 read = READ_CHANNEL(ifft_out[1]);
+                float4 norm = power_norm4(read);
+                chunk_buf_0[tile & 1][step] = norm.s0;
+                chunk_buf_1[tile & 1][step] = norm.s2;
+                chunk_buf_2[tile & 1][step] = norm.s1;
+                chunk_buf_3[tile & 1][step] = norm.s3;
+            }
+        }
+    }
+}
+
+__attribute__((max_global_work_dim(0)))
+__attribute__((uses_global_work_offset(0)))
+kernel void square_and_discard_2(global float4 * restrict fop,
+                                 const uint fop_offset,
+                                 const uint n_tiles)
+{
+    const float4 zeros = {0, 0, 0, 0};
+
+    float __attribute__((bank_bits(9))) chunk_buf_0[2][512];
+    float __attribute__((bank_bits(9))) chunk_buf_1[2][512];
+    float __attribute__((bank_bits(9))) chunk_buf_2[2][512];
+    float __attribute__((bank_bits(9))) chunk_buf_3[2][512];
+
+    uint fop_idx = 0;
+    #pragma loop_coalesce
+    for (uint tile = 0; tile < n_tiles + 1; ++tile) {
+        for (uint step = 0; step < 512; ++step) {
+            if (tile >= 1 && step >= 105) {
+                uint chunk = step / 128;
+                uint pack = step % 128;
+
+                float4 store = zeros;
+                switch (chunk) {
+                    case 0:
+                        store.s0 = chunk_buf_0[1 - (tile & 1)][pack * 4 + 0];
+                        store.s1 = chunk_buf_0[1 - (tile & 1)][pack * 4 + 1];
+                        store.s2 = chunk_buf_0[1 - (tile & 1)][pack * 4 + 2];
+                        store.s3 = chunk_buf_0[1 - (tile & 1)][pack * 4 + 3];
+                        break;
+                    case 1:
+                        store.s0 = chunk_buf_1[1 - (tile & 1)][pack * 4 + 0];
+                        store.s1 = chunk_buf_1[1 - (tile & 1)][pack * 4 + 1];
+                        store.s2 = chunk_buf_1[1 - (tile & 1)][pack * 4 + 2];
+                        store.s3 = chunk_buf_1[1 - (tile & 1)][pack * 4 + 3];
+                        break;
+                    case 2:
+                        store.s0 = chunk_buf_2[1 - (tile & 1)][pack * 4 + 0];
+                        store.s1 = chunk_buf_2[1 - (tile & 1)][pack * 4 + 1];
+                        store.s2 = chunk_buf_2[1 - (tile & 1)][pack * 4 + 2];
+                        store.s3 = chunk_buf_2[1 - (tile & 1)][pack * 4 + 3];
+                        break;
+                    case 3:
+                        store.s0 = chunk_buf_3[1 - (tile & 1)][pack * 4 + 0];
+                        store.s1 = chunk_buf_3[1 - (tile & 1)][pack * 4 + 1];
+                        store.s2 = chunk_buf_3[1 - (tile & 1)][pack * 4 + 2];
+                        store.s3 = chunk_buf_3[1 - (tile & 1)][pack * 4 + 3];
+                        break;
+                    default:
+                        break;
+                }
+
+                fop[fop_offset + fop_idx] = store;
+                ++fop_idx;
+            }
+
+            if (tile < n_tiles) {
+                float2x4 read = READ_CHANNEL(ifft_out[2]);
+                float4 norm = power_norm4(read);
+                chunk_buf_0[tile & 1][step] = norm.s0;
+                chunk_buf_1[tile & 1][step] = norm.s2;
+                chunk_buf_2[tile & 1][step] = norm.s1;
+                chunk_buf_3[tile & 1][step] = norm.s3;
+            }
+        }
+    }
+}
+
+__attribute__((max_global_work_dim(0)))
+__attribute__((uses_global_work_offset(0)))
+kernel void square_and_discard_3(global float4 * restrict fop,
+                                 const uint fop_offset,
+                                 const uint n_tiles)
+{
+    const float4 zeros = {0, 0, 0, 0};
+
+    float __attribute__((bank_bits(9))) chunk_buf_0[2][512];
+    float __attribute__((bank_bits(9))) chunk_buf_1[2][512];
+    float __attribute__((bank_bits(9))) chunk_buf_2[2][512];
+    float __attribute__((bank_bits(9))) chunk_buf_3[2][512];
+
+    uint fop_idx = 0;
+    #pragma loop_coalesce
+    for (uint tile = 0; tile < n_tiles + 1; ++tile) {
+        for (uint step = 0; step < 512; ++step) {
+            if (tile >= 1 && step >= 105) {
+                uint chunk = step / 128;
+                uint pack = step % 128;
+
+                float4 store = zeros;
+                switch (chunk) {
+                    case 0:
+                        store.s0 = chunk_buf_0[1 - (tile & 1)][pack * 4 + 0];
+                        store.s1 = chunk_buf_0[1 - (tile & 1)][pack * 4 + 1];
+                        store.s2 = chunk_buf_0[1 - (tile & 1)][pack * 4 + 2];
+                        store.s3 = chunk_buf_0[1 - (tile & 1)][pack * 4 + 3];
+                        break;
+                    case 1:
+                        store.s0 = chunk_buf_1[1 - (tile & 1)][pack * 4 + 0];
+                        store.s1 = chunk_buf_1[1 - (tile & 1)][pack * 4 + 1];
+                        store.s2 = chunk_buf_1[1 - (tile & 1)][pack * 4 + 2];
+                        store.s3 = chunk_buf_1[1 - (tile & 1)][pack * 4 + 3];
+                        break;
+                    case 2:
+                        store.s0 = chunk_buf_2[1 - (tile & 1)][pack * 4 + 0];
+                        store.s1 = chunk_buf_2[1 - (tile & 1)][pack * 4 + 1];
+                        store.s2 = chunk_buf_2[1 - (tile & 1)][pack * 4 + 2];
+                        store.s3 = chunk_buf_2[1 - (tile & 1)][pack * 4 + 3];
+                        break;
+                    case 3:
+                        store.s0 = chunk_buf_3[1 - (tile & 1)][pack * 4 + 0];
+                        store.s1 = chunk_buf_3[1 - (tile & 1)][pack * 4 + 1];
+                        store.s2 = chunk_buf_3[1 - (tile & 1)][pack * 4 + 2];
+                        store.s3 = chunk_buf_3[1 - (tile & 1)][pack * 4 + 3];
+                        break;
+                    default:
+                        break;
+                }
+
+                fop[fop_offset + fop_idx] = store;
+                ++fop_idx;
+            }
+
+            if (tile < n_tiles) {
+                float2x4 read = READ_CHANNEL(ifft_out[3]);
+                float4 norm = power_norm4(read);
+                chunk_buf_0[tile & 1][step] = norm.s0;
+                chunk_buf_1[tile & 1][step] = norm.s2;
+                chunk_buf_2[tile & 1][step] = norm.s1;
+                chunk_buf_3[tile & 1][step] = norm.s3;
+            }
+        }
+    }
+}
+
+__attribute__((max_global_work_dim(0)))
+__attribute__((uses_global_work_offset(0)))
+kernel void square_and_discard_4(global float4 * restrict fop,
+                                 const uint fop_offset,
+                                 const uint n_tiles)
+{
+    const float4 zeros = {0, 0, 0, 0};
+
+    float __attribute__((bank_bits(9))) chunk_buf_0[2][512];
+    float __attribute__((bank_bits(9))) chunk_buf_1[2][512];
+    float __attribute__((bank_bits(9))) chunk_buf_2[2][512];
+    float __attribute__((bank_bits(9))) chunk_buf_3[2][512];
+
+    uint fop_idx = 0;
+    #pragma loop_coalesce
+    for (uint tile = 0; tile < n_tiles + 1; ++tile) {
+        for (uint step = 0; step < 512; ++step) {
+            if (tile >= 1 && step >= 105) {
+                uint chunk = step / 128;
+                uint pack = step % 128;
+
+                float4 store = zeros;
+                switch (chunk) {
+                    case 0:
+                        store.s0 = chunk_buf_0[1 - (tile & 1)][pack * 4 + 0];
+                        store.s1 = chunk_buf_0[1 - (tile & 1)][pack * 4 + 1];
+                        store.s2 = chunk_buf_0[1 - (tile & 1)][pack * 4 + 2];
+                        store.s3 = chunk_buf_0[1 - (tile & 1)][pack * 4 + 3];
+                        break;
+                    case 1:
+                        store.s0 = chunk_buf_1[1 - (tile & 1)][pack * 4 + 0];
+                        store.s1 = chunk_buf_1[1 - (tile & 1)][pack * 4 + 1];
+                        store.s2 = chunk_buf_1[1 - (tile & 1)][pack * 4 + 2];
+                        store.s3 = chunk_buf_1[1 - (tile & 1)][pack * 4 + 3];
+                        break;
+                    case 2:
+                        store.s0 = chunk_buf_2[1 - (tile & 1)][pack * 4 + 0];
+                        store.s1 = chunk_buf_2[1 - (tile & 1)][pack * 4 + 1];
+                        store.s2 = chunk_buf_2[1 - (tile & 1)][pack * 4 + 2];
+                        store.s3 = chunk_buf_2[1 - (tile & 1)][pack * 4 + 3];
+                        break;
+                    case 3:
+                        store.s0 = chunk_buf_3[1 - (tile & 1)][pack * 4 + 0];
+                        store.s1 = chunk_buf_3[1 - (tile & 1)][pack * 4 + 1];
+                        store.s2 = chunk_buf_3[1 - (tile & 1)][pack * 4 + 2];
+                        store.s3 = chunk_buf_3[1 - (tile & 1)][pack * 4 + 3];
+                        break;
+                    default:
+                        break;
+                }
+
+                fop[fop_offset + fop_idx] = store;
+                ++fop_idx;
+            }
+
+            if (tile < n_tiles) {
+                float2x4 read = READ_CHANNEL(ifft_out[4]);
+                float4 norm = power_norm4(read);
+                chunk_buf_0[tile & 1][step] = norm.s0;
+                chunk_buf_1[tile & 1][step] = norm.s2;
+                chunk_buf_2[tile & 1][step] = norm.s1;
+                chunk_buf_3[tile & 1][step] = norm.s3;
+            }
         }
     }
 }
@@ -337,18 +749,19 @@ kernel void preload_1(global float2 * restrict fop,
                       const uint filter_offset_7,
                       const uint n_channel_bundles)
 {
+    const float2 zeros = {0, 0};
     float2 load[8];
     float2 out[8];
 
     for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
-        load[0] = 0 < n_rows ? fop[filter_offset_0 + bundle] : 0.0f;
-        load[1] = 1 < n_rows ? fop[filter_offset_1 + bundle] : 0.0f;
-        load[2] = 2 < n_rows ? fop[filter_offset_2 + bundle] : 0.0f;
-        load[3] = 3 < n_rows ? fop[filter_offset_3 + bundle] : 0.0f;
-        load[4] = 4 < n_rows ? fop[filter_offset_4 + bundle] : 0.0f;
-        load[5] = 5 < n_rows ? fop[filter_offset_5 + bundle] : 0.0f;
-        load[6] = 6 < n_rows ? fop[filter_offset_6 + bundle] : 0.0f;
-        load[7] = 7 < n_rows ? fop[filter_offset_7 + bundle] : 0.0f;
+        load[0] = 0 < n_rows ? fop[filter_offset_0 + bundle] : zeros;
+        load[1] = 1 < n_rows ? fop[filter_offset_1 + bundle] : zeros;
+        load[2] = 2 < n_rows ? fop[filter_offset_2 + bundle] : zeros;
+        load[3] = 3 < n_rows ? fop[filter_offset_3 + bundle] : zeros;
+        load[4] = 4 < n_rows ? fop[filter_offset_4 + bundle] : zeros;
+        load[5] = 5 < n_rows ? fop[filter_offset_5 + bundle] : zeros;
+        load[6] = 6 < n_rows ? fop[filter_offset_6 + bundle] : zeros;
+        load[7] = 7 < n_rows ? fop[filter_offset_7 + bundle] : zeros;
 
         out[0] = load[0];
         out[1] = load[1];
@@ -369,6 +782,7 @@ __attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
 kernel void delay_1(const uint n_channel_bundles)
 {
+    const float2 zeros = {0, 0};
     float2 in[8];
     float2 out[8];
 
@@ -393,10 +807,8 @@ kernel void delay_1(const uint n_channel_bundles)
                 break;
             default:
                 #pragma unroll
-                for (uint p = 0; p < 8; ++p) {
-                    out[p].s0 = 0.0f;
-                    out[p].s1 = 0.0f;
-                }
+                for (uint p = 0; p < 8; ++p)
+                    out[p] = zeros;
                 break;
         }
 
@@ -417,14 +829,15 @@ kernel void preload_2(global float2 * restrict fop,
                       const uint filter_offset_3,
                       const uint n_channel_bundles)
 {
+    const float2 zeros = {0, 0};
     float2 load[4];
     float2 out[8];
 
     for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
-        load[0] = 0 < n_rows ? fop[filter_offset_0 + bundle] : 0.0f;
-        load[1] = 1 < n_rows ? fop[filter_offset_1 + bundle] : 0.0f;
-        load[2] = 2 < n_rows ? fop[filter_offset_2 + bundle] : 0.0f;
-        load[3] = 3 < n_rows ? fop[filter_offset_3 + bundle] : 0.0f;
+        load[0] = 0 < n_rows ? fop[filter_offset_0 + bundle] : zeros;
+        load[1] = 1 < n_rows ? fop[filter_offset_1 + bundle] : zeros;
+        load[2] = 2 < n_rows ? fop[filter_offset_2 + bundle] : zeros;
+        load[3] = 3 < n_rows ? fop[filter_offset_3 + bundle] : zeros;
 
         out[0] = load[0];
         out[1] = load[0];
@@ -445,6 +858,7 @@ __attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
 kernel void delay_2(const uint n_channel_bundles)
 {
+    const float2 zeros = {0, 0};
     float2 in[8];
     float2 out[8];
 
@@ -476,10 +890,8 @@ kernel void delay_2(const uint n_channel_bundles)
                 break;
             default:
                 #pragma unroll
-                for (uint p = 0; p < 8; ++p) {
-                    out[p].s0 = 0.0f;
-                    out[p].s1 = 0.0f;
-                }
+                for (uint p = 0; p < 8; ++p)
+                    out[p] = zeros;
                 break;
         }
 
@@ -500,14 +912,15 @@ kernel void preload_3(global float2 * restrict fop,
                       const uint filter_offset_3,
                       const uint n_channel_bundles)
 {
+    const float2 zeros = {0, 0};
     float2 load[4];
     float2 out[8];
 
     for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
-        load[0] = 0 < n_rows ? fop[filter_offset_0 + bundle] : 0.0f;
-        load[1] = 1 < n_rows ? fop[filter_offset_1 + bundle] : 0.0f;
-        load[2] = 2 < n_rows ? fop[filter_offset_2 + bundle] : 0.0f;
-        load[3] = 3 < n_rows ? fop[filter_offset_3 + bundle] : 0.0f;
+        load[0] = 0 < n_rows ? fop[filter_offset_0 + bundle] : zeros;
+        load[1] = 1 < n_rows ? fop[filter_offset_1 + bundle] : zeros;
+        load[2] = 2 < n_rows ? fop[filter_offset_2 + bundle] : zeros;
+        load[3] = 3 < n_rows ? fop[filter_offset_3 + bundle] : zeros;
 
         out[0] = load[0];
         out[1] = base_row_rem < 2 ? load[0] : load[1];
@@ -528,6 +941,7 @@ __attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
 kernel void delay_3(const uint n_channel_bundles)
 {
+    const float2 zeros = {0, 0};
     float2 in[8];
     float2 out[8];
 
@@ -566,10 +980,8 @@ kernel void delay_3(const uint n_channel_bundles)
                 break;
             default:
                 #pragma unroll
-                for (uint p = 0; p < 8; ++p) {
-                    out[p].s0 = 0.0f;
-                    out[p].s1 = 0.0f;
-                }
+                for (uint p = 0; p < 8; ++p)
+                    out[p] = zeros;
                 break;
         }
 
@@ -588,12 +1000,13 @@ kernel void preload_4(global float2 * restrict fop,
                       const uint filter_offset_1,
                       const uint n_channel_bundles)
 {
+    const float2 zeros = {0, 0};
     float2 load[2];
     float2 out[8];
 
     for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
-        load[0] = 0 < n_rows ? fop[filter_offset_0 + bundle] : 0.0f;
-        load[1] = 1 < n_rows ? fop[filter_offset_1 + bundle] : 0.0f;
+        load[0] = 0 < n_rows ? fop[filter_offset_0 + bundle] : zeros;
+        load[1] = 1 < n_rows ? fop[filter_offset_1 + bundle] : zeros;
 
         out[0] = load[0];
         out[1] = load[0];
@@ -614,6 +1027,7 @@ __attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
 kernel void delay_4(const uint n_channel_bundles)
 {
+    const float2 zeros = {0, 0};
     float2 in[8];
     float2 out[8];
 
@@ -659,10 +1073,8 @@ kernel void delay_4(const uint n_channel_bundles)
                 break;
             default:
                 #pragma unroll
-                for (uint p = 0; p < 8; ++p) {
-                    out[p].s0 = 0.0f;
-                    out[p].s1 = 0.0f;
-                }
+                for (uint p = 0; p < 8; ++p)
+                    out[p] = zeros;
                 break;
         }
 
@@ -682,13 +1094,14 @@ kernel void preload_5(global float2 * restrict fop,
                       const uint filter_offset_2,
                       const uint n_channel_bundles)
 {
+    const float2 zeros = {0, 0};
     float2 load[3];
     float2 out[8];
 
     for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
-        load[0] = 0 < n_rows ? fop[filter_offset_0 + bundle] : 0.0f;
-        load[1] = 1 < n_rows ? fop[filter_offset_1 + bundle] : 0.0f;
-        load[2] = 2 < n_rows ? fop[filter_offset_2 + bundle] : 0.0f;
+        load[0] = 0 < n_rows ? fop[filter_offset_0 + bundle] : zeros;
+        load[1] = 1 < n_rows ? fop[filter_offset_1 + bundle] : zeros;
+        load[2] = 2 < n_rows ? fop[filter_offset_2 + bundle] : zeros;
 
         out[0] = load[0];
         out[1] = base_row_rem < 4 ? load[0] : load[1];
@@ -709,6 +1122,7 @@ __attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
 kernel void delay_5(const uint n_channel_bundles)
 {
+    const float2 zeros = {0, 0};
     float2 in[8];
     float2 out[8];
 
@@ -761,10 +1175,8 @@ kernel void delay_5(const uint n_channel_bundles)
                 break;
             default:
                 #pragma unroll
-                for (uint p = 0; p < 8; ++p) {
-                    out[p].s0 = 0.0f;
-                    out[p].s1 = 0.0f;
-                }
+                for (uint p = 0; p < 8; ++p)
+                    out[p] = zeros;
                 break;
         }
 
@@ -783,12 +1195,13 @@ kernel void preload_6(global float2 * restrict fop,
                       const uint filter_offset_1,
                       const uint n_channel_bundles)
 {
+    const float2 zeros = {0, 0};
     float2 load[2];
     float2 out[8];
 
     for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
-        load[0] = 0 < n_rows ? fop[filter_offset_0 + bundle] : 0.0f;
-        load[1] = 1 < n_rows ? fop[filter_offset_1 + bundle] : 0.0f;
+        load[0] = 0 < n_rows ? fop[filter_offset_0 + bundle] : zeros;
+        load[1] = 1 < n_rows ? fop[filter_offset_1 + bundle] : zeros;
 
         out[0] = load[0];
         out[1] = load[0];
@@ -809,6 +1222,7 @@ __attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
 kernel void delay_6(const uint n_channel_bundles)
 {
+    const float2 zeros = {0, 0};
     float2 in[8];
     float2 out[8];
 
@@ -868,10 +1282,8 @@ kernel void delay_6(const uint n_channel_bundles)
                 break;
             default:
                 #pragma unroll
-                for (uint p = 0; p < 8; ++p) {
-                    out[p].s0 = 0.0f;
-                    out[p].s1 = 0.0f;
-                }
+                for (uint p = 0; p < 8; ++p)
+                    out[p] = zeros;
                 break;
         }
 
@@ -890,12 +1302,13 @@ kernel void preload_7(global float2 * restrict fop,
                       const uint filter_offset_1,
                       const uint n_channel_bundles)
 {
+    const float2 zeros = {0, 0};
     float2 load[2];
     float2 out[8];
 
     for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
-        load[0] = 0 < n_rows ? fop[filter_offset_0 + bundle] : 0.0f;
-        load[1] = 1 < n_rows ? fop[filter_offset_1 + bundle] : 0.0f;
+        load[0] = 0 < n_rows ? fop[filter_offset_0 + bundle] : zeros;
+        load[1] = 1 < n_rows ? fop[filter_offset_1 + bundle] : zeros;
 
         out[0] = load[0];
         out[1] = base_row_rem < 6 ? load[0] : load[1];
@@ -916,6 +1329,7 @@ __attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
 kernel void delay_7(const uint n_channel_bundles)
 {
+    const float2 zeros = {0, 0};
     float2 in[8];
     float2 out[8];
 
@@ -982,10 +1396,8 @@ kernel void delay_7(const uint n_channel_bundles)
                 break;
             default:
                 #pragma unroll
-                for (uint p = 0; p < 8; ++p) {
-                    out[p].s0 = 0.0f;
-                    out[p].s1 = 0.0f;
-                }
+                for (uint p = 0; p < 8; ++p)
+                    out[p] = zeros;
                 break;
         }
 
@@ -1003,11 +1415,12 @@ kernel void preload_8(global float2 * restrict fop,
                       const uint filter_offset_0,
                       const uint n_channel_bundles)
 {
+    const float2 zeros = {0, 0};
     float2 load[1];
     float2 out[8];
 
     for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
-        load[0] = 0 < n_rows ? fop[filter_offset_0 + bundle] : 0.0f;
+        load[0] = 0 < n_rows ? fop[filter_offset_0 + bundle] : zeros;
 
         out[0] = load[0];
         out[1] = load[0];
@@ -1028,6 +1441,7 @@ __attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
 kernel void delay_8(const uint n_channel_bundles)
 {
+    const float2 zeros = {0, 0};
     float2 in[8];
     float2 out[8];
 
@@ -1101,10 +1515,8 @@ kernel void delay_8(const uint n_channel_bundles)
                 break;
             default:
                 #pragma unroll
-                for (uint p = 0; p < 8; ++p) {
-                    out[p].s0 = 0.0f;
-                    out[p].s1 = 0.0f;
-                }
+                for (uint p = 0; p < 8; ++p)
+                    out[p] = zeros;
                 break;
         }
 
@@ -1130,7 +1542,7 @@ kernel void detect_1(global uint * restrict detection_location,
     ulong valid = 0l;
     uint next = 0;
 
-    const uint invalid_location = encode_location(1, 11, 0);
+    const uint invalid_location = encode_location(1, 43, 0);
     const float invalid_amplitude = -1.0f;
 
     for (uint group = 0; group < n_filter_groups; ++group) {
@@ -1259,7 +1671,7 @@ kernel void detect_2(global uint * restrict detection_location,
     ulong valid = 0l;
     uint next = 0;
 
-    const uint invalid_location = encode_location(1, 11, 0);
+    const uint invalid_location = encode_location(1, 43, 0);
     const float invalid_amplitude = -1.0f;
 
     for (uint group = 0; group < n_filter_groups; ++group) {
@@ -1389,7 +1801,7 @@ kernel void detect_3(global uint * restrict detection_location,
     ulong valid = 0l;
     uint next = 0;
 
-    const uint invalid_location = encode_location(1, 11, 0);
+    const uint invalid_location = encode_location(1, 43, 0);
     const float invalid_amplitude = -1.0f;
 
     for (uint group = 0; group < n_filter_groups; ++group) {
@@ -1519,7 +1931,7 @@ kernel void detect_4(global uint * restrict detection_location,
     ulong valid = 0l;
     uint next = 0;
 
-    const uint invalid_location = encode_location(1, 11, 0);
+    const uint invalid_location = encode_location(1, 43, 0);
     const float invalid_amplitude = -1.0f;
 
     for (uint group = 0; group < n_filter_groups; ++group) {
@@ -1649,7 +2061,7 @@ kernel void detect_5(global uint * restrict detection_location,
     ulong valid = 0l;
     uint next = 0;
 
-    const uint invalid_location = encode_location(1, 11, 0);
+    const uint invalid_location = encode_location(1, 43, 0);
     const float invalid_amplitude = -1.0f;
 
     for (uint group = 0; group < n_filter_groups; ++group) {
@@ -1779,7 +2191,7 @@ kernel void detect_6(global uint * restrict detection_location,
     ulong valid = 0l;
     uint next = 0;
 
-    const uint invalid_location = encode_location(1, 11, 0);
+    const uint invalid_location = encode_location(1, 43, 0);
     const float invalid_amplitude = -1.0f;
 
     for (uint group = 0; group < n_filter_groups; ++group) {
@@ -1909,7 +2321,7 @@ kernel void detect_7(global uint * restrict detection_location,
     ulong valid = 0l;
     uint next = 0;
 
-    const uint invalid_location = encode_location(1, 11, 0);
+    const uint invalid_location = encode_location(1, 43, 0);
     const float invalid_amplitude = -1.0f;
 
     for (uint group = 0; group < n_filter_groups; ++group) {
@@ -2039,7 +2451,7 @@ kernel void detect_8(global uint * restrict detection_location,
     ulong valid = 0l;
     uint next = 0;
 
-    const uint invalid_location = encode_location(1, 11, 0);
+    const uint invalid_location = encode_location(1, 43, 0);
     const float invalid_amplitude = -1.0f;
 
     for (uint group = 0; group < n_filter_groups; ++group) {

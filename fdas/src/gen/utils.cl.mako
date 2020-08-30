@@ -11,17 +11,23 @@ inline uint bit_reversed(uint x, uint bits)
     return y;
 }
 
-inline float2 complex_mult(float2 a, float2 b)
+inline float2x4 complex_mult4(float2x4 a, float2x4 b)
 {
-    float2 res;
-    res.x = a.x * b.x - a.y * b.y;
-    res.y = a.y * b.x + a.x * b.y;
+    float2x4 res;
+%for z in range(4):
+    res.i${z}.x = a.i${z}.x * b.i${z}.x - a.i${z}.y * b.i${z}.y;
+    res.i${z}.y = a.i${z}.y * b.i${z}.x + a.i${z}.x * b.i${z}.y;
+%endfor
     return res;
 }
 
-inline float power_norm(float2 a)
+inline float4 power_norm4(float2x4 a)
 {
-    return (a.x * a.x + a.y * a.y) / ${fft_n_points ** 2};
+    float4 res;
+%for z in range(4):
+    res.s${z} = (a.i${z}.x * a.i${z}.x + a.i${z}.y * a.i${z}.y) / ${fft_n_points ** 2};
+%endfor
+    return res;
 }
 
 inline uint encode_location(uint k, int f, uint c) {

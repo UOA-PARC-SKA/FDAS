@@ -25,9 +25,9 @@
 
 namespace GenInfo {
 namespace Input {
-    static const cl_uint  n_filters                 = 21;
-    static const cl_uint  n_taps                    = 106;
-    static const cl_uint  n_filters_per_accel_sign  = 10;
+    static const cl_uint  n_filters                 = 85;
+    static const cl_uint  n_taps                    = 421;
+    static const cl_int   n_filters_per_accel_sign  = 42; // intentionally signed
 }
 namespace FFT {
     static const cl_uint  n_points                  = 2048;
@@ -36,13 +36,12 @@ namespace FFT {
     static const cl_uint  n_parallel_log            = 2;
     static const cl_uint  n_points_per_terminal     = 512;
     static const cl_uint  n_points_per_terminal_log = 9;
+    static const cl_uint  n_engines                 = 5;
 }
 namespace FDF {
     static const cl_uint  tile_sz                   = 2048;
-    static const cl_uint  tile_overlap              = 108;
-    static const cl_uint  tile_payload              = 1940;
-
-    static const cl_uint  group_sz                  = 3;
+    static const cl_uint  tile_overlap              = 420;
+    static const cl_uint  tile_payload              = 1628;
 }
 namespace HMS {
     static const cl_uint  n_planes                  = 8;
@@ -55,13 +54,13 @@ namespace HMS {
     static constexpr cl_uint first_offset_to_use_last_buffer[8] = {0, 0, 2, 0, 3, 0, 0, 0};
 
     constexpr cl_uint encode_location(cl_uint k, cl_int f, cl_uint c) {
-        return (((k - 1) & 0x7) << 29) | (((f + 10) & 0x7f) << 22) | (c & 0x3fffff);
+        return (((k - 1) & 0x7) << 29) | (((f + 42) & 0x7f) << 22) | (c & 0x3fffff);
     }
     constexpr cl_uint get_harmonic(cl_uint location) { return ((location >> 29) & 0x7) + 1; }
-    constexpr cl_uint get_filter(cl_uint location)   { return ((location >> 22) & 0x7f) - 10; }
+    constexpr cl_uint get_filter(cl_uint location)   { return ((location >> 22) & 0x7f) - 42; }
     constexpr cl_uint get_channel(cl_uint location)  { return location & 0x3fffff; }
 
-    static constexpr cl_uint invalid_location = encode_location(1, 10 + 1, 0);
+    static constexpr cl_uint invalid_location = encode_location(1, 42 + 1, 0);
 }
 namespace Output {
     static const cl_uint  n_candidates              = 8192;

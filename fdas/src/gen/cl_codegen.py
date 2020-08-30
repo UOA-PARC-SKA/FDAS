@@ -59,7 +59,7 @@ def main():
     # TODO: build an ArgumentParser around this
 
     # Input parameters
-    mode = 'emu'
+    mode = 'fpga'
     if mode == 'fpga':
         n_filters_per_accel_sign = 42
         n_taps = 421
@@ -81,12 +81,12 @@ def main():
     fft_n_points_per_terminal_log = fft_n_points_log - fft_n_parallel_log
     fft_n_points_per_terminal = 2 ** fft_n_points_per_terminal_log
 
+    fft_n_engines = 5
+
     # Frequency-domain FIR filter implementation with overlap-save algorithm
     fdf_tile_sz = fft_n_points
     fdf_tile_overlap = int(ceil((n_taps - 1) / fft_n_parallel)) * fft_n_parallel  # ease input tiling
     fdf_tile_payload = fdf_tile_sz - fdf_tile_overlap
-
-    fdf_group_sz = 5 if mode == 'fpga' else 3
 
     # Harmonic summing
     hms_n_planes = 8
@@ -107,7 +107,8 @@ def main():
     utils_template = Template(filename='utils.cl.mako')
     fft_template = Template(filename='fft.cl.mako')
     tile_input_template = Template(filename='tile_input.cl.mako')
-    convolve_template = Template(filename='convolve.cl.mako')
+    mux_and_mult_template = Template(filename='mux_and_mult.cl.mako')
+    square_and_discard_template = Template(filename='square_and_discard.cl.mako')
     preload_template = Template(filename='preload.cl.mako')
     detect_template = Template(filename='detect.cl.mako')
     gen_info_template = Template(filename='gen_info.h.mako')
@@ -138,10 +139,12 @@ def main():
         fdas_file.write('#include "fft_4p.cl"\n')
         fdas_file.write(channels_template.render(**fdas_configuration))
         fdas_file.write(utils_template.render(**fdas_configuration))
-        for i in range(fdf_group_sz):
-            fdas_file.write(fft_template.render(i=i, both_directions=i == 0, **fdas_configuration))
+        for e in range(fft_n_engines):
+            fdas_file.write(fft_template.render(engine=e, both_directions=e == 0, **fdas_configuration))
         fdas_file.write(tile_input_template.render(**fdas_configuration))
-        fdas_file.write(convolve_template.render(**fdas_configuration))
+        fdas_file.write(mux_and_mult_template.render(**fdas_configuration))
+        for e in range(fft_n_engines):
+            fdas_file.write(square_and_discard_template.render(engine=e, **fdas_configuration))
         for h in range(hms_n_planes):
             fdas_file.write(preload_template.render(k=h + 1, **fdas_configuration))
         for h in range(hms_n_planes):

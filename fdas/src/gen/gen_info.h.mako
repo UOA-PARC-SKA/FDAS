@@ -28,7 +28,7 @@ namespace GenInfo {
 namespace Input {
     static const cl_uint  n_filters                 = ${n_filters};
     static const cl_uint  n_taps                    = ${n_taps};
-    static const cl_uint  n_filters_per_accel_sign  = ${n_filters_per_accel_sign};
+    static const cl_int   n_filters_per_accel_sign  = ${n_filters_per_accel_sign}; // intentionally signed
 }
 namespace FFT {
     static const cl_uint  n_points                  = ${fft_n_points};
@@ -37,13 +37,12 @@ namespace FFT {
     static const cl_uint  n_parallel_log            = ${fft_n_parallel_log};
     static const cl_uint  n_points_per_terminal     = ${fft_n_points_per_terminal};
     static const cl_uint  n_points_per_terminal_log = ${fft_n_points_per_terminal_log};
+    static const cl_uint  n_engines                 = ${fft_n_engines};
 }
 namespace FDF {
     static const cl_uint  tile_sz                   = ${fdf_tile_sz};
     static const cl_uint  tile_overlap              = ${fdf_tile_overlap};
     static const cl_uint  tile_payload              = ${fdf_tile_payload};
-
-    static const cl_uint  group_sz                  = ${fdf_group_sz};
 }
 namespace HMS {
     static const cl_uint  n_planes                  = ${hms_n_planes};

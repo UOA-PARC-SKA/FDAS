@@ -91,7 +91,7 @@ private:
     std::unique_ptr<cl::Kernel> tile_kernel;
     std::unique_ptr<cl::Kernel> store_tiles_kernel;
     std::unique_ptr<cl::Kernel> mux_and_mult_kernel;
-    std::unique_ptr<cl::Kernel> square_and_discard_kernel;
+    std::vector<std::unique_ptr<cl::Kernel>> square_and_discard_kernels;
 
     std::vector<std::unique_ptr<cl::Kernel>> preload_kernels;
     std::vector<std::unique_ptr<cl::Kernel>> delay_kernels;

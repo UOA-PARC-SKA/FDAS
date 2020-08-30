@@ -49,12 +49,13 @@ kernel void preload_${k}(global ${hms_bundle_ty} * restrict fop,
                   % endfor
                       const uint n_channel_bundles)
 {
+    const ${hms_bundle_ty} zeros = {${", ".join(["0"] * hms_bundle_sz)}};
     ${hms_bundle_ty} load[${n_buffers}];
     ${hms_bundle_ty} out[${hms_group_sz}];
 
     for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
     % for r in range(n_buffers):
-        load[${r}] = ${r} < n_rows ? fop[filter_offset_${r} + bundle] : 0.0f;
+        load[${r}] = ${r} < n_rows ? fop[filter_offset_${r} + bundle] : zeros;
     % endfor
 
     % for p in range(hms_group_sz):
@@ -75,6 +76,7 @@ __attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
 kernel void delay_${k}(const uint n_channel_bundles)
 {
+    const ${hms_bundle_ty} zeros = {${", ".join(["0"] * hms_bundle_sz)}};
     ${hms_bundle_ty} in[${hms_group_sz}];
     ${hms_bundle_ty} out[${hms_group_sz}];
 
@@ -102,11 +104,8 @@ kernel void delay_${k}(const uint n_channel_bundles)
         % endfor
             default:
                 #pragma unroll
-                for (uint p = 0; p < ${hms_group_sz}; ++p) {
-            % for q in range(hms_bundle_sz):
-                    out[p]${bundle_idx(q)} = 0.0f;
-            % endfor
-                }
+                for (uint p = 0; p < ${hms_group_sz}; ++p)
+                    out[p] = zeros;
                 break;
         }
 

@@ -137,16 +137,19 @@ bool FDAS::initialise_accelerator(std::string bitstream_file_name,
     bitstream.shrink_to_fit();
 
     // Kernels
-    fft_kernels.resize(FDF::group_sz);
-    for (int i = 0; i < FDF::group_sz; ++i) {
-        auto name = "fft_" + std::to_string(i);
-        cl_chkref(fft_kernels[i].reset(new cl::Kernel(*program, name.c_str(), &status)));
-    }
     cl_chkref(load_input_kernel.reset(new cl::Kernel(*program, "load_input", &status)));
     cl_chkref(tile_kernel.reset(new cl::Kernel(*program, "tile", &status)));
     cl_chkref(store_tiles_kernel.reset(new cl::Kernel(*program, "store_tiles", &status)));
     cl_chkref(mux_and_mult_kernel.reset(new cl::Kernel(*program, "mux_and_mult", &status)));
-    cl_chkref(square_and_discard_kernel.reset(new cl::Kernel(*program, "square_and_discard", &status)));
+
+    fft_kernels.resize(FFT::n_engines);
+    square_and_discard_kernels.resize(FFT::n_engines);
+    for (int e = 0; e < FFT::n_engines; ++e) {
+        auto name = "fft_" + std::to_string(e);
+        cl_chkref(fft_kernels[e].reset(new cl::Kernel(*program, name.c_str(), &status)));
+        name = "square_and_discard_" + std::to_string(e);
+        cl_chkref(square_and_discard_kernels[e].reset(new cl::Kernel(*program, name.c_str(), &status)));
+    }
 
     preload_kernels.resize(HMS::n_planes);
     delay_kernels.resize(HMS::n_planes);
@@ -226,74 +229,85 @@ bool FDAS::perform_ft_convolution(const FDAS::InputType &input, const FDAS::Shap
     // Instantiate command queues, one per kernel, plus one for I/O operations. Multi-device support is NYI
     cl::CommandQueue buffer_q(*context, default_device, CL_QUEUE_PROFILING_ENABLE);
 
-    std::vector<cl::CommandQueue> fft_queues;
-    for (int i = 0; i < FDF::group_sz; ++i) {
-        cl::CommandQueue fft_q(*context, default_device, CL_QUEUE_PROFILING_ENABLE);
-        fft_queues.emplace_back(fft_q);
-    }
-
     cl::CommandQueue load_input_q(*context, default_device, CL_QUEUE_PROFILING_ENABLE);
     cl::CommandQueue tile_q(*context, default_device, CL_QUEUE_PROFILING_ENABLE);
     cl::CommandQueue store_tiles_q(*context, default_device, CL_QUEUE_PROFILING_ENABLE);
     cl::CommandQueue mux_and_mult_q(*context, default_device, CL_QUEUE_PROFILING_ENABLE);
-    cl::CommandQueue square_and_discard_q(*context, default_device, CL_QUEUE_PROFILING_ENABLE);
 
-    // NDRange configuration
-    cl::NDRange conv_local(FFT::n_points_per_terminal, 1);
-    cl::NDRange conv_global(FFT::n_points_per_terminal * n_tiles, Input::n_filters / FDF::group_sz);
-
-    // Set static kernel arguments
-    cl_chk(load_input_kernel->setArg<cl::Buffer>(0, *input_buffer));
-    cl_chk(load_input_kernel->setArg<cl_uint>(1, input_sz));
-    cl_chk(tile_kernel->setArg<cl_uint>(0, n_tiles));
-    cl_chk(store_tiles_kernel->setArg<cl::Buffer>(0, *tiles_buffer));
-    cl_chk(store_tiles_kernel->setArg<cl_uint>(1, n_tiles));
-    cl_chk(mux_and_mult_kernel->setArg<cl::Buffer>(0, *tiles_buffer));
-    cl_chk(mux_and_mult_kernel->setArg<cl::Buffer>(1, *templates_buffer));
-    cl_chk(square_and_discard_kernel->setArg<cl::Buffer>(0, *fop_buffer));
-    cl_chk(square_and_discard_kernel->setArg<cl_uint>(1, fop_row_sz));
+    std::vector<cl::CommandQueue> fft_queues, square_and_discard_queues;
+    for (int e = 0; e < FFT::n_engines; ++e) {
+        cl::CommandQueue fft_q(*context, default_device, CL_QUEUE_PROFILING_ENABLE);
+        fft_queues.emplace_back(fft_q);
+        cl::CommandQueue square_and_discard_q(*context, default_device, CL_QUEUE_PROFILING_ENABLE);
+        square_and_discard_queues.emplace_back(square_and_discard_q);
+    }
 
     // Copy input to device
     cl_chk(buffer_q.enqueueWriteBuffer(*input_buffer, true, 0, sizeof(cl_float2) * input_sz, input.data()));
     cl_chk(buffer_q.enqueueWriteBuffer(*templates_buffer, true, 0, sizeof(cl_float2) * templates_sz, templates.data()));
     cl_chk(buffer_q.finish());
 
-    cl::Event load_input_ev, tile_ev, store_tiles_ev, mux_and_mult_ev, square_and_discard_ev;
-    cl::Event fft_evs[FDF::group_sz];
+    cl::Event prep_start, prep_end, conv_start, conv_end;
 
-    cl_chk(load_input_q.enqueueTask(*load_input_kernel, nullptr, &load_input_ev));
-    cl_chk(tile_q.enqueueTask(*tile_kernel, nullptr, &tile_ev));
+    cl_chk(load_input_kernel->setArg<cl::Buffer>(0, *input_buffer));
+    cl_chk(load_input_kernel->setArg<cl_uint>(1, input_sz / FFT::n_parallel));
 
-    auto& fwd_fft_k = *fft_kernels[0];
-    auto& fwd_fft_q = fft_queues[0];
-    cl_chk(fwd_fft_k.setArg<cl_uint>(0, n_tiles));
-    cl_chk(fwd_fft_k.setArg<cl_uint>(1, false));
-    cl_chk(fwd_fft_q.enqueueTask(fwd_fft_k, nullptr, &fft_evs[0]));
+    cl_chk(tile_kernel->setArg<cl_uint>(0, n_tiles));
 
-    cl_chk(store_tiles_q.enqueueTask(*store_tiles_kernel, nullptr, &store_tiles_ev));
+    cl_chk(fft_kernels[0]->setArg<cl_uint>(0, n_tiles));
+    cl_chk(fft_kernels[0]->setArg<cl_uint>(1, false));
+
+    cl_chk(store_tiles_kernel->setArg<cl::Buffer>(0, *tiles_buffer));
+    cl_chk(store_tiles_kernel->setArg<cl_uint>(1, n_tiles));
+
+    cl_chk(load_input_q.enqueueTask(*load_input_kernel, nullptr, &prep_start));
+    cl_chk(tile_q.enqueueTask(*tile_kernel, nullptr, nullptr));
+    cl_chk(fft_queues[0].enqueueTask(*fft_kernels[0], nullptr, nullptr));
+    cl_chk(store_tiles_q.enqueueTask(*store_tiles_kernel, nullptr, &prep_end));
 
     load_input_q.finish();
     tile_q.finish();
-    fwd_fft_q.finish();
+    fft_queues[0].finish();
     store_tiles_q.finish();
-    print_duration("Preparation", load_input_ev, store_tiles_ev);
+    print_duration("Preparation", prep_start, prep_end);
 
-    cl_chk(mux_and_mult_q.enqueueNDRangeKernel(*mux_and_mult_kernel, cl::NullRange, conv_global, conv_local, nullptr, &mux_and_mult_ev));
+    cl_chk(mux_and_mult_kernel->setArg<cl::Buffer>(0, *tiles_buffer));
+    cl_chk(mux_and_mult_kernel->setArg<cl::Buffer>(1, *templates_buffer));
+    cl_chk(mux_and_mult_kernel->setArg<cl_uint>(2, n_tiles));
 
-    fwd_fft_k.setArg<cl_uint>(1, true);
-    for (int i = 0; i < FDF::group_sz; ++i) {
-        cl_chk(fft_kernels[i]->setArg<cl_uint>(0, Input::n_filters / FDF::group_sz * n_tiles));
-        fft_queues[i].enqueueTask(*fft_kernels[i], nullptr, &fft_evs[i]);
+    for (int e = 0; e < FFT::n_engines; ++e) {
+        cl_chk(fft_kernels[e]->setArg<cl_uint>(0, n_tiles));
+        if (e == 0)
+            cl_chk(fft_kernels[e]->setArg<cl_uint>(1, true));
+
+        cl_chk(square_and_discard_kernels[e]->setArg<cl::Buffer>(0, *fop_buffer));
+        cl_chk(square_and_discard_kernels[e]->setArg<cl_uint>(2, n_tiles));
     }
 
-    cl_chk(square_and_discard_q.enqueueNDRangeKernel(*square_and_discard_kernel, cl::NullRange, conv_global, conv_local, nullptr, &square_and_discard_ev));
+    for (int f = -Input::n_filters_per_accel_sign; f <= Input::n_filters_per_accel_sign; f += FFT::n_engines) {
+        int n_filters = std::min(Input::n_filters_per_accel_sign - f + 1, (int) FFT::n_engines);
+        cl_chk(mux_and_mult_kernel->setArg<cl_uint>(3 + FFT::n_engines, n_filters));
+        for (int e = 0; e < FFT::n_engines; ++e) {
+            cl_chk(mux_and_mult_kernel->setArg<cl_uint>(3 + e, f + e));
+
+            cl_uint fop_offset = (f + e + Input::n_filters_per_accel_sign) * fop_row_sz / FFT::n_parallel;
+            cl_chk(square_and_discard_kernels[e]->setArg<cl_uint>(1, fop_offset));
+        }
+
+        cl_chk(mux_and_mult_q.enqueueTask(*mux_and_mult_kernel, nullptr, (f == -Input::n_filters_per_accel_sign ? &conv_start : nullptr)));
+        for (int e = 0; e < n_filters; ++e) {
+            cl_chk(fft_queues[e].enqueueTask(*fft_kernels[e], nullptr, nullptr));
+            cl_chk(square_and_discard_queues[e].enqueueTask(*square_and_discard_kernels[e], nullptr, (f + e == Input::n_filters_per_accel_sign ? &conv_end : nullptr)));
+        }
+    }
 
     mux_and_mult_q.finish();
-    for (int i = 0; i < FDF::group_sz; ++i)
-        fft_queues[i].finish();
-    square_and_discard_q.finish();
+    for (int e = 0; e < FFT::n_engines; ++e) {
+        fft_queues[e].finish();
+        square_and_discard_queues[e].finish();
+    }
 
-    print_duration("FT convolution and IFFT", mux_and_mult_ev, square_and_discard_ev);
+    print_duration("FT convolution and IFFT", conv_start, conv_end);
 
     return true;
 }
@@ -313,9 +327,7 @@ bool FDAS::perform_harmonic_summing(const FDAS::ThreshType &thresholds, const FD
 
     log << "[INFO] HSUM: Considering " << n_channels << " channels per filter" << endl;
 
-    cl::Event preload_evs[n_planes][n_filter_groups];
-    cl::Event delay_evs[n_planes][n_filter_groups];
-    cl::Event detect_evs[n_planes];
+    cl::Event hsum_start, hsum_end;
 
     std::vector<cl::CommandQueue> preload_queues, delay_queues, detect_queues;
 
@@ -348,10 +360,10 @@ bool FDAS::perform_harmonic_summing(const FDAS::ThreshType &thresholds, const FD
                 cl_chk(preload_k.setArg<cl_uint>(3 + r, filter_offset));
             }
             cl_chk(preload_k.setArg<cl_uint>(3 + HMS::n_buffers[h], n_channel_bundles / k)); // important: n_channel_bundles must be divisible by all k
-            cl_chk(preload_q.enqueueTask(preload_k, nullptr, &preload_evs[h][g]));
+            cl_chk(preload_q.enqueueTask(preload_k, nullptr, (k == 1 && g == 0 ? &hsum_start : nullptr)));
 
             cl_chk(delay_k.setArg<cl_uint>(0, n_channel_bundles));
-            cl_chk(delay_q.enqueueTask(delay_k, nullptr, &delay_evs[h][g]));
+            cl_chk(delay_q.enqueueTask(delay_k, nullptr, nullptr));
         }
 
         auto &detect_k = *detect_kernels[h];
@@ -365,7 +377,7 @@ bool FDAS::perform_harmonic_summing(const FDAS::ThreshType &thresholds, const FD
 
         cl::CommandQueue detect_q(*context, default_device, CL_QUEUE_PROFILING_ENABLE);
         detect_queues.emplace_back(detect_q);
-        cl_chk(detect_q.enqueueTask(detect_k, nullptr, &detect_evs[h]));
+        cl_chk(detect_q.enqueueTask(detect_k, nullptr, (k == n_planes ? &hsum_end : nullptr)));
     }
 
     for (auto &q : preload_queues)
@@ -377,7 +389,7 @@ bool FDAS::perform_harmonic_summing(const FDAS::ThreshType &thresholds, const FD
     for (auto &q : detect_queues)
         cl_chk(q.finish());
 
-    print_duration("Harmonic summing (1/2 FOP)", preload_evs[0][0], detect_evs[n_planes - 1]);
+    print_duration("Harmonic summing (1/2 FOP)", hsum_start, hsum_end);
 
     return true;
 }
