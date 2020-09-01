@@ -34,8 +34,8 @@ channel float2x4 load_to_tile __attribute__((depth(0)));
 channel float2x4 fft_in __attribute__((depth(0)));
 channel float2x4 fft_out __attribute__((depth(0)));
 
-channel float2x4 ifft_in[5] __attribute__((depth(0)));
-channel float2x4 ifft_out[5] __attribute__((depth(0)));
+channel float2x4 ifft_in[4] __attribute__((depth(0)));
+channel float2x4 ifft_out[4] __attribute__((depth(0)));
 
 channel float2 preload_to_delay[8][8] __attribute__((depth(0)));
 channel float2 delay_to_detect[8][8] __attribute__((depth(0)));
@@ -216,37 +216,6 @@ kernel void fft_3(const uint n_tiles)
 
 __attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
-kernel void fft_4(const uint n_tiles)
-{
-    const float2x4 zeros = {0, 0, 0, 0};
-
-    float2x4 __attribute__((bank_bits(9))) buf[2][512];
-    float2 fft_delay_elements[2080];
-    float2x4 data;
-
-    #pragma loop_coalesce
-    for (uint tile = 0; tile < n_tiles + 2; ++tile) {
-        for (uint step = 0; step < 512; ++step) {
-            if (tile >= 1) {
-                buf[1 - (tile & 1)][bit_reversed(step, 9)] = data;
-            }
-            if (tile >= 2) {
-                WRITE_CHANNEL(ifft_out[4], buf[tile & 1][step]);
-            }
-
-            if (tile < n_tiles) {
-                data = READ_CHANNEL(ifft_in[4]);
-            } else {
-                data = zeros;
-            }
-
-            data = fft_step(data, step, fft_delay_elements, 1, 11);
-        }
-    }
-}
-
-__attribute__((max_global_work_dim(0)))
-__attribute__((uses_global_work_offset(0)))
 kernel void load_input(global float2x4 * restrict input,
                        const uint n_packs)
 {
@@ -351,7 +320,6 @@ kernel void mux_and_mult(global float2x4 * restrict tiles,
                          const int filter_1,
                          const int filter_2,
                          const int filter_3,
-                         const int filter_4,
                          const uint n_filters)
 {
     const float2x4 zeros = {0, 0, 0, 0};
@@ -360,39 +328,34 @@ kernel void mux_and_mult(global float2x4 * restrict tiles,
     float2x4 template_buf_1[512];
     float2x4 template_buf_2[512];
     float2x4 template_buf_3[512];
-    float2x4 template_buf_4[512];
 
     for (uint pack = 0; pack < 512; ++pack) {
         float2x4 tmpl_0 = 0 < n_filters ? templates[(42 + filter_0) * 512 + pack] : zeros;
         float2x4 tmpl_1 = 1 < n_filters ? templates[(42 + filter_1) * 512 + pack] : zeros;
         float2x4 tmpl_2 = 2 < n_filters ? templates[(42 + filter_2) * 512 + pack] : zeros;
         float2x4 tmpl_3 = 3 < n_filters ? templates[(42 + filter_3) * 512 + pack] : zeros;
-        float2x4 tmpl_4 = 4 < n_filters ? templates[(42 + filter_4) * 512 + pack] : zeros;
         template_buf_0[pack] = tmpl_0;
         template_buf_1[pack] = tmpl_1;
         template_buf_2[pack] = tmpl_2;
         template_buf_3[pack] = tmpl_3;
-        template_buf_4[pack] = tmpl_4;
     }
 
     for (uint pack = 0; pack < n_tiles * 512; ++pack) {
-        float2x4 coeffs[5];
-        float2x4 prods[5];
+        float2x4 coeffs[4];
+        float2x4 prods[4];
 
         float2x4 load = tiles[pack];
         coeffs[0] = template_buf_0[pack % 512];
         coeffs[1] = template_buf_1[pack % 512];
         coeffs[2] = template_buf_2[pack % 512];
         coeffs[3] = template_buf_3[pack % 512];
-        coeffs[4] = template_buf_4[pack % 512];
         prods[0] = complex_mult4(load, coeffs[0]);
         prods[1] = complex_mult4(load, coeffs[1]);
         prods[2] = complex_mult4(load, coeffs[2]);
         prods[3] = complex_mult4(load, coeffs[3]);
-        prods[4] = complex_mult4(load, coeffs[4]);
 
         #pragma unroll
-        for (uint e = 0; e < 5; ++e) {
+        for (uint e = 0; e < 4; ++e) {
             if (e < n_filters)
                 WRITE_CHANNEL(ifft_in[e], prods[e]);
         }
@@ -665,75 +628,6 @@ kernel void square_and_discard_3(global float4 * restrict fop_A,
 
             if (tile < n_tiles) {
                 float2x4 read = READ_CHANNEL(ifft_out[3]);
-                float4 norm = power_norm4(read);
-                chunk_buf_0[tile & 1][step] = norm.s0;
-                chunk_buf_1[tile & 1][step] = norm.s2;
-                chunk_buf_2[tile & 1][step] = norm.s1;
-                chunk_buf_3[tile & 1][step] = norm.s3;
-            }
-        }
-    }
-}
-
-__attribute__((max_global_work_dim(0)))
-__attribute__((uses_global_work_offset(0)))
-kernel void square_and_discard_4(global float4 * restrict fop_A,
-                                 global float4 * restrict fop_B,
-                                 const uint fop_offset,
-                                 const uint n_tiles)
-{
-    const float4 zeros = {0, 0, 0, 0};
-
-    float __attribute__((bank_bits(9))) chunk_buf_0[2][512];
-    float __attribute__((bank_bits(9))) chunk_buf_1[2][512];
-    float __attribute__((bank_bits(9))) chunk_buf_2[2][512];
-    float __attribute__((bank_bits(9))) chunk_buf_3[2][512];
-
-    uint fop_idx = 0;
-    #pragma loop_coalesce
-    for (uint tile = 0; tile < n_tiles + 1; ++tile) {
-        for (uint step = 0; step < 512; ++step) {
-            if (tile >= 1 && step >= 105) {
-                uint chunk = step / 128;
-                uint pack = step % 128;
-
-                float4 store = zeros;
-                switch (chunk) {
-                    case 0:
-                        store.s0 = chunk_buf_0[1 - (tile & 1)][pack * 4 + 0];
-                        store.s1 = chunk_buf_0[1 - (tile & 1)][pack * 4 + 1];
-                        store.s2 = chunk_buf_0[1 - (tile & 1)][pack * 4 + 2];
-                        store.s3 = chunk_buf_0[1 - (tile & 1)][pack * 4 + 3];
-                        break;
-                    case 1:
-                        store.s0 = chunk_buf_1[1 - (tile & 1)][pack * 4 + 0];
-                        store.s1 = chunk_buf_1[1 - (tile & 1)][pack * 4 + 1];
-                        store.s2 = chunk_buf_1[1 - (tile & 1)][pack * 4 + 2];
-                        store.s3 = chunk_buf_1[1 - (tile & 1)][pack * 4 + 3];
-                        break;
-                    case 2:
-                        store.s0 = chunk_buf_2[1 - (tile & 1)][pack * 4 + 0];
-                        store.s1 = chunk_buf_2[1 - (tile & 1)][pack * 4 + 1];
-                        store.s2 = chunk_buf_2[1 - (tile & 1)][pack * 4 + 2];
-                        store.s3 = chunk_buf_2[1 - (tile & 1)][pack * 4 + 3];
-                        break;
-                    case 3:
-                        store.s0 = chunk_buf_3[1 - (tile & 1)][pack * 4 + 0];
-                        store.s1 = chunk_buf_3[1 - (tile & 1)][pack * 4 + 1];
-                        store.s2 = chunk_buf_3[1 - (tile & 1)][pack * 4 + 2];
-                        store.s3 = chunk_buf_3[1 - (tile & 1)][pack * 4 + 3];
-                        break;
-                    default:
-                        break;
-                }
-
-                fop_A[fop_offset + fop_idx] = store;
-                fop_B[fop_offset + fop_idx] = store;
-                ++fop_idx;
-            }
-
-            if (tile < n_tiles) {
-                float2x4 read = READ_CHANNEL(ifft_out[4]);
                 float4 norm = power_norm4(read);
                 chunk_buf_0[tile & 1][step] = norm.s0;
                 chunk_buf_1[tile & 1][step] = norm.s2;

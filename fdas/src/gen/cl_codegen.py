@@ -81,7 +81,7 @@ def main():
     fft_n_points_per_terminal_log = fft_n_points_log - fft_n_parallel_log
     fft_n_points_per_terminal = 2 ** fft_n_points_per_terminal_log
 
-    fft_n_engines = 5
+    fft_n_engines = 4
 
     # Frequency-domain FIR filter implementation with overlap-save algorithm
     fdf_tile_sz = fft_n_points
