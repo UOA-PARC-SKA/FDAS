@@ -401,7 +401,8 @@ kernel void mux_and_mult(global float2x4 * restrict tiles,
 
 __attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
-kernel void square_and_discard_0(global float4 * restrict fop,
+kernel void square_and_discard_0(global float4 * restrict fop_A,
+                                 global float4 * restrict fop_B,
                                  const uint fop_offset,
                                  const uint n_tiles)
 {
@@ -450,7 +451,8 @@ kernel void square_and_discard_0(global float4 * restrict fop,
                         break;
                 }
 
-                fop[fop_offset + fop_idx] = store;
+                fop_A[fop_offset + fop_idx] = store;
+                fop_B[fop_offset + fop_idx] = store;
                 ++fop_idx;
             }
 
@@ -468,7 +470,8 @@ kernel void square_and_discard_0(global float4 * restrict fop,
 
 __attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
-kernel void square_and_discard_1(global float4 * restrict fop,
+kernel void square_and_discard_1(global float4 * restrict fop_A,
+                                 global float4 * restrict fop_B,
                                  const uint fop_offset,
                                  const uint n_tiles)
 {
@@ -517,7 +520,8 @@ kernel void square_and_discard_1(global float4 * restrict fop,
                         break;
                 }
 
-                fop[fop_offset + fop_idx] = store;
+                fop_A[fop_offset + fop_idx] = store;
+                fop_B[fop_offset + fop_idx] = store;
                 ++fop_idx;
             }
 
@@ -535,7 +539,8 @@ kernel void square_and_discard_1(global float4 * restrict fop,
 
 __attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
-kernel void square_and_discard_2(global float4 * restrict fop,
+kernel void square_and_discard_2(global float4 * restrict fop_A,
+                                 global float4 * restrict fop_B,
                                  const uint fop_offset,
                                  const uint n_tiles)
 {
@@ -584,7 +589,8 @@ kernel void square_and_discard_2(global float4 * restrict fop,
                         break;
                 }
 
-                fop[fop_offset + fop_idx] = store;
+                fop_A[fop_offset + fop_idx] = store;
+                fop_B[fop_offset + fop_idx] = store;
                 ++fop_idx;
             }
 
@@ -602,7 +608,8 @@ kernel void square_and_discard_2(global float4 * restrict fop,
 
 __attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
-kernel void square_and_discard_3(global float4 * restrict fop,
+kernel void square_and_discard_3(global float4 * restrict fop_A,
+                                 global float4 * restrict fop_B,
                                  const uint fop_offset,
                                  const uint n_tiles)
 {
@@ -651,7 +658,8 @@ kernel void square_and_discard_3(global float4 * restrict fop,
                         break;
                 }
 
-                fop[fop_offset + fop_idx] = store;
+                fop_A[fop_offset + fop_idx] = store;
+                fop_B[fop_offset + fop_idx] = store;
                 ++fop_idx;
             }
 
@@ -669,7 +677,8 @@ kernel void square_and_discard_3(global float4 * restrict fop,
 
 __attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
-kernel void square_and_discard_4(global float4 * restrict fop,
+kernel void square_and_discard_4(global float4 * restrict fop_A,
+                                 global float4 * restrict fop_B,
                                  const uint fop_offset,
                                  const uint n_tiles)
 {
@@ -718,7 +727,8 @@ kernel void square_and_discard_4(global float4 * restrict fop,
                         break;
                 }
 
-                fop[fop_offset + fop_idx] = store;
+                fop_A[fop_offset + fop_idx] = store;
+                fop_B[fop_offset + fop_idx] = store;
                 ++fop_idx;
             }
 

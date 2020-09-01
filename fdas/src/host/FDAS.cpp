@@ -25,6 +25,8 @@
 #include "FDAS.h"
 #include "gen_info.h"
 
+#include <CL/cl_ext_intelfpga.h>
+
 using std::endl;
 using std::setprecision;
 using std::fixed;
@@ -182,8 +184,10 @@ bool FDAS::initialise_accelerator(std::string bitstream_file_name,
     cl_chkref(templates_buffer.reset(new cl::Buffer(*context, CL_MEM_READ_ONLY, sizeof(cl_float2) * templates_sz, nullptr, &status)));
     total_allocated += templates_buffer->getInfo<CL_MEM_SIZE>();
 
-    cl_chkref(fop_buffer.reset(new cl::Buffer(*context, CL_MEM_READ_WRITE, sizeof(cl_float) * fop_sz, nullptr, &status)));
-    total_allocated += fop_buffer->getInfo<CL_MEM_SIZE>();
+    cl_chkref(fop_buffer_A.reset(new cl::Buffer(*context, CL_MEM_READ_WRITE | CL_CHANNEL_2_INTELFPGA, sizeof(cl_float) * fop_sz, nullptr, &status)));
+    total_allocated += fop_buffer_A->getInfo<CL_MEM_SIZE>();
+    cl_chkref(fop_buffer_B.reset(new cl::Buffer(*context, CL_MEM_READ_WRITE | CL_CHANNEL_1_INTELFPGA, sizeof(cl_float) * fop_sz, nullptr, &status)));
+    total_allocated += fop_buffer_B->getInfo<CL_MEM_SIZE>();
 
     cl_chkref(detection_location_buffer.reset(new cl::Buffer(*context, CL_MEM_WRITE_ONLY, sizeof(cl_uint) * Output::n_candidates, nullptr, &status)));
     total_allocated += detection_location_buffer->getInfo<CL_MEM_SIZE>();
@@ -280,24 +284,28 @@ bool FDAS::perform_ft_convolution(const FDAS::InputType &input, const FDAS::Shap
         if (e == 0)
             cl_chk(fft_kernels[e]->setArg<cl_uint>(1, true));
 
-        cl_chk(square_and_discard_kernels[e]->setArg<cl::Buffer>(0, *fop_buffer));
-        cl_chk(square_and_discard_kernels[e]->setArg<cl_uint>(2, n_tiles));
+        cl_chk(square_and_discard_kernels[e]->setArg<cl::Buffer>(0, *fop_buffer_A));
+        if (HMS::dual_channnel)
+            cl_chk(square_and_discard_kernels[e]->setArg<cl::Buffer>(1, *fop_buffer_B));
+        cl_chk(square_and_discard_kernels[e]->setArg<cl_uint>(HMS::dual_channnel ? 3 : 2, n_tiles));
     }
 
-    for (int f = -Input::n_filters_per_accel_sign; f <= Input::n_filters_per_accel_sign; f += FFT::n_engines) {
-        int n_filters = std::min(Input::n_filters_per_accel_sign - f + 1, (int) FFT::n_engines);
+    const int first_filter = 0; // use -Input::n_filters_per_accel_sign for full FOP
+    const int last_filter = Input::n_filters_per_accel_sign;
+    for (int f = first_filter; f <= last_filter; f += FFT::n_engines) {
+        int n_filters = std::min(last_filter - f + 1, (int) FFT::n_engines);
         cl_chk(mux_and_mult_kernel->setArg<cl_uint>(3 + FFT::n_engines, n_filters));
         for (int e = 0; e < FFT::n_engines; ++e) {
             cl_chk(mux_and_mult_kernel->setArg<cl_uint>(3 + e, f + e));
 
             cl_uint fop_offset = (f + e + Input::n_filters_per_accel_sign) * fop_row_sz / FFT::n_parallel;
-            cl_chk(square_and_discard_kernels[e]->setArg<cl_uint>(1, fop_offset));
+            cl_chk(square_and_discard_kernels[e]->setArg<cl_uint>(HMS::dual_channnel ? 2 : 1, fop_offset));
         }
 
-        cl_chk(mux_and_mult_q.enqueueTask(*mux_and_mult_kernel, nullptr, (f == -Input::n_filters_per_accel_sign ? &conv_start : nullptr)));
+        cl_chk(mux_and_mult_q.enqueueTask(*mux_and_mult_kernel, nullptr, (f == first_filter ? &conv_start : nullptr)));
         for (int e = 0; e < n_filters; ++e) {
             cl_chk(fft_queues[e].enqueueTask(*fft_kernels[e], nullptr, nullptr));
-            cl_chk(square_and_discard_queues[e].enqueueTask(*square_and_discard_kernels[e], nullptr, (f + e == Input::n_filters_per_accel_sign ? &conv_end : nullptr)));
+            cl_chk(square_and_discard_queues[e].enqueueTask(*square_and_discard_kernels[e], nullptr, (f + e == last_filter ? &conv_end : nullptr)));
         }
     }
 
@@ -307,7 +315,7 @@ bool FDAS::perform_ft_convolution(const FDAS::InputType &input, const FDAS::Shap
         square_and_discard_queues[e].finish();
     }
 
-    print_duration("FT convolution and IFFT", conv_start, conv_end);
+    print_duration("FT convolution and IFFT (1/2 FOP)", conv_start, conv_end);
 
     return true;
 }
@@ -351,7 +359,10 @@ bool FDAS::perform_harmonic_summing(const FDAS::ThreshType &thresholds, const FD
             if (base_row + n_rows >= n_filters)
                 n_rows = n_filters - base_row;
 
-            cl_chk(preload_k.setArg<cl::Buffer>(0, *fop_buffer));
+            if (HMS::dual_channnel && k == 1)
+                cl_chk(preload_k.setArg<cl::Buffer>(0, *fop_buffer_B));
+            else
+                cl_chk(preload_k.setArg<cl::Buffer>(0, *fop_buffer_A));
             cl_chk(preload_k.setArg<cl_uint>(1, n_rows));
             cl_chk(preload_k.setArg<cl_uint>(2, base_row_rem));
             for (int r = 0; r < HMS::n_buffers[h]; ++r) {
@@ -408,7 +419,7 @@ bool FDAS::retrieve_tiles(FDAS::TilesType &tiles, FDAS::ShapeType &tiles_shape) 
 bool FDAS::retrieve_FOP(FDAS::FOPType &fop, FDAS::ShapeType &fop_shape) {
     fop.resize(fop_sz);
     cl::CommandQueue buffer_q(*context, default_device, CL_QUEUE_PROFILING_ENABLE);
-    cl_chk(buffer_q.enqueueReadBuffer(*fop_buffer, true, 0, sizeof(cl_float) * fop_sz, fop.data()));
+    cl_chk(buffer_q.enqueueReadBuffer(*fop_buffer_A, true, 0, sizeof(cl_float) * fop_sz, fop.data()));
     cl_chk(buffer_q.finish());
     fop_shape.push_back(Input::n_filters);
     fop_shape.push_back(fop_row_sz);
@@ -434,7 +445,9 @@ bool FDAS::retrieve_candidates(FDAS::DetLocType &detection_location, FDAS::Shape
 
 bool FDAS::inject_FOP(FDAS::FOPType &fop, FDAS::ShapeType &fop_shape) {
     cl::CommandQueue buffer_q(*context, default_device, CL_QUEUE_PROFILING_ENABLE);
-    cl_chk(buffer_q.enqueueWriteBuffer(*fop_buffer, true, 0, sizeof(cl_float) * fop_sz, fop.data()));
+    cl_chk(buffer_q.enqueueWriteBuffer(*fop_buffer_A, true, 0, sizeof(cl_float) * fop_sz, fop.data()));
+    if (HMS::dual_channnel)
+        cl_chk(buffer_q.enqueueWriteBuffer(*fop_buffer_B, true, 0, sizeof(cl_float) * fop_sz, fop.data()));
     cl_chk(buffer_q.finish());
 
     return true;

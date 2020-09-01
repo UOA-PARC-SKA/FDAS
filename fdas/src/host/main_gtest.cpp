@@ -163,6 +163,52 @@ TEST_P(FDASTest, Harmonic_Summing) {
     EXPECT_EQ(n_non_cands, 0);
 }
 
+TEST_P(FDASTest, FDAS) {
+    FDAS pipeline(std::cerr);
+    ASSERT_TRUE(pipeline.initialise_accelerator(bitstream_file, FDAS::choose_first_platform, FDAS::choose_accelerator_devices, input.size()));
+
+    ASSERT_TRUE(pipeline.perform_ft_convolution(input, input_shape, templates, templates_shape));
+
+    ASSERT_TRUE(pipeline.perform_harmonic_summing(thresholds, thresholds_shape));
+
+    ASSERT_TRUE(pipeline.retrieve_candidates(detection_location, detection_location_shape, detection_amplitude, detection_amplitude_shape));
+    // store data as downloaded from the device (i.e. before filtering invalid slots)
+    npy::SaveArrayAsNumpy(det_loc_file(), false, detection_location_shape.size(), detection_location_shape.data(), detection_location);
+    npy::SaveArrayAsNumpy(det_amp_file(), false, detection_amplitude_shape.size(), detection_amplitude_shape.data(), detection_amplitude);
+
+    auto loc_it = detection_location.begin();
+    auto amp_it = detection_amplitude.begin();
+    while (loc_it != detection_location.end() && amp_it != detection_amplitude.end()) {
+        auto loc = *loc_it;
+        if (loc == HMS::invalid_location) {
+            loc_it = detection_location.erase(loc_it);
+            amp_it = detection_amplitude.erase(amp_it);
+        } else {
+            ++loc_it, ++amp_it;
+        }
+    }
+    EXPECT_LE(detection_location.size(), detection_location_ref.size());
+    EXPECT_GE(detection_location.size(), 1);
+
+    int n_non_cands = 0;
+    for (loc_it = detection_location.begin(), amp_it = detection_amplitude.begin();
+         loc_it != detection_location.end() && amp_it != detection_amplitude.end();
+         ++loc_it, ++amp_it) {
+        auto loc = *loc_it;
+        auto amp = *amp_it;
+
+        auto it = std::find(detection_location_ref.begin(), detection_location_ref.end(), loc);
+        if (it == detection_location_ref.end()) {
+            ++n_non_cands;
+            continue;
+        }
+        auto dist = std::distance(detection_location_ref.begin(), it);
+        auto amp_ref = detection_amplitude_ref[dist];
+        EXPECT_TRUE(fabs(amp - amp_ref) < tolerance);
+    }
+    EXPECT_EQ(n_non_cands, 0);
+}
+
 INSTANTIATE_TEST_SUITE_P(TestVectors, FDASTest, ::testing::ValuesIn(FDASTest::test_vectors));
 
 std::vector<std::string> FDASTest::test_vectors;

@@ -8,7 +8,10 @@
 %>\
 __attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
-kernel void square_and_discard_${engine}(global float4 * restrict fop,
+kernel void square_and_discard_${engine}(global float4 * restrict fop_A,
+                             %if hms_dual_channel:
+                                 global float4 * restrict fop_B,
+                             %endif
                                  const uint fop_offset,
                                  const uint n_tiles)
 {
@@ -39,7 +42,10 @@ kernel void square_and_discard_${engine}(global float4 * restrict fop,
                         break;
                 }
 
-                fop[fop_offset + fop_idx] = store;
+                fop_A[fop_offset + fop_idx] = store;
+            % if hms_dual_channel:
+                fop_B[fop_offset + fop_idx] = store;
+            % endif
                 ++fop_idx;
             }
 

@@ -95,6 +95,7 @@ def main():
     hms_group_sz = 8
     hms_bundle_sz = 2
     hms_bundle_ty = "float" if hms_bundle_sz == 1 else f"float{hms_bundle_sz}"
+    hms_dual_channel = True
 
     # Output
     n_candidates = hms_n_planes * hms_detection_sz * hms_group_sz * hms_bundle_sz

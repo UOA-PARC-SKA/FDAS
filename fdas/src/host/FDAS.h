@@ -100,7 +100,7 @@ private:
     std::unique_ptr<cl::Buffer> input_buffer;
     std::unique_ptr<cl::Buffer> tiles_buffer;
     std::unique_ptr<cl::Buffer> templates_buffer;
-    std::unique_ptr<cl::Buffer> fop_buffer;
+    std::unique_ptr<cl::Buffer> fop_buffer_A, fop_buffer_B;
     std::unique_ptr<cl::Buffer> detection_location_buffer;
     std::unique_ptr<cl::Buffer> detection_amplitude_buffer;
 
