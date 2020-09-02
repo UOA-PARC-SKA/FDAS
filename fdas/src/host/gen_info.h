@@ -46,13 +46,13 @@ namespace FDF {
 namespace HMS {
     static const cl_uint  n_planes                  = 8;
     static const cl_uint  detection_sz              = 64;
-    static const cl_uint  group_sz                  = 6;
+    static const cl_uint  group_sz                  = 8;
     static const cl_uint  bundle_sz                 = 2;
-    static const cl_uint  dual_channnel             = 1;
+    static const cl_uint  dual_channnel             = 0;
 
     static const     cl_uint lcm = 840;
-    static constexpr cl_uint n_buffers[8] = {6, 3, 2, 2, 2, 1, 2, 2};
-    static constexpr cl_uint first_offset_to_use_last_buffer[8] = {0, 0, 0, 0, 0, 0, 2, 4};
+    static constexpr cl_uint n_buffers[8] = {8, 4, 4, 2, 3, 2, 2, 1};
+    static constexpr cl_uint first_offset_to_use_last_buffer[8] = {0, 0, 2, 0, 3, 0, 0, 0};
 
     constexpr cl_uint encode_location(cl_uint k, cl_int f, cl_uint c) {
         return (((k - 1) & 0x7) << 29) | (((f + 42) & 0x7f) << 22) | (c & 0x3fffff);
@@ -64,7 +64,7 @@ namespace HMS {
     static constexpr cl_uint invalid_location = encode_location(1, 42 + 1, 0);
 }
 namespace Output {
-    static const cl_uint  n_candidates              = 6144;
+    static const cl_uint  n_candidates              = 8192;
 }
 }
 

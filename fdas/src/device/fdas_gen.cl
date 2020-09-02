@@ -37,12 +37,12 @@ channel float2x4 fft_out __attribute__((depth(0)));
 channel float2x4 ifft_in[3] __attribute__((depth(0)));
 channel float2x4 ifft_out[3] __attribute__((depth(0)));
 
-channel float2 preload_to_delay[8][6] __attribute__((depth(0)));
-channel float2 delay_to_detect[8][6] __attribute__((depth(0)));
+channel float2 preload_to_delay[8][8] __attribute__((depth(0)));
+channel float2 delay_to_detect[8][8] __attribute__((depth(0)));
 
-channel float2 detect_to_detect[7][6] __attribute__((depth(0)));
-channel uint  detect_to_store_location[8][12] __attribute__((depth(0)));
-channel float detect_to_store_amplitude[8][12] __attribute__((depth(0)));
+channel float2 detect_to_detect[7][8] __attribute__((depth(0)));
+channel uint  detect_to_store_location[8][16] __attribute__((depth(0)));
+channel float detect_to_store_amplitude[8][16] __attribute__((depth(0)));
 
 inline uint bit_reversed(uint x, uint bits)
 {
@@ -329,9 +329,7 @@ __attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
 kernel void square_and_discard_0(global float4 * restrict fop_A,
                                  const uint fop_offset,
-                                 const uint n_tiles,
-                                 global float4 * restrict fop_B,
-                                 const uint use_second_bank)
+                                 const uint n_tiles)
 {
     const float4 zeros = {0, 0, 0, 0};
 
@@ -379,8 +377,6 @@ kernel void square_and_discard_0(global float4 * restrict fop_A,
                 }
 
                 fop_A[fop_offset + fop_idx] = store;
-                if (use_second_bank)
-                    fop_B[fop_offset + fop_idx] = store;
                 ++fop_idx;
             }
 
@@ -400,9 +396,7 @@ __attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
 kernel void square_and_discard_1(global float4 * restrict fop_A,
                                  const uint fop_offset,
-                                 const uint n_tiles,
-                                 global float4 * restrict fop_B,
-                                 const uint use_second_bank)
+                                 const uint n_tiles)
 {
     const float4 zeros = {0, 0, 0, 0};
 
@@ -450,8 +444,6 @@ kernel void square_and_discard_1(global float4 * restrict fop_A,
                 }
 
                 fop_A[fop_offset + fop_idx] = store;
-                if (use_second_bank)
-                    fop_B[fop_offset + fop_idx] = store;
                 ++fop_idx;
             }
 
@@ -471,9 +463,7 @@ __attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
 kernel void square_and_discard_2(global float4 * restrict fop_A,
                                  const uint fop_offset,
-                                 const uint n_tiles,
-                                 global float4 * restrict fop_B,
-                                 const uint use_second_bank)
+                                 const uint n_tiles)
 {
     const float4 zeros = {0, 0, 0, 0};
 
@@ -521,8 +511,6 @@ kernel void square_and_discard_2(global float4 * restrict fop_A,
                 }
 
                 fop_A[fop_offset + fop_idx] = store;
-                if (use_second_bank)
-                    fop_B[fop_offset + fop_idx] = store;
                 ++fop_idx;
             }
 
@@ -549,11 +537,13 @@ kernel void preload_1(global float2 * restrict fop,
                       const uint filter_offset_3,
                       const uint filter_offset_4,
                       const uint filter_offset_5,
+                      const uint filter_offset_6,
+                      const uint filter_offset_7,
                       const uint n_channel_bundles)
 {
     const float2 zeros = {0, 0};
-    float2 load[6];
-    float2 out[6];
+    float2 load[8];
+    float2 out[8];
 
     for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
         load[0] = 0 < n_rows ? fop[filter_offset_0 + bundle] : zeros;
@@ -562,6 +552,8 @@ kernel void preload_1(global float2 * restrict fop,
         load[3] = 3 < n_rows ? fop[filter_offset_3 + bundle] : zeros;
         load[4] = 4 < n_rows ? fop[filter_offset_4 + bundle] : zeros;
         load[5] = 5 < n_rows ? fop[filter_offset_5 + bundle] : zeros;
+        load[6] = 6 < n_rows ? fop[filter_offset_6 + bundle] : zeros;
+        load[7] = 7 < n_rows ? fop[filter_offset_7 + bundle] : zeros;
 
         out[0] = load[0];
         out[1] = load[1];
@@ -569,9 +561,11 @@ kernel void preload_1(global float2 * restrict fop,
         out[3] = load[3];
         out[4] = load[4];
         out[5] = load[5];
+        out[6] = load[6];
+        out[7] = load[7];
 
         #pragma unroll
-        for (uint p = 0; p < 6; ++p)
+        for (uint p = 0; p < 8; ++p)
             WRITE_CHANNEL(preload_to_delay[0][p], out[p]);
     }
 }
@@ -581,8 +575,8 @@ __attribute__((uses_global_work_offset(0)))
 kernel void delay_1(const uint n_channel_bundles)
 {
     const float2 zeros = {0, 0};
-    float2 in[6];
-    float2 out[6];
+    float2 in[8];
+    float2 out[8];
 
     uint M = 0;
     for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
@@ -591,27 +585,27 @@ kernel void delay_1(const uint n_channel_bundles)
 
         if (m == 0) {
             #pragma unroll
-            for (uint p = 0; p < 6; ++p)
+            for (uint p = 0; p < 8; ++p)
                 in[p] = READ_CHANNEL(preload_to_delay[0][p]);
         }
 
         switch (m) {
             case 0:
                 #pragma unroll
-                for (uint p = 0; p < 6; ++p) {
+                for (uint p = 0; p < 8; ++p) {
                     out[p].s0 = in[p].s0;
                     out[p].s1 = in[p].s1;
                 }
                 break;
             default:
                 #pragma unroll
-                for (uint p = 0; p < 6; ++p)
+                for (uint p = 0; p < 8; ++p)
                     out[p] = zeros;
                 break;
         }
 
         #pragma unroll
-        for (uint p = 0; p < 6; ++p)
+        for (uint p = 0; p < 8; ++p)
             WRITE_CHANNEL(delay_to_detect[0][p], out[p]);
     }
 }
@@ -624,16 +618,18 @@ kernel void preload_2(global float2 * restrict fop,
                       const uint filter_offset_0,
                       const uint filter_offset_1,
                       const uint filter_offset_2,
+                      const uint filter_offset_3,
                       const uint n_channel_bundles)
 {
     const float2 zeros = {0, 0};
-    float2 load[3];
-    float2 out[6];
+    float2 load[4];
+    float2 out[8];
 
     for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
         load[0] = 0 < n_rows ? fop[filter_offset_0 + bundle] : zeros;
         load[1] = 1 < n_rows ? fop[filter_offset_1 + bundle] : zeros;
         load[2] = 2 < n_rows ? fop[filter_offset_2 + bundle] : zeros;
+        load[3] = 3 < n_rows ? fop[filter_offset_3 + bundle] : zeros;
 
         out[0] = load[0];
         out[1] = load[0];
@@ -641,9 +637,11 @@ kernel void preload_2(global float2 * restrict fop,
         out[3] = load[1];
         out[4] = load[2];
         out[5] = load[2];
+        out[6] = load[3];
+        out[7] = load[3];
 
         #pragma unroll
-        for (uint p = 0; p < 6; ++p)
+        for (uint p = 0; p < 8; ++p)
             WRITE_CHANNEL(preload_to_delay[1][p], out[p]);
     }
 }
@@ -653,8 +651,8 @@ __attribute__((uses_global_work_offset(0)))
 kernel void delay_2(const uint n_channel_bundles)
 {
     const float2 zeros = {0, 0};
-    float2 in[6];
-    float2 out[6];
+    float2 in[8];
+    float2 out[8];
 
     uint M = 0;
     for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
@@ -663,34 +661,34 @@ kernel void delay_2(const uint n_channel_bundles)
 
         if (m == 0) {
             #pragma unroll
-            for (uint p = 0; p < 6; ++p)
+            for (uint p = 0; p < 8; ++p)
                 in[p] = READ_CHANNEL(preload_to_delay[1][p]);
         }
 
         switch (m) {
             case 0:
                 #pragma unroll
-                for (uint p = 0; p < 6; ++p) {
+                for (uint p = 0; p < 8; ++p) {
                     out[p].s0 = in[p].s0;
                     out[p].s1 = in[p].s0;
                 }
                 break;
             case 1:
                 #pragma unroll
-                for (uint p = 0; p < 6; ++p) {
+                for (uint p = 0; p < 8; ++p) {
                     out[p].s0 = in[p].s1;
                     out[p].s1 = in[p].s1;
                 }
                 break;
             default:
                 #pragma unroll
-                for (uint p = 0; p < 6; ++p)
+                for (uint p = 0; p < 8; ++p)
                     out[p] = zeros;
                 break;
         }
 
         #pragma unroll
-        for (uint p = 0; p < 6; ++p)
+        for (uint p = 0; p < 8; ++p)
             WRITE_CHANNEL(delay_to_detect[1][p], out[p]);
     }
 }
@@ -702,25 +700,31 @@ kernel void preload_3(global float2 * restrict fop,
                       const uint base_row_rem,
                       const uint filter_offset_0,
                       const uint filter_offset_1,
+                      const uint filter_offset_2,
+                      const uint filter_offset_3,
                       const uint n_channel_bundles)
 {
     const float2 zeros = {0, 0};
-    float2 load[2];
-    float2 out[6];
+    float2 load[4];
+    float2 out[8];
 
     for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
         load[0] = 0 < n_rows ? fop[filter_offset_0 + bundle] : zeros;
         load[1] = 1 < n_rows ? fop[filter_offset_1 + bundle] : zeros;
+        load[2] = 2 < n_rows ? fop[filter_offset_2 + bundle] : zeros;
+        load[3] = 3 < n_rows ? fop[filter_offset_3 + bundle] : zeros;
 
         out[0] = load[0];
-        out[1] = load[0];
-        out[2] = load[0];
+        out[1] = base_row_rem < 2 ? load[0] : load[1];
+        out[2] = base_row_rem < 1 ? load[0] : load[1];
         out[3] = load[1];
-        out[4] = load[1];
-        out[5] = load[1];
+        out[4] = base_row_rem < 2 ? load[1] : load[2];
+        out[5] = base_row_rem < 1 ? load[1] : load[2];
+        out[6] = load[2];
+        out[7] = base_row_rem < 2 ? load[2] : load[3];
 
         #pragma unroll
-        for (uint p = 0; p < 6; ++p)
+        for (uint p = 0; p < 8; ++p)
             WRITE_CHANNEL(preload_to_delay[2][p], out[p]);
     }
 }
@@ -730,8 +734,8 @@ __attribute__((uses_global_work_offset(0)))
 kernel void delay_3(const uint n_channel_bundles)
 {
     const float2 zeros = {0, 0};
-    float2 in[6];
-    float2 out[6];
+    float2 in[8];
+    float2 out[8];
 
     uint M = 0;
     for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
@@ -740,41 +744,41 @@ kernel void delay_3(const uint n_channel_bundles)
 
         if (m == 0) {
             #pragma unroll
-            for (uint p = 0; p < 6; ++p)
+            for (uint p = 0; p < 8; ++p)
                 in[p] = READ_CHANNEL(preload_to_delay[2][p]);
         }
 
         switch (m) {
             case 0:
                 #pragma unroll
-                for (uint p = 0; p < 6; ++p) {
+                for (uint p = 0; p < 8; ++p) {
                     out[p].s0 = in[p].s0;
                     out[p].s1 = in[p].s0;
                 }
                 break;
             case 1:
                 #pragma unroll
-                for (uint p = 0; p < 6; ++p) {
+                for (uint p = 0; p < 8; ++p) {
                     out[p].s0 = in[p].s0;
                     out[p].s1 = in[p].s1;
                 }
                 break;
             case 2:
                 #pragma unroll
-                for (uint p = 0; p < 6; ++p) {
+                for (uint p = 0; p < 8; ++p) {
                     out[p].s0 = in[p].s1;
                     out[p].s1 = in[p].s1;
                 }
                 break;
             default:
                 #pragma unroll
-                for (uint p = 0; p < 6; ++p)
+                for (uint p = 0; p < 8; ++p)
                     out[p] = zeros;
                 break;
         }
 
         #pragma unroll
-        for (uint p = 0; p < 6; ++p)
+        for (uint p = 0; p < 8; ++p)
             WRITE_CHANNEL(delay_to_detect[2][p], out[p]);
     }
 }
@@ -790,7 +794,7 @@ kernel void preload_4(global float2 * restrict fop,
 {
     const float2 zeros = {0, 0};
     float2 load[2];
-    float2 out[6];
+    float2 out[8];
 
     for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
         load[0] = 0 < n_rows ? fop[filter_offset_0 + bundle] : zeros;
@@ -798,13 +802,15 @@ kernel void preload_4(global float2 * restrict fop,
 
         out[0] = load[0];
         out[1] = load[0];
-        out[2] = base_row_rem < 2 ? load[0] : load[1];
-        out[3] = base_row_rem < 2 ? load[0] : load[1];
+        out[2] = load[0];
+        out[3] = load[0];
         out[4] = load[1];
         out[5] = load[1];
+        out[6] = load[1];
+        out[7] = load[1];
 
         #pragma unroll
-        for (uint p = 0; p < 6; ++p)
+        for (uint p = 0; p < 8; ++p)
             WRITE_CHANNEL(preload_to_delay[3][p], out[p]);
     }
 }
@@ -814,8 +820,8 @@ __attribute__((uses_global_work_offset(0)))
 kernel void delay_4(const uint n_channel_bundles)
 {
     const float2 zeros = {0, 0};
-    float2 in[6];
-    float2 out[6];
+    float2 in[8];
+    float2 out[8];
 
     uint M = 0;
     for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
@@ -824,48 +830,48 @@ kernel void delay_4(const uint n_channel_bundles)
 
         if (m == 0) {
             #pragma unroll
-            for (uint p = 0; p < 6; ++p)
+            for (uint p = 0; p < 8; ++p)
                 in[p] = READ_CHANNEL(preload_to_delay[3][p]);
         }
 
         switch (m) {
             case 0:
                 #pragma unroll
-                for (uint p = 0; p < 6; ++p) {
+                for (uint p = 0; p < 8; ++p) {
                     out[p].s0 = in[p].s0;
                     out[p].s1 = in[p].s0;
                 }
                 break;
             case 1:
                 #pragma unroll
-                for (uint p = 0; p < 6; ++p) {
+                for (uint p = 0; p < 8; ++p) {
                     out[p].s0 = in[p].s0;
                     out[p].s1 = in[p].s0;
                 }
                 break;
             case 2:
                 #pragma unroll
-                for (uint p = 0; p < 6; ++p) {
+                for (uint p = 0; p < 8; ++p) {
                     out[p].s0 = in[p].s1;
                     out[p].s1 = in[p].s1;
                 }
                 break;
             case 3:
                 #pragma unroll
-                for (uint p = 0; p < 6; ++p) {
+                for (uint p = 0; p < 8; ++p) {
                     out[p].s0 = in[p].s1;
                     out[p].s1 = in[p].s1;
                 }
                 break;
             default:
                 #pragma unroll
-                for (uint p = 0; p < 6; ++p)
+                for (uint p = 0; p < 8; ++p)
                     out[p] = zeros;
                 break;
         }
 
         #pragma unroll
-        for (uint p = 0; p < 6; ++p)
+        for (uint p = 0; p < 8; ++p)
             WRITE_CHANNEL(delay_to_detect[3][p], out[p]);
     }
 }
@@ -877,15 +883,17 @@ kernel void preload_5(global float2 * restrict fop,
                       const uint base_row_rem,
                       const uint filter_offset_0,
                       const uint filter_offset_1,
+                      const uint filter_offset_2,
                       const uint n_channel_bundles)
 {
     const float2 zeros = {0, 0};
-    float2 load[2];
-    float2 out[6];
+    float2 load[3];
+    float2 out[8];
 
     for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
         load[0] = 0 < n_rows ? fop[filter_offset_0 + bundle] : zeros;
         load[1] = 1 < n_rows ? fop[filter_offset_1 + bundle] : zeros;
+        load[2] = 2 < n_rows ? fop[filter_offset_2 + bundle] : zeros;
 
         out[0] = load[0];
         out[1] = base_row_rem < 4 ? load[0] : load[1];
@@ -893,9 +901,11 @@ kernel void preload_5(global float2 * restrict fop,
         out[3] = base_row_rem < 2 ? load[0] : load[1];
         out[4] = base_row_rem < 1 ? load[0] : load[1];
         out[5] = load[1];
+        out[6] = base_row_rem < 4 ? load[1] : load[2];
+        out[7] = base_row_rem < 3 ? load[1] : load[2];
 
         #pragma unroll
-        for (uint p = 0; p < 6; ++p)
+        for (uint p = 0; p < 8; ++p)
             WRITE_CHANNEL(preload_to_delay[4][p], out[p]);
     }
 }
@@ -905,8 +915,8 @@ __attribute__((uses_global_work_offset(0)))
 kernel void delay_5(const uint n_channel_bundles)
 {
     const float2 zeros = {0, 0};
-    float2 in[6];
-    float2 out[6];
+    float2 in[8];
+    float2 out[8];
 
     uint M = 0;
     for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
@@ -915,55 +925,55 @@ kernel void delay_5(const uint n_channel_bundles)
 
         if (m == 0) {
             #pragma unroll
-            for (uint p = 0; p < 6; ++p)
+            for (uint p = 0; p < 8; ++p)
                 in[p] = READ_CHANNEL(preload_to_delay[4][p]);
         }
 
         switch (m) {
             case 0:
                 #pragma unroll
-                for (uint p = 0; p < 6; ++p) {
+                for (uint p = 0; p < 8; ++p) {
                     out[p].s0 = in[p].s0;
                     out[p].s1 = in[p].s0;
                 }
                 break;
             case 1:
                 #pragma unroll
-                for (uint p = 0; p < 6; ++p) {
+                for (uint p = 0; p < 8; ++p) {
                     out[p].s0 = in[p].s0;
                     out[p].s1 = in[p].s0;
                 }
                 break;
             case 2:
                 #pragma unroll
-                for (uint p = 0; p < 6; ++p) {
+                for (uint p = 0; p < 8; ++p) {
                     out[p].s0 = in[p].s0;
                     out[p].s1 = in[p].s1;
                 }
                 break;
             case 3:
                 #pragma unroll
-                for (uint p = 0; p < 6; ++p) {
+                for (uint p = 0; p < 8; ++p) {
                     out[p].s0 = in[p].s1;
                     out[p].s1 = in[p].s1;
                 }
                 break;
             case 4:
                 #pragma unroll
-                for (uint p = 0; p < 6; ++p) {
+                for (uint p = 0; p < 8; ++p) {
                     out[p].s0 = in[p].s1;
                     out[p].s1 = in[p].s1;
                 }
                 break;
             default:
                 #pragma unroll
-                for (uint p = 0; p < 6; ++p)
+                for (uint p = 0; p < 8; ++p)
                     out[p] = zeros;
                 break;
         }
 
         #pragma unroll
-        for (uint p = 0; p < 6; ++p)
+        for (uint p = 0; p < 8; ++p)
             WRITE_CHANNEL(delay_to_detect[4][p], out[p]);
     }
 }
@@ -974,24 +984,28 @@ kernel void preload_6(global float2 * restrict fop,
                       const uint n_rows,
                       const uint base_row_rem,
                       const uint filter_offset_0,
+                      const uint filter_offset_1,
                       const uint n_channel_bundles)
 {
     const float2 zeros = {0, 0};
-    float2 load[1];
-    float2 out[6];
+    float2 load[2];
+    float2 out[8];
 
     for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
         load[0] = 0 < n_rows ? fop[filter_offset_0 + bundle] : zeros;
+        load[1] = 1 < n_rows ? fop[filter_offset_1 + bundle] : zeros;
 
         out[0] = load[0];
         out[1] = load[0];
-        out[2] = load[0];
-        out[3] = load[0];
-        out[4] = load[0];
-        out[5] = load[0];
+        out[2] = base_row_rem < 4 ? load[0] : load[1];
+        out[3] = base_row_rem < 4 ? load[0] : load[1];
+        out[4] = base_row_rem < 2 ? load[0] : load[1];
+        out[5] = base_row_rem < 2 ? load[0] : load[1];
+        out[6] = load[1];
+        out[7] = load[1];
 
         #pragma unroll
-        for (uint p = 0; p < 6; ++p)
+        for (uint p = 0; p < 8; ++p)
             WRITE_CHANNEL(preload_to_delay[5][p], out[p]);
     }
 }
@@ -1001,8 +1015,8 @@ __attribute__((uses_global_work_offset(0)))
 kernel void delay_6(const uint n_channel_bundles)
 {
     const float2 zeros = {0, 0};
-    float2 in[6];
-    float2 out[6];
+    float2 in[8];
+    float2 out[8];
 
     uint M = 0;
     for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
@@ -1011,62 +1025,62 @@ kernel void delay_6(const uint n_channel_bundles)
 
         if (m == 0) {
             #pragma unroll
-            for (uint p = 0; p < 6; ++p)
+            for (uint p = 0; p < 8; ++p)
                 in[p] = READ_CHANNEL(preload_to_delay[5][p]);
         }
 
         switch (m) {
             case 0:
                 #pragma unroll
-                for (uint p = 0; p < 6; ++p) {
+                for (uint p = 0; p < 8; ++p) {
                     out[p].s0 = in[p].s0;
                     out[p].s1 = in[p].s0;
                 }
                 break;
             case 1:
                 #pragma unroll
-                for (uint p = 0; p < 6; ++p) {
+                for (uint p = 0; p < 8; ++p) {
                     out[p].s0 = in[p].s0;
                     out[p].s1 = in[p].s0;
                 }
                 break;
             case 2:
                 #pragma unroll
-                for (uint p = 0; p < 6; ++p) {
+                for (uint p = 0; p < 8; ++p) {
                     out[p].s0 = in[p].s0;
                     out[p].s1 = in[p].s0;
                 }
                 break;
             case 3:
                 #pragma unroll
-                for (uint p = 0; p < 6; ++p) {
+                for (uint p = 0; p < 8; ++p) {
                     out[p].s0 = in[p].s1;
                     out[p].s1 = in[p].s1;
                 }
                 break;
             case 4:
                 #pragma unroll
-                for (uint p = 0; p < 6; ++p) {
+                for (uint p = 0; p < 8; ++p) {
                     out[p].s0 = in[p].s1;
                     out[p].s1 = in[p].s1;
                 }
                 break;
             case 5:
                 #pragma unroll
-                for (uint p = 0; p < 6; ++p) {
+                for (uint p = 0; p < 8; ++p) {
                     out[p].s0 = in[p].s1;
                     out[p].s1 = in[p].s1;
                 }
                 break;
             default:
                 #pragma unroll
-                for (uint p = 0; p < 6; ++p)
+                for (uint p = 0; p < 8; ++p)
                     out[p] = zeros;
                 break;
         }
 
         #pragma unroll
-        for (uint p = 0; p < 6; ++p)
+        for (uint p = 0; p < 8; ++p)
             WRITE_CHANNEL(delay_to_detect[5][p], out[p]);
     }
 }
@@ -1082,7 +1096,7 @@ kernel void preload_7(global float2 * restrict fop,
 {
     const float2 zeros = {0, 0};
     float2 load[2];
-    float2 out[6];
+    float2 out[8];
 
     for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
         load[0] = 0 < n_rows ? fop[filter_offset_0 + bundle] : zeros;
@@ -1094,9 +1108,11 @@ kernel void preload_7(global float2 * restrict fop,
         out[3] = base_row_rem < 4 ? load[0] : load[1];
         out[4] = base_row_rem < 3 ? load[0] : load[1];
         out[5] = base_row_rem < 2 ? load[0] : load[1];
+        out[6] = base_row_rem < 1 ? load[0] : load[1];
+        out[7] = load[1];
 
         #pragma unroll
-        for (uint p = 0; p < 6; ++p)
+        for (uint p = 0; p < 8; ++p)
             WRITE_CHANNEL(preload_to_delay[6][p], out[p]);
     }
 }
@@ -1106,8 +1122,8 @@ __attribute__((uses_global_work_offset(0)))
 kernel void delay_7(const uint n_channel_bundles)
 {
     const float2 zeros = {0, 0};
-    float2 in[6];
-    float2 out[6];
+    float2 in[8];
+    float2 out[8];
 
     uint M = 0;
     for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
@@ -1116,69 +1132,69 @@ kernel void delay_7(const uint n_channel_bundles)
 
         if (m == 0) {
             #pragma unroll
-            for (uint p = 0; p < 6; ++p)
+            for (uint p = 0; p < 8; ++p)
                 in[p] = READ_CHANNEL(preload_to_delay[6][p]);
         }
 
         switch (m) {
             case 0:
                 #pragma unroll
-                for (uint p = 0; p < 6; ++p) {
+                for (uint p = 0; p < 8; ++p) {
                     out[p].s0 = in[p].s0;
                     out[p].s1 = in[p].s0;
                 }
                 break;
             case 1:
                 #pragma unroll
-                for (uint p = 0; p < 6; ++p) {
+                for (uint p = 0; p < 8; ++p) {
                     out[p].s0 = in[p].s0;
                     out[p].s1 = in[p].s0;
                 }
                 break;
             case 2:
                 #pragma unroll
-                for (uint p = 0; p < 6; ++p) {
+                for (uint p = 0; p < 8; ++p) {
                     out[p].s0 = in[p].s0;
                     out[p].s1 = in[p].s0;
                 }
                 break;
             case 3:
                 #pragma unroll
-                for (uint p = 0; p < 6; ++p) {
+                for (uint p = 0; p < 8; ++p) {
                     out[p].s0 = in[p].s0;
                     out[p].s1 = in[p].s1;
                 }
                 break;
             case 4:
                 #pragma unroll
-                for (uint p = 0; p < 6; ++p) {
+                for (uint p = 0; p < 8; ++p) {
                     out[p].s0 = in[p].s1;
                     out[p].s1 = in[p].s1;
                 }
                 break;
             case 5:
                 #pragma unroll
-                for (uint p = 0; p < 6; ++p) {
+                for (uint p = 0; p < 8; ++p) {
                     out[p].s0 = in[p].s1;
                     out[p].s1 = in[p].s1;
                 }
                 break;
             case 6:
                 #pragma unroll
-                for (uint p = 0; p < 6; ++p) {
+                for (uint p = 0; p < 8; ++p) {
                     out[p].s0 = in[p].s1;
                     out[p].s1 = in[p].s1;
                 }
                 break;
             default:
                 #pragma unroll
-                for (uint p = 0; p < 6; ++p)
+                for (uint p = 0; p < 8; ++p)
                     out[p] = zeros;
                 break;
         }
 
         #pragma unroll
-        for (uint p = 0; p < 6; ++p)
+        for (uint p = 0; p < 8; ++p)
             WRITE_CHANNEL(delay_to_detect[6][p], out[p]);
     }
 }
@@ -1189,26 +1205,26 @@ kernel void preload_8(global float2 * restrict fop,
                       const uint n_rows,
                       const uint base_row_rem,
                       const uint filter_offset_0,
-                      const uint filter_offset_1,
                       const uint n_channel_bundles)
 {
     const float2 zeros = {0, 0};
-    float2 load[2];
-    float2 out[6];
+    float2 load[1];
+    float2 out[8];
 
     for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
         load[0] = 0 < n_rows ? fop[filter_offset_0 + bundle] : zeros;
-        load[1] = 1 < n_rows ? fop[filter_offset_1 + bundle] : zeros;
 
         out[0] = load[0];
         out[1] = load[0];
-        out[2] = base_row_rem < 6 ? load[0] : load[1];
-        out[3] = base_row_rem < 6 ? load[0] : load[1];
-        out[4] = base_row_rem < 4 ? load[0] : load[1];
-        out[5] = base_row_rem < 4 ? load[0] : load[1];
+        out[2] = load[0];
+        out[3] = load[0];
+        out[4] = load[0];
+        out[5] = load[0];
+        out[6] = load[0];
+        out[7] = load[0];
 
         #pragma unroll
-        for (uint p = 0; p < 6; ++p)
+        for (uint p = 0; p < 8; ++p)
             WRITE_CHANNEL(preload_to_delay[7][p], out[p]);
     }
 }
@@ -1218,8 +1234,8 @@ __attribute__((uses_global_work_offset(0)))
 kernel void delay_8(const uint n_channel_bundles)
 {
     const float2 zeros = {0, 0};
-    float2 in[6];
-    float2 out[6];
+    float2 in[8];
+    float2 out[8];
 
     uint M = 0;
     for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
@@ -1228,76 +1244,76 @@ kernel void delay_8(const uint n_channel_bundles)
 
         if (m == 0) {
             #pragma unroll
-            for (uint p = 0; p < 6; ++p)
+            for (uint p = 0; p < 8; ++p)
                 in[p] = READ_CHANNEL(preload_to_delay[7][p]);
         }
 
         switch (m) {
             case 0:
                 #pragma unroll
-                for (uint p = 0; p < 6; ++p) {
+                for (uint p = 0; p < 8; ++p) {
                     out[p].s0 = in[p].s0;
                     out[p].s1 = in[p].s0;
                 }
                 break;
             case 1:
                 #pragma unroll
-                for (uint p = 0; p < 6; ++p) {
+                for (uint p = 0; p < 8; ++p) {
                     out[p].s0 = in[p].s0;
                     out[p].s1 = in[p].s0;
                 }
                 break;
             case 2:
                 #pragma unroll
-                for (uint p = 0; p < 6; ++p) {
+                for (uint p = 0; p < 8; ++p) {
                     out[p].s0 = in[p].s0;
                     out[p].s1 = in[p].s0;
                 }
                 break;
             case 3:
                 #pragma unroll
-                for (uint p = 0; p < 6; ++p) {
+                for (uint p = 0; p < 8; ++p) {
                     out[p].s0 = in[p].s0;
                     out[p].s1 = in[p].s0;
                 }
                 break;
             case 4:
                 #pragma unroll
-                for (uint p = 0; p < 6; ++p) {
+                for (uint p = 0; p < 8; ++p) {
                     out[p].s0 = in[p].s1;
                     out[p].s1 = in[p].s1;
                 }
                 break;
             case 5:
                 #pragma unroll
-                for (uint p = 0; p < 6; ++p) {
+                for (uint p = 0; p < 8; ++p) {
                     out[p].s0 = in[p].s1;
                     out[p].s1 = in[p].s1;
                 }
                 break;
             case 6:
                 #pragma unroll
-                for (uint p = 0; p < 6; ++p) {
+                for (uint p = 0; p < 8; ++p) {
                     out[p].s0 = in[p].s1;
                     out[p].s1 = in[p].s1;
                 }
                 break;
             case 7:
                 #pragma unroll
-                for (uint p = 0; p < 6; ++p) {
+                for (uint p = 0; p < 8; ++p) {
                     out[p].s0 = in[p].s1;
                     out[p].s1 = in[p].s1;
                 }
                 break;
             default:
                 #pragma unroll
-                for (uint p = 0; p < 6; ++p)
+                for (uint p = 0; p < 8; ++p)
                     out[p] = zeros;
                 break;
         }
 
         #pragma unroll
-        for (uint p = 0; p < 6; ++p)
+        for (uint p = 0; p < 8; ++p)
             WRITE_CHANNEL(delay_to_detect[7][p], out[p]);
     }
 }
@@ -1312,8 +1328,8 @@ kernel void detect_1(global uint * restrict detection_location,
                      uint n_filter_groups,
                      uint n_channel_bundles)
 {
-    uint location_buffer[64][12];
-    float amplitude_buffer[64][12];
+    uint location_buffer[64][16];
+    float amplitude_buffer[64][16];
 
     ulong valid = 0l;
     uint next = 0;
@@ -1322,11 +1338,11 @@ kernel void detect_1(global uint * restrict detection_location,
     const float invalid_amplitude = -1.0f;
 
     for (uint group = 0; group < n_filter_groups; ++group) {
-        uint group_base = group * 6;
-        int filter_num[6];
-        bool filter_mask[6];
+        uint group_base = group * 8;
+        int filter_num[8];
+        bool filter_mask[8];
         #pragma unroll
-        for (uint p = 0; p < 6; ++p) {
+        for (uint p = 0; p < 8; ++p) {
             filter_num[p] = negative_filters ? - group_base - p : group_base + p;
             filter_mask[p] = group_base + p < n_filters;
         }
@@ -1338,19 +1354,19 @@ kernel void detect_1(global uint * restrict detection_location,
             for (uint q = 0; q < 2; ++q)
                 channel_num[q] = bundle_base + q;
 
-            float2 hsum[6];
+            float2 hsum[8];
 
             #pragma unroll
-            for (uint p = 0; p < 6; ++p) {
+            for (uint p = 0; p < 8; ++p) {
                 float2 from_fop = READ_CHANNEL(delay_to_detect[0][p]);
                 hsum[p] = from_fop;
             }
 
             #pragma unroll
-            for (uint p = 0; p < 6; ++p)
+            for (uint p = 0; p < 8; ++p)
                 WRITE_CHANNEL(detect_to_detect[0][p], hsum[p]);
 
-            bool cand[12];
+            bool cand[16];
 
             cand[0] = (hsum[0].s0 > threshold) & filter_mask[0];
             cand[1] = (hsum[0].s1 > threshold) & filter_mask[0];
@@ -1364,11 +1380,15 @@ kernel void detect_1(global uint * restrict detection_location,
             cand[9] = (hsum[4].s1 > threshold) & filter_mask[4];
             cand[10] = (hsum[5].s0 > threshold) & filter_mask[5];
             cand[11] = (hsum[5].s1 > threshold) & filter_mask[5];
+            cand[12] = (hsum[6].s0 > threshold) & filter_mask[6];
+            cand[13] = (hsum[6].s1 > threshold) & filter_mask[6];
+            cand[14] = (hsum[7].s0 > threshold) & filter_mask[7];
+            cand[15] = (hsum[7].s1 > threshold) & filter_mask[7];
 
-            bool any_cand = cand[0] | cand[1] | cand[2] | cand[3] | cand[4] | cand[5] | cand[6] | cand[7] | cand[8] | cand[9] | cand[10] | cand[11];
+            bool any_cand = cand[0] | cand[1] | cand[2] | cand[3] | cand[4] | cand[5] | cand[6] | cand[7] | cand[8] | cand[9] | cand[10] | cand[11] | cand[12] | cand[13] | cand[14] | cand[15];
             if (any_cand) {
-                uint loc[12];
-                float amp[12];
+                uint loc[16];
+                float amp[16];
 
                 loc[0] = cand[0] ? encode_location(1, filter_num[0], channel_num[0]) : invalid_location;
                 amp[0] = cand[0] ? hsum[0].s0 : invalid_amplitude;
@@ -1394,12 +1414,20 @@ kernel void detect_1(global uint * restrict detection_location,
                 amp[10] = cand[10] ? hsum[5].s0 : invalid_amplitude;
                 loc[11] = cand[11] ? encode_location(1, filter_num[5], channel_num[1]) : invalid_location;
                 amp[11] = cand[11] ? hsum[5].s1 : invalid_amplitude;
+                loc[12] = cand[12] ? encode_location(1, filter_num[6], channel_num[0]) : invalid_location;
+                amp[12] = cand[12] ? hsum[6].s0 : invalid_amplitude;
+                loc[13] = cand[13] ? encode_location(1, filter_num[6], channel_num[1]) : invalid_location;
+                amp[13] = cand[13] ? hsum[6].s1 : invalid_amplitude;
+                loc[14] = cand[14] ? encode_location(1, filter_num[7], channel_num[0]) : invalid_location;
+                amp[14] = cand[14] ? hsum[7].s0 : invalid_amplitude;
+                loc[15] = cand[15] ? encode_location(1, filter_num[7], channel_num[1]) : invalid_location;
+                amp[15] = cand[15] ? hsum[7].s1 : invalid_amplitude;
 
                 uint slot = next;
                 next = (next + 1) & 63;
 
                 #pragma unroll
-                for (uint x = 0; x < 12; ++x) {
+                for (uint x = 0; x < 16; ++x) {
                     location_buffer[slot][x] = loc[x];
                     amplitude_buffer[slot][x] = amp[x];
                 }
@@ -1412,9 +1440,9 @@ kernel void detect_1(global uint * restrict detection_location,
     for (uint d = 0; d < 64; ++d) {
         bool is_valid = (valid & (1l << d)) > 0;
         #pragma unroll
-        for (uint x = 0; x < 12; ++x) {
-            detection_location[0 + d * 12 + x] = is_valid ? location_buffer[d][x] : invalid_location;
-            detection_amplitude[0 + d * 12 + x] = is_valid ? amplitude_buffer[d][x] : invalid_amplitude;
+        for (uint x = 0; x < 16; ++x) {
+            detection_location[0 + d * 16 + x] = is_valid ? location_buffer[d][x] : invalid_location;
+            detection_amplitude[0 + d * 16 + x] = is_valid ? amplitude_buffer[d][x] : invalid_amplitude;
         }
     }
 }
@@ -1429,8 +1457,8 @@ kernel void detect_2(global uint * restrict detection_location,
                      uint n_filter_groups,
                      uint n_channel_bundles)
 {
-    uint location_buffer[64][12];
-    float amplitude_buffer[64][12];
+    uint location_buffer[64][16];
+    float amplitude_buffer[64][16];
 
     ulong valid = 0l;
     uint next = 0;
@@ -1439,11 +1467,11 @@ kernel void detect_2(global uint * restrict detection_location,
     const float invalid_amplitude = -1.0f;
 
     for (uint group = 0; group < n_filter_groups; ++group) {
-        uint group_base = group * 6;
-        int filter_num[6];
-        bool filter_mask[6];
+        uint group_base = group * 8;
+        int filter_num[8];
+        bool filter_mask[8];
         #pragma unroll
-        for (uint p = 0; p < 6; ++p) {
+        for (uint p = 0; p < 8; ++p) {
             filter_num[p] = negative_filters ? - group_base - p : group_base + p;
             filter_mask[p] = group_base + p < n_filters;
         }
@@ -1455,20 +1483,20 @@ kernel void detect_2(global uint * restrict detection_location,
             for (uint q = 0; q < 2; ++q)
                 channel_num[q] = bundle_base + q;
 
-            float2 hsum[6];
+            float2 hsum[8];
 
             #pragma unroll
-            for (uint p = 0; p < 6; ++p) {
+            for (uint p = 0; p < 8; ++p) {
                 float2 from_prev_hp = READ_CHANNEL(detect_to_detect[0][p]);
                 float2 from_sp = READ_CHANNEL(delay_to_detect[1][p]);
                 hsum[p] = from_prev_hp + from_sp;
             }
 
             #pragma unroll
-            for (uint p = 0; p < 6; ++p)
+            for (uint p = 0; p < 8; ++p)
                 WRITE_CHANNEL(detect_to_detect[1][p], hsum[p]);
 
-            bool cand[12];
+            bool cand[16];
 
             cand[0] = (hsum[0].s0 > threshold) & filter_mask[0];
             cand[1] = (hsum[0].s1 > threshold) & filter_mask[0];
@@ -1482,11 +1510,15 @@ kernel void detect_2(global uint * restrict detection_location,
             cand[9] = (hsum[4].s1 > threshold) & filter_mask[4];
             cand[10] = (hsum[5].s0 > threshold) & filter_mask[5];
             cand[11] = (hsum[5].s1 > threshold) & filter_mask[5];
+            cand[12] = (hsum[6].s0 > threshold) & filter_mask[6];
+            cand[13] = (hsum[6].s1 > threshold) & filter_mask[6];
+            cand[14] = (hsum[7].s0 > threshold) & filter_mask[7];
+            cand[15] = (hsum[7].s1 > threshold) & filter_mask[7];
 
-            bool any_cand = cand[0] | cand[1] | cand[2] | cand[3] | cand[4] | cand[5] | cand[6] | cand[7] | cand[8] | cand[9] | cand[10] | cand[11];
+            bool any_cand = cand[0] | cand[1] | cand[2] | cand[3] | cand[4] | cand[5] | cand[6] | cand[7] | cand[8] | cand[9] | cand[10] | cand[11] | cand[12] | cand[13] | cand[14] | cand[15];
             if (any_cand) {
-                uint loc[12];
-                float amp[12];
+                uint loc[16];
+                float amp[16];
 
                 loc[0] = cand[0] ? encode_location(2, filter_num[0], channel_num[0]) : invalid_location;
                 amp[0] = cand[0] ? hsum[0].s0 : invalid_amplitude;
@@ -1512,12 +1544,20 @@ kernel void detect_2(global uint * restrict detection_location,
                 amp[10] = cand[10] ? hsum[5].s0 : invalid_amplitude;
                 loc[11] = cand[11] ? encode_location(2, filter_num[5], channel_num[1]) : invalid_location;
                 amp[11] = cand[11] ? hsum[5].s1 : invalid_amplitude;
+                loc[12] = cand[12] ? encode_location(2, filter_num[6], channel_num[0]) : invalid_location;
+                amp[12] = cand[12] ? hsum[6].s0 : invalid_amplitude;
+                loc[13] = cand[13] ? encode_location(2, filter_num[6], channel_num[1]) : invalid_location;
+                amp[13] = cand[13] ? hsum[6].s1 : invalid_amplitude;
+                loc[14] = cand[14] ? encode_location(2, filter_num[7], channel_num[0]) : invalid_location;
+                amp[14] = cand[14] ? hsum[7].s0 : invalid_amplitude;
+                loc[15] = cand[15] ? encode_location(2, filter_num[7], channel_num[1]) : invalid_location;
+                amp[15] = cand[15] ? hsum[7].s1 : invalid_amplitude;
 
                 uint slot = next;
                 next = (next + 1) & 63;
 
                 #pragma unroll
-                for (uint x = 0; x < 12; ++x) {
+                for (uint x = 0; x < 16; ++x) {
                     location_buffer[slot][x] = loc[x];
                     amplitude_buffer[slot][x] = amp[x];
                 }
@@ -1530,9 +1570,9 @@ kernel void detect_2(global uint * restrict detection_location,
     for (uint d = 0; d < 64; ++d) {
         bool is_valid = (valid & (1l << d)) > 0;
         #pragma unroll
-        for (uint x = 0; x < 12; ++x) {
-            detection_location[768 + d * 12 + x] = is_valid ? location_buffer[d][x] : invalid_location;
-            detection_amplitude[768 + d * 12 + x] = is_valid ? amplitude_buffer[d][x] : invalid_amplitude;
+        for (uint x = 0; x < 16; ++x) {
+            detection_location[1024 + d * 16 + x] = is_valid ? location_buffer[d][x] : invalid_location;
+            detection_amplitude[1024 + d * 16 + x] = is_valid ? amplitude_buffer[d][x] : invalid_amplitude;
         }
     }
 }
@@ -1547,8 +1587,8 @@ kernel void detect_3(global uint * restrict detection_location,
                      uint n_filter_groups,
                      uint n_channel_bundles)
 {
-    uint location_buffer[64][12];
-    float amplitude_buffer[64][12];
+    uint location_buffer[64][16];
+    float amplitude_buffer[64][16];
 
     ulong valid = 0l;
     uint next = 0;
@@ -1557,11 +1597,11 @@ kernel void detect_3(global uint * restrict detection_location,
     const float invalid_amplitude = -1.0f;
 
     for (uint group = 0; group < n_filter_groups; ++group) {
-        uint group_base = group * 6;
-        int filter_num[6];
-        bool filter_mask[6];
+        uint group_base = group * 8;
+        int filter_num[8];
+        bool filter_mask[8];
         #pragma unroll
-        for (uint p = 0; p < 6; ++p) {
+        for (uint p = 0; p < 8; ++p) {
             filter_num[p] = negative_filters ? - group_base - p : group_base + p;
             filter_mask[p] = group_base + p < n_filters;
         }
@@ -1573,20 +1613,20 @@ kernel void detect_3(global uint * restrict detection_location,
             for (uint q = 0; q < 2; ++q)
                 channel_num[q] = bundle_base + q;
 
-            float2 hsum[6];
+            float2 hsum[8];
 
             #pragma unroll
-            for (uint p = 0; p < 6; ++p) {
+            for (uint p = 0; p < 8; ++p) {
                 float2 from_prev_hp = READ_CHANNEL(detect_to_detect[1][p]);
                 float2 from_sp = READ_CHANNEL(delay_to_detect[2][p]);
                 hsum[p] = from_prev_hp + from_sp;
             }
 
             #pragma unroll
-            for (uint p = 0; p < 6; ++p)
+            for (uint p = 0; p < 8; ++p)
                 WRITE_CHANNEL(detect_to_detect[2][p], hsum[p]);
 
-            bool cand[12];
+            bool cand[16];
 
             cand[0] = (hsum[0].s0 > threshold) & filter_mask[0];
             cand[1] = (hsum[0].s1 > threshold) & filter_mask[0];
@@ -1600,11 +1640,15 @@ kernel void detect_3(global uint * restrict detection_location,
             cand[9] = (hsum[4].s1 > threshold) & filter_mask[4];
             cand[10] = (hsum[5].s0 > threshold) & filter_mask[5];
             cand[11] = (hsum[5].s1 > threshold) & filter_mask[5];
+            cand[12] = (hsum[6].s0 > threshold) & filter_mask[6];
+            cand[13] = (hsum[6].s1 > threshold) & filter_mask[6];
+            cand[14] = (hsum[7].s0 > threshold) & filter_mask[7];
+            cand[15] = (hsum[7].s1 > threshold) & filter_mask[7];
 
-            bool any_cand = cand[0] | cand[1] | cand[2] | cand[3] | cand[4] | cand[5] | cand[6] | cand[7] | cand[8] | cand[9] | cand[10] | cand[11];
+            bool any_cand = cand[0] | cand[1] | cand[2] | cand[3] | cand[4] | cand[5] | cand[6] | cand[7] | cand[8] | cand[9] | cand[10] | cand[11] | cand[12] | cand[13] | cand[14] | cand[15];
             if (any_cand) {
-                uint loc[12];
-                float amp[12];
+                uint loc[16];
+                float amp[16];
 
                 loc[0] = cand[0] ? encode_location(3, filter_num[0], channel_num[0]) : invalid_location;
                 amp[0] = cand[0] ? hsum[0].s0 : invalid_amplitude;
@@ -1630,12 +1674,20 @@ kernel void detect_3(global uint * restrict detection_location,
                 amp[10] = cand[10] ? hsum[5].s0 : invalid_amplitude;
                 loc[11] = cand[11] ? encode_location(3, filter_num[5], channel_num[1]) : invalid_location;
                 amp[11] = cand[11] ? hsum[5].s1 : invalid_amplitude;
+                loc[12] = cand[12] ? encode_location(3, filter_num[6], channel_num[0]) : invalid_location;
+                amp[12] = cand[12] ? hsum[6].s0 : invalid_amplitude;
+                loc[13] = cand[13] ? encode_location(3, filter_num[6], channel_num[1]) : invalid_location;
+                amp[13] = cand[13] ? hsum[6].s1 : invalid_amplitude;
+                loc[14] = cand[14] ? encode_location(3, filter_num[7], channel_num[0]) : invalid_location;
+                amp[14] = cand[14] ? hsum[7].s0 : invalid_amplitude;
+                loc[15] = cand[15] ? encode_location(3, filter_num[7], channel_num[1]) : invalid_location;
+                amp[15] = cand[15] ? hsum[7].s1 : invalid_amplitude;
 
                 uint slot = next;
                 next = (next + 1) & 63;
 
                 #pragma unroll
-                for (uint x = 0; x < 12; ++x) {
+                for (uint x = 0; x < 16; ++x) {
                     location_buffer[slot][x] = loc[x];
                     amplitude_buffer[slot][x] = amp[x];
                 }
@@ -1648,9 +1700,9 @@ kernel void detect_3(global uint * restrict detection_location,
     for (uint d = 0; d < 64; ++d) {
         bool is_valid = (valid & (1l << d)) > 0;
         #pragma unroll
-        for (uint x = 0; x < 12; ++x) {
-            detection_location[1536 + d * 12 + x] = is_valid ? location_buffer[d][x] : invalid_location;
-            detection_amplitude[1536 + d * 12 + x] = is_valid ? amplitude_buffer[d][x] : invalid_amplitude;
+        for (uint x = 0; x < 16; ++x) {
+            detection_location[2048 + d * 16 + x] = is_valid ? location_buffer[d][x] : invalid_location;
+            detection_amplitude[2048 + d * 16 + x] = is_valid ? amplitude_buffer[d][x] : invalid_amplitude;
         }
     }
 }
@@ -1665,8 +1717,8 @@ kernel void detect_4(global uint * restrict detection_location,
                      uint n_filter_groups,
                      uint n_channel_bundles)
 {
-    uint location_buffer[64][12];
-    float amplitude_buffer[64][12];
+    uint location_buffer[64][16];
+    float amplitude_buffer[64][16];
 
     ulong valid = 0l;
     uint next = 0;
@@ -1675,11 +1727,11 @@ kernel void detect_4(global uint * restrict detection_location,
     const float invalid_amplitude = -1.0f;
 
     for (uint group = 0; group < n_filter_groups; ++group) {
-        uint group_base = group * 6;
-        int filter_num[6];
-        bool filter_mask[6];
+        uint group_base = group * 8;
+        int filter_num[8];
+        bool filter_mask[8];
         #pragma unroll
-        for (uint p = 0; p < 6; ++p) {
+        for (uint p = 0; p < 8; ++p) {
             filter_num[p] = negative_filters ? - group_base - p : group_base + p;
             filter_mask[p] = group_base + p < n_filters;
         }
@@ -1691,20 +1743,20 @@ kernel void detect_4(global uint * restrict detection_location,
             for (uint q = 0; q < 2; ++q)
                 channel_num[q] = bundle_base + q;
 
-            float2 hsum[6];
+            float2 hsum[8];
 
             #pragma unroll
-            for (uint p = 0; p < 6; ++p) {
+            for (uint p = 0; p < 8; ++p) {
                 float2 from_prev_hp = READ_CHANNEL(detect_to_detect[2][p]);
                 float2 from_sp = READ_CHANNEL(delay_to_detect[3][p]);
                 hsum[p] = from_prev_hp + from_sp;
             }
 
             #pragma unroll
-            for (uint p = 0; p < 6; ++p)
+            for (uint p = 0; p < 8; ++p)
                 WRITE_CHANNEL(detect_to_detect[3][p], hsum[p]);
 
-            bool cand[12];
+            bool cand[16];
 
             cand[0] = (hsum[0].s0 > threshold) & filter_mask[0];
             cand[1] = (hsum[0].s1 > threshold) & filter_mask[0];
@@ -1718,11 +1770,15 @@ kernel void detect_4(global uint * restrict detection_location,
             cand[9] = (hsum[4].s1 > threshold) & filter_mask[4];
             cand[10] = (hsum[5].s0 > threshold) & filter_mask[5];
             cand[11] = (hsum[5].s1 > threshold) & filter_mask[5];
+            cand[12] = (hsum[6].s0 > threshold) & filter_mask[6];
+            cand[13] = (hsum[6].s1 > threshold) & filter_mask[6];
+            cand[14] = (hsum[7].s0 > threshold) & filter_mask[7];
+            cand[15] = (hsum[7].s1 > threshold) & filter_mask[7];
 
-            bool any_cand = cand[0] | cand[1] | cand[2] | cand[3] | cand[4] | cand[5] | cand[6] | cand[7] | cand[8] | cand[9] | cand[10] | cand[11];
+            bool any_cand = cand[0] | cand[1] | cand[2] | cand[3] | cand[4] | cand[5] | cand[6] | cand[7] | cand[8] | cand[9] | cand[10] | cand[11] | cand[12] | cand[13] | cand[14] | cand[15];
             if (any_cand) {
-                uint loc[12];
-                float amp[12];
+                uint loc[16];
+                float amp[16];
 
                 loc[0] = cand[0] ? encode_location(4, filter_num[0], channel_num[0]) : invalid_location;
                 amp[0] = cand[0] ? hsum[0].s0 : invalid_amplitude;
@@ -1748,12 +1804,20 @@ kernel void detect_4(global uint * restrict detection_location,
                 amp[10] = cand[10] ? hsum[5].s0 : invalid_amplitude;
                 loc[11] = cand[11] ? encode_location(4, filter_num[5], channel_num[1]) : invalid_location;
                 amp[11] = cand[11] ? hsum[5].s1 : invalid_amplitude;
+                loc[12] = cand[12] ? encode_location(4, filter_num[6], channel_num[0]) : invalid_location;
+                amp[12] = cand[12] ? hsum[6].s0 : invalid_amplitude;
+                loc[13] = cand[13] ? encode_location(4, filter_num[6], channel_num[1]) : invalid_location;
+                amp[13] = cand[13] ? hsum[6].s1 : invalid_amplitude;
+                loc[14] = cand[14] ? encode_location(4, filter_num[7], channel_num[0]) : invalid_location;
+                amp[14] = cand[14] ? hsum[7].s0 : invalid_amplitude;
+                loc[15] = cand[15] ? encode_location(4, filter_num[7], channel_num[1]) : invalid_location;
+                amp[15] = cand[15] ? hsum[7].s1 : invalid_amplitude;
 
                 uint slot = next;
                 next = (next + 1) & 63;
 
                 #pragma unroll
-                for (uint x = 0; x < 12; ++x) {
+                for (uint x = 0; x < 16; ++x) {
                     location_buffer[slot][x] = loc[x];
                     amplitude_buffer[slot][x] = amp[x];
                 }
@@ -1766,9 +1830,9 @@ kernel void detect_4(global uint * restrict detection_location,
     for (uint d = 0; d < 64; ++d) {
         bool is_valid = (valid & (1l << d)) > 0;
         #pragma unroll
-        for (uint x = 0; x < 12; ++x) {
-            detection_location[2304 + d * 12 + x] = is_valid ? location_buffer[d][x] : invalid_location;
-            detection_amplitude[2304 + d * 12 + x] = is_valid ? amplitude_buffer[d][x] : invalid_amplitude;
+        for (uint x = 0; x < 16; ++x) {
+            detection_location[3072 + d * 16 + x] = is_valid ? location_buffer[d][x] : invalid_location;
+            detection_amplitude[3072 + d * 16 + x] = is_valid ? amplitude_buffer[d][x] : invalid_amplitude;
         }
     }
 }
@@ -1783,8 +1847,8 @@ kernel void detect_5(global uint * restrict detection_location,
                      uint n_filter_groups,
                      uint n_channel_bundles)
 {
-    uint location_buffer[64][12];
-    float amplitude_buffer[64][12];
+    uint location_buffer[64][16];
+    float amplitude_buffer[64][16];
 
     ulong valid = 0l;
     uint next = 0;
@@ -1793,11 +1857,11 @@ kernel void detect_5(global uint * restrict detection_location,
     const float invalid_amplitude = -1.0f;
 
     for (uint group = 0; group < n_filter_groups; ++group) {
-        uint group_base = group * 6;
-        int filter_num[6];
-        bool filter_mask[6];
+        uint group_base = group * 8;
+        int filter_num[8];
+        bool filter_mask[8];
         #pragma unroll
-        for (uint p = 0; p < 6; ++p) {
+        for (uint p = 0; p < 8; ++p) {
             filter_num[p] = negative_filters ? - group_base - p : group_base + p;
             filter_mask[p] = group_base + p < n_filters;
         }
@@ -1809,20 +1873,20 @@ kernel void detect_5(global uint * restrict detection_location,
             for (uint q = 0; q < 2; ++q)
                 channel_num[q] = bundle_base + q;
 
-            float2 hsum[6];
+            float2 hsum[8];
 
             #pragma unroll
-            for (uint p = 0; p < 6; ++p) {
+            for (uint p = 0; p < 8; ++p) {
                 float2 from_prev_hp = READ_CHANNEL(detect_to_detect[3][p]);
                 float2 from_sp = READ_CHANNEL(delay_to_detect[4][p]);
                 hsum[p] = from_prev_hp + from_sp;
             }
 
             #pragma unroll
-            for (uint p = 0; p < 6; ++p)
+            for (uint p = 0; p < 8; ++p)
                 WRITE_CHANNEL(detect_to_detect[4][p], hsum[p]);
 
-            bool cand[12];
+            bool cand[16];
 
             cand[0] = (hsum[0].s0 > threshold) & filter_mask[0];
             cand[1] = (hsum[0].s1 > threshold) & filter_mask[0];
@@ -1836,11 +1900,15 @@ kernel void detect_5(global uint * restrict detection_location,
             cand[9] = (hsum[4].s1 > threshold) & filter_mask[4];
             cand[10] = (hsum[5].s0 > threshold) & filter_mask[5];
             cand[11] = (hsum[5].s1 > threshold) & filter_mask[5];
+            cand[12] = (hsum[6].s0 > threshold) & filter_mask[6];
+            cand[13] = (hsum[6].s1 > threshold) & filter_mask[6];
+            cand[14] = (hsum[7].s0 > threshold) & filter_mask[7];
+            cand[15] = (hsum[7].s1 > threshold) & filter_mask[7];
 
-            bool any_cand = cand[0] | cand[1] | cand[2] | cand[3] | cand[4] | cand[5] | cand[6] | cand[7] | cand[8] | cand[9] | cand[10] | cand[11];
+            bool any_cand = cand[0] | cand[1] | cand[2] | cand[3] | cand[4] | cand[5] | cand[6] | cand[7] | cand[8] | cand[9] | cand[10] | cand[11] | cand[12] | cand[13] | cand[14] | cand[15];
             if (any_cand) {
-                uint loc[12];
-                float amp[12];
+                uint loc[16];
+                float amp[16];
 
                 loc[0] = cand[0] ? encode_location(5, filter_num[0], channel_num[0]) : invalid_location;
                 amp[0] = cand[0] ? hsum[0].s0 : invalid_amplitude;
@@ -1866,12 +1934,20 @@ kernel void detect_5(global uint * restrict detection_location,
                 amp[10] = cand[10] ? hsum[5].s0 : invalid_amplitude;
                 loc[11] = cand[11] ? encode_location(5, filter_num[5], channel_num[1]) : invalid_location;
                 amp[11] = cand[11] ? hsum[5].s1 : invalid_amplitude;
+                loc[12] = cand[12] ? encode_location(5, filter_num[6], channel_num[0]) : invalid_location;
+                amp[12] = cand[12] ? hsum[6].s0 : invalid_amplitude;
+                loc[13] = cand[13] ? encode_location(5, filter_num[6], channel_num[1]) : invalid_location;
+                amp[13] = cand[13] ? hsum[6].s1 : invalid_amplitude;
+                loc[14] = cand[14] ? encode_location(5, filter_num[7], channel_num[0]) : invalid_location;
+                amp[14] = cand[14] ? hsum[7].s0 : invalid_amplitude;
+                loc[15] = cand[15] ? encode_location(5, filter_num[7], channel_num[1]) : invalid_location;
+                amp[15] = cand[15] ? hsum[7].s1 : invalid_amplitude;
 
                 uint slot = next;
                 next = (next + 1) & 63;
 
                 #pragma unroll
-                for (uint x = 0; x < 12; ++x) {
+                for (uint x = 0; x < 16; ++x) {
                     location_buffer[slot][x] = loc[x];
                     amplitude_buffer[slot][x] = amp[x];
                 }
@@ -1884,9 +1960,9 @@ kernel void detect_5(global uint * restrict detection_location,
     for (uint d = 0; d < 64; ++d) {
         bool is_valid = (valid & (1l << d)) > 0;
         #pragma unroll
-        for (uint x = 0; x < 12; ++x) {
-            detection_location[3072 + d * 12 + x] = is_valid ? location_buffer[d][x] : invalid_location;
-            detection_amplitude[3072 + d * 12 + x] = is_valid ? amplitude_buffer[d][x] : invalid_amplitude;
+        for (uint x = 0; x < 16; ++x) {
+            detection_location[4096 + d * 16 + x] = is_valid ? location_buffer[d][x] : invalid_location;
+            detection_amplitude[4096 + d * 16 + x] = is_valid ? amplitude_buffer[d][x] : invalid_amplitude;
         }
     }
 }
@@ -1901,8 +1977,8 @@ kernel void detect_6(global uint * restrict detection_location,
                      uint n_filter_groups,
                      uint n_channel_bundles)
 {
-    uint location_buffer[64][12];
-    float amplitude_buffer[64][12];
+    uint location_buffer[64][16];
+    float amplitude_buffer[64][16];
 
     ulong valid = 0l;
     uint next = 0;
@@ -1911,11 +1987,11 @@ kernel void detect_6(global uint * restrict detection_location,
     const float invalid_amplitude = -1.0f;
 
     for (uint group = 0; group < n_filter_groups; ++group) {
-        uint group_base = group * 6;
-        int filter_num[6];
-        bool filter_mask[6];
+        uint group_base = group * 8;
+        int filter_num[8];
+        bool filter_mask[8];
         #pragma unroll
-        for (uint p = 0; p < 6; ++p) {
+        for (uint p = 0; p < 8; ++p) {
             filter_num[p] = negative_filters ? - group_base - p : group_base + p;
             filter_mask[p] = group_base + p < n_filters;
         }
@@ -1927,20 +2003,20 @@ kernel void detect_6(global uint * restrict detection_location,
             for (uint q = 0; q < 2; ++q)
                 channel_num[q] = bundle_base + q;
 
-            float2 hsum[6];
+            float2 hsum[8];
 
             #pragma unroll
-            for (uint p = 0; p < 6; ++p) {
+            for (uint p = 0; p < 8; ++p) {
                 float2 from_prev_hp = READ_CHANNEL(detect_to_detect[4][p]);
                 float2 from_sp = READ_CHANNEL(delay_to_detect[5][p]);
                 hsum[p] = from_prev_hp + from_sp;
             }
 
             #pragma unroll
-            for (uint p = 0; p < 6; ++p)
+            for (uint p = 0; p < 8; ++p)
                 WRITE_CHANNEL(detect_to_detect[5][p], hsum[p]);
 
-            bool cand[12];
+            bool cand[16];
 
             cand[0] = (hsum[0].s0 > threshold) & filter_mask[0];
             cand[1] = (hsum[0].s1 > threshold) & filter_mask[0];
@@ -1954,11 +2030,15 @@ kernel void detect_6(global uint * restrict detection_location,
             cand[9] = (hsum[4].s1 > threshold) & filter_mask[4];
             cand[10] = (hsum[5].s0 > threshold) & filter_mask[5];
             cand[11] = (hsum[5].s1 > threshold) & filter_mask[5];
+            cand[12] = (hsum[6].s0 > threshold) & filter_mask[6];
+            cand[13] = (hsum[6].s1 > threshold) & filter_mask[6];
+            cand[14] = (hsum[7].s0 > threshold) & filter_mask[7];
+            cand[15] = (hsum[7].s1 > threshold) & filter_mask[7];
 
-            bool any_cand = cand[0] | cand[1] | cand[2] | cand[3] | cand[4] | cand[5] | cand[6] | cand[7] | cand[8] | cand[9] | cand[10] | cand[11];
+            bool any_cand = cand[0] | cand[1] | cand[2] | cand[3] | cand[4] | cand[5] | cand[6] | cand[7] | cand[8] | cand[9] | cand[10] | cand[11] | cand[12] | cand[13] | cand[14] | cand[15];
             if (any_cand) {
-                uint loc[12];
-                float amp[12];
+                uint loc[16];
+                float amp[16];
 
                 loc[0] = cand[0] ? encode_location(6, filter_num[0], channel_num[0]) : invalid_location;
                 amp[0] = cand[0] ? hsum[0].s0 : invalid_amplitude;
@@ -1984,12 +2064,20 @@ kernel void detect_6(global uint * restrict detection_location,
                 amp[10] = cand[10] ? hsum[5].s0 : invalid_amplitude;
                 loc[11] = cand[11] ? encode_location(6, filter_num[5], channel_num[1]) : invalid_location;
                 amp[11] = cand[11] ? hsum[5].s1 : invalid_amplitude;
+                loc[12] = cand[12] ? encode_location(6, filter_num[6], channel_num[0]) : invalid_location;
+                amp[12] = cand[12] ? hsum[6].s0 : invalid_amplitude;
+                loc[13] = cand[13] ? encode_location(6, filter_num[6], channel_num[1]) : invalid_location;
+                amp[13] = cand[13] ? hsum[6].s1 : invalid_amplitude;
+                loc[14] = cand[14] ? encode_location(6, filter_num[7], channel_num[0]) : invalid_location;
+                amp[14] = cand[14] ? hsum[7].s0 : invalid_amplitude;
+                loc[15] = cand[15] ? encode_location(6, filter_num[7], channel_num[1]) : invalid_location;
+                amp[15] = cand[15] ? hsum[7].s1 : invalid_amplitude;
 
                 uint slot = next;
                 next = (next + 1) & 63;
 
                 #pragma unroll
-                for (uint x = 0; x < 12; ++x) {
+                for (uint x = 0; x < 16; ++x) {
                     location_buffer[slot][x] = loc[x];
                     amplitude_buffer[slot][x] = amp[x];
                 }
@@ -2002,9 +2090,9 @@ kernel void detect_6(global uint * restrict detection_location,
     for (uint d = 0; d < 64; ++d) {
         bool is_valid = (valid & (1l << d)) > 0;
         #pragma unroll
-        for (uint x = 0; x < 12; ++x) {
-            detection_location[3840 + d * 12 + x] = is_valid ? location_buffer[d][x] : invalid_location;
-            detection_amplitude[3840 + d * 12 + x] = is_valid ? amplitude_buffer[d][x] : invalid_amplitude;
+        for (uint x = 0; x < 16; ++x) {
+            detection_location[5120 + d * 16 + x] = is_valid ? location_buffer[d][x] : invalid_location;
+            detection_amplitude[5120 + d * 16 + x] = is_valid ? amplitude_buffer[d][x] : invalid_amplitude;
         }
     }
 }
@@ -2019,8 +2107,8 @@ kernel void detect_7(global uint * restrict detection_location,
                      uint n_filter_groups,
                      uint n_channel_bundles)
 {
-    uint location_buffer[64][12];
-    float amplitude_buffer[64][12];
+    uint location_buffer[64][16];
+    float amplitude_buffer[64][16];
 
     ulong valid = 0l;
     uint next = 0;
@@ -2029,11 +2117,11 @@ kernel void detect_7(global uint * restrict detection_location,
     const float invalid_amplitude = -1.0f;
 
     for (uint group = 0; group < n_filter_groups; ++group) {
-        uint group_base = group * 6;
-        int filter_num[6];
-        bool filter_mask[6];
+        uint group_base = group * 8;
+        int filter_num[8];
+        bool filter_mask[8];
         #pragma unroll
-        for (uint p = 0; p < 6; ++p) {
+        for (uint p = 0; p < 8; ++p) {
             filter_num[p] = negative_filters ? - group_base - p : group_base + p;
             filter_mask[p] = group_base + p < n_filters;
         }
@@ -2045,20 +2133,20 @@ kernel void detect_7(global uint * restrict detection_location,
             for (uint q = 0; q < 2; ++q)
                 channel_num[q] = bundle_base + q;
 
-            float2 hsum[6];
+            float2 hsum[8];
 
             #pragma unroll
-            for (uint p = 0; p < 6; ++p) {
+            for (uint p = 0; p < 8; ++p) {
                 float2 from_prev_hp = READ_CHANNEL(detect_to_detect[5][p]);
                 float2 from_sp = READ_CHANNEL(delay_to_detect[6][p]);
                 hsum[p] = from_prev_hp + from_sp;
             }
 
             #pragma unroll
-            for (uint p = 0; p < 6; ++p)
+            for (uint p = 0; p < 8; ++p)
                 WRITE_CHANNEL(detect_to_detect[6][p], hsum[p]);
 
-            bool cand[12];
+            bool cand[16];
 
             cand[0] = (hsum[0].s0 > threshold) & filter_mask[0];
             cand[1] = (hsum[0].s1 > threshold) & filter_mask[0];
@@ -2072,11 +2160,15 @@ kernel void detect_7(global uint * restrict detection_location,
             cand[9] = (hsum[4].s1 > threshold) & filter_mask[4];
             cand[10] = (hsum[5].s0 > threshold) & filter_mask[5];
             cand[11] = (hsum[5].s1 > threshold) & filter_mask[5];
+            cand[12] = (hsum[6].s0 > threshold) & filter_mask[6];
+            cand[13] = (hsum[6].s1 > threshold) & filter_mask[6];
+            cand[14] = (hsum[7].s0 > threshold) & filter_mask[7];
+            cand[15] = (hsum[7].s1 > threshold) & filter_mask[7];
 
-            bool any_cand = cand[0] | cand[1] | cand[2] | cand[3] | cand[4] | cand[5] | cand[6] | cand[7] | cand[8] | cand[9] | cand[10] | cand[11];
+            bool any_cand = cand[0] | cand[1] | cand[2] | cand[3] | cand[4] | cand[5] | cand[6] | cand[7] | cand[8] | cand[9] | cand[10] | cand[11] | cand[12] | cand[13] | cand[14] | cand[15];
             if (any_cand) {
-                uint loc[12];
-                float amp[12];
+                uint loc[16];
+                float amp[16];
 
                 loc[0] = cand[0] ? encode_location(7, filter_num[0], channel_num[0]) : invalid_location;
                 amp[0] = cand[0] ? hsum[0].s0 : invalid_amplitude;
@@ -2102,12 +2194,20 @@ kernel void detect_7(global uint * restrict detection_location,
                 amp[10] = cand[10] ? hsum[5].s0 : invalid_amplitude;
                 loc[11] = cand[11] ? encode_location(7, filter_num[5], channel_num[1]) : invalid_location;
                 amp[11] = cand[11] ? hsum[5].s1 : invalid_amplitude;
+                loc[12] = cand[12] ? encode_location(7, filter_num[6], channel_num[0]) : invalid_location;
+                amp[12] = cand[12] ? hsum[6].s0 : invalid_amplitude;
+                loc[13] = cand[13] ? encode_location(7, filter_num[6], channel_num[1]) : invalid_location;
+                amp[13] = cand[13] ? hsum[6].s1 : invalid_amplitude;
+                loc[14] = cand[14] ? encode_location(7, filter_num[7], channel_num[0]) : invalid_location;
+                amp[14] = cand[14] ? hsum[7].s0 : invalid_amplitude;
+                loc[15] = cand[15] ? encode_location(7, filter_num[7], channel_num[1]) : invalid_location;
+                amp[15] = cand[15] ? hsum[7].s1 : invalid_amplitude;
 
                 uint slot = next;
                 next = (next + 1) & 63;
 
                 #pragma unroll
-                for (uint x = 0; x < 12; ++x) {
+                for (uint x = 0; x < 16; ++x) {
                     location_buffer[slot][x] = loc[x];
                     amplitude_buffer[slot][x] = amp[x];
                 }
@@ -2120,9 +2220,9 @@ kernel void detect_7(global uint * restrict detection_location,
     for (uint d = 0; d < 64; ++d) {
         bool is_valid = (valid & (1l << d)) > 0;
         #pragma unroll
-        for (uint x = 0; x < 12; ++x) {
-            detection_location[4608 + d * 12 + x] = is_valid ? location_buffer[d][x] : invalid_location;
-            detection_amplitude[4608 + d * 12 + x] = is_valid ? amplitude_buffer[d][x] : invalid_amplitude;
+        for (uint x = 0; x < 16; ++x) {
+            detection_location[6144 + d * 16 + x] = is_valid ? location_buffer[d][x] : invalid_location;
+            detection_amplitude[6144 + d * 16 + x] = is_valid ? amplitude_buffer[d][x] : invalid_amplitude;
         }
     }
 }
@@ -2137,8 +2237,8 @@ kernel void detect_8(global uint * restrict detection_location,
                      uint n_filter_groups,
                      uint n_channel_bundles)
 {
-    uint location_buffer[64][12];
-    float amplitude_buffer[64][12];
+    uint location_buffer[64][16];
+    float amplitude_buffer[64][16];
 
     ulong valid = 0l;
     uint next = 0;
@@ -2147,11 +2247,11 @@ kernel void detect_8(global uint * restrict detection_location,
     const float invalid_amplitude = -1.0f;
 
     for (uint group = 0; group < n_filter_groups; ++group) {
-        uint group_base = group * 6;
-        int filter_num[6];
-        bool filter_mask[6];
+        uint group_base = group * 8;
+        int filter_num[8];
+        bool filter_mask[8];
         #pragma unroll
-        for (uint p = 0; p < 6; ++p) {
+        for (uint p = 0; p < 8; ++p) {
             filter_num[p] = negative_filters ? - group_base - p : group_base + p;
             filter_mask[p] = group_base + p < n_filters;
         }
@@ -2163,17 +2263,17 @@ kernel void detect_8(global uint * restrict detection_location,
             for (uint q = 0; q < 2; ++q)
                 channel_num[q] = bundle_base + q;
 
-            float2 hsum[6];
+            float2 hsum[8];
 
             #pragma unroll
-            for (uint p = 0; p < 6; ++p) {
+            for (uint p = 0; p < 8; ++p) {
                 float2 from_prev_hp = READ_CHANNEL(detect_to_detect[6][p]);
                 float2 from_sp = READ_CHANNEL(delay_to_detect[7][p]);
                 hsum[p] = from_prev_hp + from_sp;
             }
 
 
-            bool cand[12];
+            bool cand[16];
 
             cand[0] = (hsum[0].s0 > threshold) & filter_mask[0];
             cand[1] = (hsum[0].s1 > threshold) & filter_mask[0];
@@ -2187,11 +2287,15 @@ kernel void detect_8(global uint * restrict detection_location,
             cand[9] = (hsum[4].s1 > threshold) & filter_mask[4];
             cand[10] = (hsum[5].s0 > threshold) & filter_mask[5];
             cand[11] = (hsum[5].s1 > threshold) & filter_mask[5];
+            cand[12] = (hsum[6].s0 > threshold) & filter_mask[6];
+            cand[13] = (hsum[6].s1 > threshold) & filter_mask[6];
+            cand[14] = (hsum[7].s0 > threshold) & filter_mask[7];
+            cand[15] = (hsum[7].s1 > threshold) & filter_mask[7];
 
-            bool any_cand = cand[0] | cand[1] | cand[2] | cand[3] | cand[4] | cand[5] | cand[6] | cand[7] | cand[8] | cand[9] | cand[10] | cand[11];
+            bool any_cand = cand[0] | cand[1] | cand[2] | cand[3] | cand[4] | cand[5] | cand[6] | cand[7] | cand[8] | cand[9] | cand[10] | cand[11] | cand[12] | cand[13] | cand[14] | cand[15];
             if (any_cand) {
-                uint loc[12];
-                float amp[12];
+                uint loc[16];
+                float amp[16];
 
                 loc[0] = cand[0] ? encode_location(8, filter_num[0], channel_num[0]) : invalid_location;
                 amp[0] = cand[0] ? hsum[0].s0 : invalid_amplitude;
@@ -2217,12 +2321,20 @@ kernel void detect_8(global uint * restrict detection_location,
                 amp[10] = cand[10] ? hsum[5].s0 : invalid_amplitude;
                 loc[11] = cand[11] ? encode_location(8, filter_num[5], channel_num[1]) : invalid_location;
                 amp[11] = cand[11] ? hsum[5].s1 : invalid_amplitude;
+                loc[12] = cand[12] ? encode_location(8, filter_num[6], channel_num[0]) : invalid_location;
+                amp[12] = cand[12] ? hsum[6].s0 : invalid_amplitude;
+                loc[13] = cand[13] ? encode_location(8, filter_num[6], channel_num[1]) : invalid_location;
+                amp[13] = cand[13] ? hsum[6].s1 : invalid_amplitude;
+                loc[14] = cand[14] ? encode_location(8, filter_num[7], channel_num[0]) : invalid_location;
+                amp[14] = cand[14] ? hsum[7].s0 : invalid_amplitude;
+                loc[15] = cand[15] ? encode_location(8, filter_num[7], channel_num[1]) : invalid_location;
+                amp[15] = cand[15] ? hsum[7].s1 : invalid_amplitude;
 
                 uint slot = next;
                 next = (next + 1) & 63;
 
                 #pragma unroll
-                for (uint x = 0; x < 12; ++x) {
+                for (uint x = 0; x < 16; ++x) {
                     location_buffer[slot][x] = loc[x];
                     amplitude_buffer[slot][x] = amp[x];
                 }
@@ -2235,9 +2347,9 @@ kernel void detect_8(global uint * restrict detection_location,
     for (uint d = 0; d < 64; ++d) {
         bool is_valid = (valid & (1l << d)) > 0;
         #pragma unroll
-        for (uint x = 0; x < 12; ++x) {
-            detection_location[5376 + d * 12 + x] = is_valid ? location_buffer[d][x] : invalid_location;
-            detection_amplitude[5376 + d * 12 + x] = is_valid ? amplitude_buffer[d][x] : invalid_amplitude;
+        for (uint x = 0; x < 16; ++x) {
+            detection_location[7168 + d * 16 + x] = is_valid ? location_buffer[d][x] : invalid_location;
+            detection_amplitude[7168 + d * 16 + x] = is_valid ? amplitude_buffer[d][x] : invalid_amplitude;
         }
     }
 }
