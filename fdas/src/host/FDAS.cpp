@@ -285,9 +285,11 @@ bool FDAS::perform_ft_convolution(const FDAS::InputType &input, const FDAS::Shap
             cl_chk(fft_kernels[e]->setArg<cl_uint>(1, true));
 
         cl_chk(square_and_discard_kernels[e]->setArg<cl::Buffer>(0, *fop_buffer_A));
-        if (HMS::dual_channnel)
-            cl_chk(square_and_discard_kernels[e]->setArg<cl::Buffer>(1, *fop_buffer_B));
-        cl_chk(square_and_discard_kernels[e]->setArg<cl_uint>(HMS::dual_channnel ? 3 : 2, n_tiles));
+        if (HMS::dual_channnel) {
+            cl_chk(square_and_discard_kernels[e]->setArg<cl::Buffer>(3, *fop_buffer_B));
+            cl_chk(square_and_discard_kernels[e]->setArg<cl_uint>(4, false));
+        }
+        cl_chk(square_and_discard_kernels[e]->setArg<cl_uint>(2, n_tiles));
     }
 
     const int first_filter = 0; // use -Input::n_filters_per_accel_sign for full FOP
@@ -299,7 +301,7 @@ bool FDAS::perform_ft_convolution(const FDAS::InputType &input, const FDAS::Shap
             cl_chk(mux_and_mult_kernel->setArg<cl_uint>(3 + e, f + e));
 
             cl_uint fop_offset = (f + e + Input::n_filters_per_accel_sign) * fop_row_sz / FFT::n_parallel;
-            cl_chk(square_and_discard_kernels[e]->setArg<cl_uint>(HMS::dual_channnel ? 2 : 1, fop_offset));
+            cl_chk(square_and_discard_kernels[e]->setArg<cl_uint>(1, fop_offset));
         }
 
         cl_chk(mux_and_mult_q.enqueueTask(*mux_and_mult_kernel, nullptr, (f == first_filter ? &conv_start : nullptr)));
