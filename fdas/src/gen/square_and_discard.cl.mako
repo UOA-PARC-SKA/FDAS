@@ -10,7 +10,6 @@ __attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
 kernel void square_and_discard_${engine}(global float4 * restrict fop_A,
                                  const uint fop_offset,
-                                 const uint n_tiles
                              %if not hms_dual_channel:
                                  const uint n_tiles)
                              % else:
