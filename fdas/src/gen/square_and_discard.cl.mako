@@ -25,7 +25,6 @@ kernel void square_and_discard_${engine}(global float4 * restrict fop_A,
 % endfor
 
     uint fop_idx = 0;
-##    #pragma loop_coalesce
     for (uint tile = 0; tile < n_tiles + 1; ++tile) {
         for (uint step = 0; step < ${n_steps}; ++step) {
             if (tile >= 1 && step >= ${n_steps_for_overlap}) {

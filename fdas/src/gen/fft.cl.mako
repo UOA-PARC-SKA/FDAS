@@ -13,7 +13,6 @@ kernel void fft_${engine}(const uint n_tiles)
     float2 fft_delay_elements[${fft_n_points + fft_n_parallel * (fft_n_points_log - 3)}];
     float2x4 data;
 
-##    #pragma loop_coalesce
     for (uint tile = 0; tile < n_tiles + 2; ++tile) {
         for (uint step = 0; step < ${fft_n_points_per_terminal}; ++step) {
             if (tile >= 1) {
