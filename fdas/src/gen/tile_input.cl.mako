@@ -28,7 +28,7 @@ kernel void tile(const uint n_tiles)
     float2 __attribute__((bank_bits(${fft_n_points_per_terminal_log}))) chunk_buf_${p}[2][${fft_n_points_per_terminal}];
 % endfor
 
-    #pragma loop_coalesce
+##    #pragma loop_coalesce
     for (uint tile = 0; tile < n_tiles + 1; ++tile) {
         for (uint step = 0; step < ${n_steps}; ++step) {
             if (tile >= 1) {
@@ -79,7 +79,7 @@ __attribute__((uses_global_work_offset(0)))
 kernel void store_tiles(global float2x4 * restrict tiles,
                         const uint n_tiles)
 {
-    #pragma loop_coalesce
+##    #pragma loop_coalesce
     for (uint tile = 0; tile < n_tiles; ++tile) {
         for (uint step = 0; step < ${n_steps}; ++step) {
             float2x4 read = READ_CHANNEL(fft_out);

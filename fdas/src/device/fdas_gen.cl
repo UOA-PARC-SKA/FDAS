@@ -94,7 +94,6 @@ kernel void fft_0(const uint n_tiles, const uint is_inverse)
     float2 fft_delay_elements[2080];
     float2x4 data;
 
-    #pragma loop_coalesce
     for (uint tile = 0; tile < n_tiles + 2; ++tile) {
         for (uint step = 0; step < 512; ++step) {
             if (tile >= 1) {
@@ -131,7 +130,6 @@ kernel void fft_1(const uint n_tiles)
     float2 fft_delay_elements[2080];
     float2x4 data;
 
-    #pragma loop_coalesce
     for (uint tile = 0; tile < n_tiles + 2; ++tile) {
         for (uint step = 0; step < 512; ++step) {
             if (tile >= 1) {
@@ -162,7 +160,6 @@ kernel void fft_2(const uint n_tiles)
     float2 fft_delay_elements[2080];
     float2x4 data;
 
-    #pragma loop_coalesce
     for (uint tile = 0; tile < n_tiles + 2; ++tile) {
         for (uint step = 0; step < 512; ++step) {
             if (tile >= 1) {
@@ -206,7 +203,6 @@ kernel void tile(const uint n_tiles)
     float2 __attribute__((bank_bits(9))) chunk_buf_2[2][512];
     float2 __attribute__((bank_bits(9))) chunk_buf_3[2][512];
 
-    #pragma loop_coalesce
     for (uint tile = 0; tile < n_tiles + 1; ++tile) {
         for (uint step = 0; step < 512; ++step) {
             if (tile >= 1) {
@@ -271,7 +267,6 @@ __attribute__((uses_global_work_offset(0)))
 kernel void store_tiles(global float2x4 * restrict tiles,
                         const uint n_tiles)
 {
-    #pragma loop_coalesce
     for (uint tile = 0; tile < n_tiles; ++tile) {
         for (uint step = 0; step < 512; ++step) {
             float2x4 read = READ_CHANNEL(fft_out);
@@ -339,7 +334,6 @@ kernel void square_and_discard_0(global float4 * restrict fop_A,
     float __attribute__((bank_bits(9))) chunk_buf_3[2][512];
 
     uint fop_idx = 0;
-    #pragma loop_coalesce
     for (uint tile = 0; tile < n_tiles + 1; ++tile) {
         for (uint step = 0; step < 512; ++step) {
             if (tile >= 1 && step >= 105) {
@@ -406,7 +400,6 @@ kernel void square_and_discard_1(global float4 * restrict fop_A,
     float __attribute__((bank_bits(9))) chunk_buf_3[2][512];
 
     uint fop_idx = 0;
-    #pragma loop_coalesce
     for (uint tile = 0; tile < n_tiles + 1; ++tile) {
         for (uint step = 0; step < 512; ++step) {
             if (tile >= 1 && step >= 105) {
@@ -473,7 +466,6 @@ kernel void square_and_discard_2(global float4 * restrict fop_A,
     float __attribute__((bank_bits(9))) chunk_buf_3[2][512];
 
     uint fop_idx = 0;
-    #pragma loop_coalesce
     for (uint tile = 0; tile < n_tiles + 1; ++tile) {
         for (uint step = 0; step < 512; ++step) {
             if (tile >= 1 && step >= 105) {

@@ -18,7 +18,7 @@ target_link_libraries(fdas_gtest npy alteracl OpenCL elf gtest)
 add_executable(print_config
         src/host/print_config.cpp)
 
-set(AOC_FLAGS -v -report -g -profile -no-interleaving=default -D FDAS_${FDAS_MODE})
+set(AOC_FLAGS -v -report -g -fmax=300 -no-interleaving=default -D FDAS_${FDAS_MODE})
 
 if (FDAS_MODE STREQUAL "EMU")
 add_custom_target(fdas_emu
