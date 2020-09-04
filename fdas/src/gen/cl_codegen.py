@@ -81,7 +81,7 @@ def main():
     fft_n_points_per_terminal_log = fft_n_points_log - fft_n_parallel_log
     fft_n_points_per_terminal = 2 ** fft_n_points_per_terminal_log
 
-    fft_n_engines = 3
+    fft_n_engines = 4
 
     # Frequency-domain FIR filter implementation with overlap-save algorithm
     fdf_tile_sz = fft_n_points
@@ -92,8 +92,8 @@ def main():
     hms_n_planes = 8
     hms_detection_sz = 64
 
-    hms_group_sz = 8
-    hms_bundle_sz = 2
+    hms_group_sz = 4
+    hms_bundle_sz = 4
     hms_bundle_ty = "float" if hms_bundle_sz == 1 else f"float{hms_bundle_sz}"
     hms_dual_channel = False
 
