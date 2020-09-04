@@ -41,8 +41,8 @@ channel float2 preload_to_delay[8][8] __attribute__((depth(0)));
 channel float2 delay_to_detect[8][8] __attribute__((depth(0)));
 
 channel float2 detect_to_detect[7][8] __attribute__((depth(0)));
-channel uint  detect_to_store_location[8][16] __attribute__((depth(0)));
-channel float detect_to_store_amplitude[8][16] __attribute__((depth(0)));
+channel uint  detect_location_out[8][16] __attribute__((depth(0)));
+channel float detect_amplitude_out[8][16] __attribute__((depth(0)));
 
 inline uint bit_reversed(uint x, uint bits)
 {
@@ -1312,9 +1312,7 @@ kernel void delay_8(const uint n_channel_bundles)
 
 __attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
-kernel void detect_1(global uint * restrict detection_location,
-                     global float * restrict detection_amplitude,
-                     float threshold,
+kernel void detect_1(float threshold,
                      uint n_filters,
                      uint negative_filters,
                      uint n_filter_groups,
@@ -1429,21 +1427,23 @@ kernel void detect_1(global uint * restrict detection_location,
         }
     }
 
-    for (uint d = 0; d < 64; ++d) {
-        bool is_valid = (valid & (1l << d)) > 0;
-        #pragma unroll
-        for (uint x = 0; x < 16; ++x) {
-            detection_location[0 + d * 16 + x] = is_valid ? location_buffer[d][x] : invalid_location;
-            detection_amplitude[0 + d * 16 + x] = is_valid ? amplitude_buffer[d][x] : invalid_amplitude;
+    for (uint h = 0; h < 1; ++h) {
+        for (uint d = 0; d < 64; ++d) {
+            bool is_valid = (valid & (1l << d)) > 0;
+            #pragma unroll
+            for (uint x = 0; x < 16; ++x) {
+                uint location = is_valid ? location_buffer[d][x] : invalid_location;
+                float amplitude = is_valid ? amplitude_buffer[d][x] : invalid_amplitude;
+                WRITE_CHANNEL(detect_location_out[0][x], location);
+                WRITE_CHANNEL(detect_amplitude_out[0][x], amplitude);
+            }
         }
     }
 }
 
 __attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
-kernel void detect_2(global uint * restrict detection_location,
-                     global float * restrict detection_amplitude,
-                     float threshold,
+kernel void detect_2(float threshold,
                      uint n_filters,
                      uint negative_filters,
                      uint n_filter_groups,
@@ -1559,21 +1559,30 @@ kernel void detect_2(global uint * restrict detection_location,
         }
     }
 
-    for (uint d = 0; d < 64; ++d) {
-        bool is_valid = (valid & (1l << d)) > 0;
-        #pragma unroll
-        for (uint x = 0; x < 16; ++x) {
-            detection_location[1024 + d * 16 + x] = is_valid ? location_buffer[d][x] : invalid_location;
-            detection_amplitude[1024 + d * 16 + x] = is_valid ? amplitude_buffer[d][x] : invalid_amplitude;
+    for (uint h = 0; h < 2; ++h) {
+        for (uint d = 0; d < 64; ++d) {
+            bool is_valid = (valid & (1l << d)) > 0;
+            #pragma unroll
+            for (uint x = 0; x < 16; ++x) {
+                uint location = invalid_location;
+                float amplitude = invalid_amplitude;
+                if (h < 1) {
+                    location = READ_CHANNEL(detect_location_out[0][x]);
+                    amplitude = READ_CHANNEL(detect_amplitude_out[0][x]);
+                } else if (is_valid) {
+                    location = location_buffer[d][x];
+                    amplitude = amplitude_buffer[d][x];
+                }
+                WRITE_CHANNEL(detect_location_out[1][x], location);
+                WRITE_CHANNEL(detect_amplitude_out[1][x], amplitude);
+            }
         }
     }
 }
 
 __attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
-kernel void detect_3(global uint * restrict detection_location,
-                     global float * restrict detection_amplitude,
-                     float threshold,
+kernel void detect_3(float threshold,
                      uint n_filters,
                      uint negative_filters,
                      uint n_filter_groups,
@@ -1689,21 +1698,30 @@ kernel void detect_3(global uint * restrict detection_location,
         }
     }
 
-    for (uint d = 0; d < 64; ++d) {
-        bool is_valid = (valid & (1l << d)) > 0;
-        #pragma unroll
-        for (uint x = 0; x < 16; ++x) {
-            detection_location[2048 + d * 16 + x] = is_valid ? location_buffer[d][x] : invalid_location;
-            detection_amplitude[2048 + d * 16 + x] = is_valid ? amplitude_buffer[d][x] : invalid_amplitude;
+    for (uint h = 0; h < 3; ++h) {
+        for (uint d = 0; d < 64; ++d) {
+            bool is_valid = (valid & (1l << d)) > 0;
+            #pragma unroll
+            for (uint x = 0; x < 16; ++x) {
+                uint location = invalid_location;
+                float amplitude = invalid_amplitude;
+                if (h < 2) {
+                    location = READ_CHANNEL(detect_location_out[1][x]);
+                    amplitude = READ_CHANNEL(detect_amplitude_out[1][x]);
+                } else if (is_valid) {
+                    location = location_buffer[d][x];
+                    amplitude = amplitude_buffer[d][x];
+                }
+                WRITE_CHANNEL(detect_location_out[2][x], location);
+                WRITE_CHANNEL(detect_amplitude_out[2][x], amplitude);
+            }
         }
     }
 }
 
 __attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
-kernel void detect_4(global uint * restrict detection_location,
-                     global float * restrict detection_amplitude,
-                     float threshold,
+kernel void detect_4(float threshold,
                      uint n_filters,
                      uint negative_filters,
                      uint n_filter_groups,
@@ -1819,21 +1837,30 @@ kernel void detect_4(global uint * restrict detection_location,
         }
     }
 
-    for (uint d = 0; d < 64; ++d) {
-        bool is_valid = (valid & (1l << d)) > 0;
-        #pragma unroll
-        for (uint x = 0; x < 16; ++x) {
-            detection_location[3072 + d * 16 + x] = is_valid ? location_buffer[d][x] : invalid_location;
-            detection_amplitude[3072 + d * 16 + x] = is_valid ? amplitude_buffer[d][x] : invalid_amplitude;
+    for (uint h = 0; h < 4; ++h) {
+        for (uint d = 0; d < 64; ++d) {
+            bool is_valid = (valid & (1l << d)) > 0;
+            #pragma unroll
+            for (uint x = 0; x < 16; ++x) {
+                uint location = invalid_location;
+                float amplitude = invalid_amplitude;
+                if (h < 3) {
+                    location = READ_CHANNEL(detect_location_out[2][x]);
+                    amplitude = READ_CHANNEL(detect_amplitude_out[2][x]);
+                } else if (is_valid) {
+                    location = location_buffer[d][x];
+                    amplitude = amplitude_buffer[d][x];
+                }
+                WRITE_CHANNEL(detect_location_out[3][x], location);
+                WRITE_CHANNEL(detect_amplitude_out[3][x], amplitude);
+            }
         }
     }
 }
 
 __attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
-kernel void detect_5(global uint * restrict detection_location,
-                     global float * restrict detection_amplitude,
-                     float threshold,
+kernel void detect_5(float threshold,
                      uint n_filters,
                      uint negative_filters,
                      uint n_filter_groups,
@@ -1949,21 +1976,30 @@ kernel void detect_5(global uint * restrict detection_location,
         }
     }
 
-    for (uint d = 0; d < 64; ++d) {
-        bool is_valid = (valid & (1l << d)) > 0;
-        #pragma unroll
-        for (uint x = 0; x < 16; ++x) {
-            detection_location[4096 + d * 16 + x] = is_valid ? location_buffer[d][x] : invalid_location;
-            detection_amplitude[4096 + d * 16 + x] = is_valid ? amplitude_buffer[d][x] : invalid_amplitude;
+    for (uint h = 0; h < 5; ++h) {
+        for (uint d = 0; d < 64; ++d) {
+            bool is_valid = (valid & (1l << d)) > 0;
+            #pragma unroll
+            for (uint x = 0; x < 16; ++x) {
+                uint location = invalid_location;
+                float amplitude = invalid_amplitude;
+                if (h < 4) {
+                    location = READ_CHANNEL(detect_location_out[3][x]);
+                    amplitude = READ_CHANNEL(detect_amplitude_out[3][x]);
+                } else if (is_valid) {
+                    location = location_buffer[d][x];
+                    amplitude = amplitude_buffer[d][x];
+                }
+                WRITE_CHANNEL(detect_location_out[4][x], location);
+                WRITE_CHANNEL(detect_amplitude_out[4][x], amplitude);
+            }
         }
     }
 }
 
 __attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
-kernel void detect_6(global uint * restrict detection_location,
-                     global float * restrict detection_amplitude,
-                     float threshold,
+kernel void detect_6(float threshold,
                      uint n_filters,
                      uint negative_filters,
                      uint n_filter_groups,
@@ -2079,21 +2115,30 @@ kernel void detect_6(global uint * restrict detection_location,
         }
     }
 
-    for (uint d = 0; d < 64; ++d) {
-        bool is_valid = (valid & (1l << d)) > 0;
-        #pragma unroll
-        for (uint x = 0; x < 16; ++x) {
-            detection_location[5120 + d * 16 + x] = is_valid ? location_buffer[d][x] : invalid_location;
-            detection_amplitude[5120 + d * 16 + x] = is_valid ? amplitude_buffer[d][x] : invalid_amplitude;
+    for (uint h = 0; h < 6; ++h) {
+        for (uint d = 0; d < 64; ++d) {
+            bool is_valid = (valid & (1l << d)) > 0;
+            #pragma unroll
+            for (uint x = 0; x < 16; ++x) {
+                uint location = invalid_location;
+                float amplitude = invalid_amplitude;
+                if (h < 5) {
+                    location = READ_CHANNEL(detect_location_out[4][x]);
+                    amplitude = READ_CHANNEL(detect_amplitude_out[4][x]);
+                } else if (is_valid) {
+                    location = location_buffer[d][x];
+                    amplitude = amplitude_buffer[d][x];
+                }
+                WRITE_CHANNEL(detect_location_out[5][x], location);
+                WRITE_CHANNEL(detect_amplitude_out[5][x], amplitude);
+            }
         }
     }
 }
 
 __attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
-kernel void detect_7(global uint * restrict detection_location,
-                     global float * restrict detection_amplitude,
-                     float threshold,
+kernel void detect_7(float threshold,
                      uint n_filters,
                      uint negative_filters,
                      uint n_filter_groups,
@@ -2209,21 +2254,30 @@ kernel void detect_7(global uint * restrict detection_location,
         }
     }
 
-    for (uint d = 0; d < 64; ++d) {
-        bool is_valid = (valid & (1l << d)) > 0;
-        #pragma unroll
-        for (uint x = 0; x < 16; ++x) {
-            detection_location[6144 + d * 16 + x] = is_valid ? location_buffer[d][x] : invalid_location;
-            detection_amplitude[6144 + d * 16 + x] = is_valid ? amplitude_buffer[d][x] : invalid_amplitude;
+    for (uint h = 0; h < 7; ++h) {
+        for (uint d = 0; d < 64; ++d) {
+            bool is_valid = (valid & (1l << d)) > 0;
+            #pragma unroll
+            for (uint x = 0; x < 16; ++x) {
+                uint location = invalid_location;
+                float amplitude = invalid_amplitude;
+                if (h < 6) {
+                    location = READ_CHANNEL(detect_location_out[5][x]);
+                    amplitude = READ_CHANNEL(detect_amplitude_out[5][x]);
+                } else if (is_valid) {
+                    location = location_buffer[d][x];
+                    amplitude = amplitude_buffer[d][x];
+                }
+                WRITE_CHANNEL(detect_location_out[6][x], location);
+                WRITE_CHANNEL(detect_amplitude_out[6][x], amplitude);
+            }
         }
     }
 }
 
 __attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
-kernel void detect_8(global uint * restrict detection_location,
-                     global float * restrict detection_amplitude,
-                     float threshold,
+kernel void detect_8(float threshold,
                      uint n_filters,
                      uint negative_filters,
                      uint n_filter_groups,
@@ -2336,12 +2390,38 @@ kernel void detect_8(global uint * restrict detection_location,
         }
     }
 
-    for (uint d = 0; d < 64; ++d) {
-        bool is_valid = (valid & (1l << d)) > 0;
+    for (uint h = 0; h < 8; ++h) {
+        for (uint d = 0; d < 64; ++d) {
+            bool is_valid = (valid & (1l << d)) > 0;
+            #pragma unroll
+            for (uint x = 0; x < 16; ++x) {
+                uint location = invalid_location;
+                float amplitude = invalid_amplitude;
+                if (h < 7) {
+                    location = READ_CHANNEL(detect_location_out[6][x]);
+                    amplitude = READ_CHANNEL(detect_amplitude_out[6][x]);
+                } else if (is_valid) {
+                    location = location_buffer[d][x];
+                    amplitude = amplitude_buffer[d][x];
+                }
+                WRITE_CHANNEL(detect_location_out[7][x], location);
+                WRITE_CHANNEL(detect_amplitude_out[7][x], amplitude);
+            }
+        }
+    }
+}
+__attribute__((max_global_work_dim(0)))
+__attribute__((uses_global_work_offset(0)))
+kernel void store_cands(global uint * restrict detection_location,
+                        global float * restrict detection_amplitude)
+{
+    for (uint d = 0; d < 512; ++d) {
         #pragma unroll
         for (uint x = 0; x < 16; ++x) {
-            detection_location[7168 + d * 16 + x] = is_valid ? location_buffer[d][x] : invalid_location;
-            detection_amplitude[7168 + d * 16 + x] = is_valid ? amplitude_buffer[d][x] : invalid_amplitude;
+            uint location = READ_CHANNEL(detect_location_out[7][x]);
+            float amplitude = READ_CHANNEL(detect_amplitude_out[7][x]);
+            detection_location[d * 16 + x] = location;
+            detection_amplitude[d * 16 + x] = amplitude;
         }
     }
 }

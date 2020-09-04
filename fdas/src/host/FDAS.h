@@ -96,6 +96,7 @@ private:
     std::vector<std::unique_ptr<cl::Kernel>> preload_kernels;
     std::vector<std::unique_ptr<cl::Kernel>> delay_kernels;
     std::vector<std::unique_ptr<cl::Kernel>> detect_kernels;
+    std::unique_ptr<cl::Kernel> store_cands_kernel;
 
     std::unique_ptr<cl::Buffer> input_buffer;
     std::unique_ptr<cl::Buffer> tiles_buffer;
