@@ -112,7 +112,6 @@ def main():
     square_and_discard_template = Template(filename='square_and_discard.cl.mako')
     preload_template = Template(filename='preload.cl.mako')
     detect_template = Template(filename='detect.cl.mako')
-    store_cands_template = Template(filename='store_cands.cl.mako')
     gen_info_template = Template(filename='gen_info.h.mako')
 
     copyright_header = """/*
@@ -151,7 +150,7 @@ def main():
             fdas_file.write(preload_template.render(k=h + 1, **fdas_configuration))
         for h in range(hms_n_planes):
             fdas_file.write(detect_template.render(k=h + 1, **fdas_configuration))
-        fdas_file.write(store_cands_template.render(**fdas_configuration))
+
 
     with open("../host/gen_info.h", 'wt') as gen_info_file:
         gen_info_file.write(copyright_header)
