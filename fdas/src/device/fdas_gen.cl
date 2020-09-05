@@ -37,10 +37,10 @@ channel float2x4 fft_out __attribute__((depth(0)));
 channel float2x4 ifft_in[4] __attribute__((depth(0)));
 channel float2x4 ifft_out[4] __attribute__((depth(0)));
 
-channel float4 preload_to_delay[8][4] __attribute__((depth(0)));
-channel float4 delay_to_detect[8][4] __attribute__((depth(0)));
+channel float preload_to_delay[8][16] __attribute__((depth(0)));
+channel float delay_to_detect[8][16] __attribute__((depth(0)));
 
-channel float4 detect_to_detect[7][4] __attribute__((depth(0)));
+channel float detect_to_detect[7][16] __attribute__((depth(0)));
 channel uint  detect_location_out[8][16] __attribute__((depth(0)));
 channel float detect_amplitude_out[8][16] __attribute__((depth(0)));
 
@@ -622,32 +622,68 @@ kernel void square_and_discard_3(global float4 * restrict fop_A,
 
 __attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
-kernel void preload_1(global float4 * restrict fop,
+kernel void preload_1(global float * restrict fop,
                       const uint n_rows,
                       const uint base_row_rem,
                       const uint filter_offset_0,
                       const uint filter_offset_1,
                       const uint filter_offset_2,
                       const uint filter_offset_3,
+                      const uint filter_offset_4,
+                      const uint filter_offset_5,
+                      const uint filter_offset_6,
+                      const uint filter_offset_7,
+                      const uint filter_offset_8,
+                      const uint filter_offset_9,
+                      const uint filter_offset_10,
+                      const uint filter_offset_11,
+                      const uint filter_offset_12,
+                      const uint filter_offset_13,
+                      const uint filter_offset_14,
+                      const uint filter_offset_15,
                       const uint n_channel_bundles)
 {
-    const float4 zeros = {0, 0, 0, 0};
-    float4 load[4];
-    float4 out[4];
+    const float zeros = {0};
+    float load[16];
+    float out[16];
 
     for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
         load[0] = 0 < n_rows ? fop[filter_offset_0 + bundle] : zeros;
         load[1] = 1 < n_rows ? fop[filter_offset_1 + bundle] : zeros;
         load[2] = 2 < n_rows ? fop[filter_offset_2 + bundle] : zeros;
         load[3] = 3 < n_rows ? fop[filter_offset_3 + bundle] : zeros;
+        load[4] = 4 < n_rows ? fop[filter_offset_4 + bundle] : zeros;
+        load[5] = 5 < n_rows ? fop[filter_offset_5 + bundle] : zeros;
+        load[6] = 6 < n_rows ? fop[filter_offset_6 + bundle] : zeros;
+        load[7] = 7 < n_rows ? fop[filter_offset_7 + bundle] : zeros;
+        load[8] = 8 < n_rows ? fop[filter_offset_8 + bundle] : zeros;
+        load[9] = 9 < n_rows ? fop[filter_offset_9 + bundle] : zeros;
+        load[10] = 10 < n_rows ? fop[filter_offset_10 + bundle] : zeros;
+        load[11] = 11 < n_rows ? fop[filter_offset_11 + bundle] : zeros;
+        load[12] = 12 < n_rows ? fop[filter_offset_12 + bundle] : zeros;
+        load[13] = 13 < n_rows ? fop[filter_offset_13 + bundle] : zeros;
+        load[14] = 14 < n_rows ? fop[filter_offset_14 + bundle] : zeros;
+        load[15] = 15 < n_rows ? fop[filter_offset_15 + bundle] : zeros;
 
         out[0] = load[0];
         out[1] = load[1];
         out[2] = load[2];
         out[3] = load[3];
+        out[4] = load[4];
+        out[5] = load[5];
+        out[6] = load[6];
+        out[7] = load[7];
+        out[8] = load[8];
+        out[9] = load[9];
+        out[10] = load[10];
+        out[11] = load[11];
+        out[12] = load[12];
+        out[13] = load[13];
+        out[14] = load[14];
+        out[15] = load[15];
 
         #pragma unroll
-        for (uint p = 0; p < 4; ++p)
+        for (uint p = 0; p < 16; ++p)
             WRITE_CHANNEL(preload_to_delay[0][p], out[p]);
     }
 }
@@ -656,9 +692,9 @@ __attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
 kernel void delay_1(const uint n_channel_bundles)
 {
-    const float4 zeros = {0, 0, 0, 0};
-    float4 in[4];
-    float4 out[4];
+    const float zeros = {0};
+    float in[16];
+    float out[16];
 
     uint M = 0;
     for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
@@ -667,57 +703,78 @@ kernel void delay_1(const uint n_channel_bundles)
 
         if (m == 0) {
             #pragma unroll
-            for (uint p = 0; p < 4; ++p)
+            for (uint p = 0; p < 16; ++p)
                 in[p] = READ_CHANNEL(preload_to_delay[0][p]);
         }
 
         switch (m) {
             case 0:
                 #pragma unroll
-                for (uint p = 0; p < 4; ++p) {
-                    out[p].s0 = in[p].s0;
-                    out[p].s1 = in[p].s1;
-                    out[p].s2 = in[p].s2;
-                    out[p].s3 = in[p].s3;
+                for (uint p = 0; p < 16; ++p) {
+                    out[p] = in[p];
                 }
                 break;
             default:
                 #pragma unroll
-                for (uint p = 0; p < 4; ++p)
+                for (uint p = 0; p < 16; ++p)
                     out[p] = zeros;
                 break;
         }
 
         #pragma unroll
-        for (uint p = 0; p < 4; ++p)
+        for (uint p = 0; p < 16; ++p)
             WRITE_CHANNEL(delay_to_detect[0][p], out[p]);
     }
 }
 
 __attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
-kernel void preload_2(global float4 * restrict fop,
+kernel void preload_2(global float * restrict fop,
                       const uint n_rows,
                       const uint base_row_rem,
                       const uint filter_offset_0,
                       const uint filter_offset_1,
+                      const uint filter_offset_2,
+                      const uint filter_offset_3,
+                      const uint filter_offset_4,
+                      const uint filter_offset_5,
+                      const uint filter_offset_6,
+                      const uint filter_offset_7,
                       const uint n_channel_bundles)
 {
-    const float4 zeros = {0, 0, 0, 0};
-    float4 load[2];
-    float4 out[4];
+    const float zeros = {0};
+    float load[8];
+    float out[16];
 
     for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
         load[0] = 0 < n_rows ? fop[filter_offset_0 + bundle] : zeros;
         load[1] = 1 < n_rows ? fop[filter_offset_1 + bundle] : zeros;
+        load[2] = 2 < n_rows ? fop[filter_offset_2 + bundle] : zeros;
+        load[3] = 3 < n_rows ? fop[filter_offset_3 + bundle] : zeros;
+        load[4] = 4 < n_rows ? fop[filter_offset_4 + bundle] : zeros;
+        load[5] = 5 < n_rows ? fop[filter_offset_5 + bundle] : zeros;
+        load[6] = 6 < n_rows ? fop[filter_offset_6 + bundle] : zeros;
+        load[7] = 7 < n_rows ? fop[filter_offset_7 + bundle] : zeros;
 
         out[0] = load[0];
         out[1] = load[0];
         out[2] = load[1];
         out[3] = load[1];
+        out[4] = load[2];
+        out[5] = load[2];
+        out[6] = load[3];
+        out[7] = load[3];
+        out[8] = load[4];
+        out[9] = load[4];
+        out[10] = load[5];
+        out[11] = load[5];
+        out[12] = load[6];
+        out[13] = load[6];
+        out[14] = load[7];
+        out[15] = load[7];
 
         #pragma unroll
-        for (uint p = 0; p < 4; ++p)
+        for (uint p = 0; p < 16; ++p)
             WRITE_CHANNEL(preload_to_delay[1][p], out[p]);
     }
 }
@@ -726,9 +783,9 @@ __attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
 kernel void delay_2(const uint n_channel_bundles)
 {
-    const float4 zeros = {0, 0, 0, 0};
-    float4 in[4];
-    float4 out[4];
+    const float zeros = {0};
+    float in[16];
+    float out[16];
 
     uint M = 0;
     for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
@@ -737,66 +794,80 @@ kernel void delay_2(const uint n_channel_bundles)
 
         if (m == 0) {
             #pragma unroll
-            for (uint p = 0; p < 4; ++p)
+            for (uint p = 0; p < 16; ++p)
                 in[p] = READ_CHANNEL(preload_to_delay[1][p]);
         }
 
         switch (m) {
             case 0:
                 #pragma unroll
-                for (uint p = 0; p < 4; ++p) {
-                    out[p].s0 = in[p].s0;
-                    out[p].s1 = in[p].s0;
-                    out[p].s2 = in[p].s1;
-                    out[p].s3 = in[p].s1;
+                for (uint p = 0; p < 16; ++p) {
+                    out[p] = in[p];
                 }
                 break;
             case 1:
                 #pragma unroll
-                for (uint p = 0; p < 4; ++p) {
-                    out[p].s0 = in[p].s2;
-                    out[p].s1 = in[p].s2;
-                    out[p].s2 = in[p].s3;
-                    out[p].s3 = in[p].s3;
+                for (uint p = 0; p < 16; ++p) {
+                    out[p] = in[p];
                 }
                 break;
             default:
                 #pragma unroll
-                for (uint p = 0; p < 4; ++p)
+                for (uint p = 0; p < 16; ++p)
                     out[p] = zeros;
                 break;
         }
 
         #pragma unroll
-        for (uint p = 0; p < 4; ++p)
+        for (uint p = 0; p < 16; ++p)
             WRITE_CHANNEL(delay_to_detect[1][p], out[p]);
     }
 }
 
 __attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
-kernel void preload_3(global float4 * restrict fop,
+kernel void preload_3(global float * restrict fop,
                       const uint n_rows,
                       const uint base_row_rem,
                       const uint filter_offset_0,
                       const uint filter_offset_1,
+                      const uint filter_offset_2,
+                      const uint filter_offset_3,
+                      const uint filter_offset_4,
+                      const uint filter_offset_5,
                       const uint n_channel_bundles)
 {
-    const float4 zeros = {0, 0, 0, 0};
-    float4 load[2];
-    float4 out[4];
+    const float zeros = {0};
+    float load[6];
+    float out[16];
 
     for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
         load[0] = 0 < n_rows ? fop[filter_offset_0 + bundle] : zeros;
         load[1] = 1 < n_rows ? fop[filter_offset_1 + bundle] : zeros;
+        load[2] = 2 < n_rows ? fop[filter_offset_2 + bundle] : zeros;
+        load[3] = 3 < n_rows ? fop[filter_offset_3 + bundle] : zeros;
+        load[4] = 4 < n_rows ? fop[filter_offset_4 + bundle] : zeros;
+        load[5] = 5 < n_rows ? fop[filter_offset_5 + bundle] : zeros;
 
         out[0] = load[0];
         out[1] = base_row_rem < 2 ? load[0] : load[1];
         out[2] = base_row_rem < 1 ? load[0] : load[1];
         out[3] = load[1];
+        out[4] = base_row_rem < 2 ? load[1] : load[2];
+        out[5] = base_row_rem < 1 ? load[1] : load[2];
+        out[6] = load[2];
+        out[7] = base_row_rem < 2 ? load[2] : load[3];
+        out[8] = base_row_rem < 1 ? load[2] : load[3];
+        out[9] = load[3];
+        out[10] = base_row_rem < 2 ? load[3] : load[4];
+        out[11] = base_row_rem < 1 ? load[3] : load[4];
+        out[12] = load[4];
+        out[13] = base_row_rem < 2 ? load[4] : load[5];
+        out[14] = base_row_rem < 1 ? load[4] : load[5];
+        out[15] = load[5];
 
         #pragma unroll
-        for (uint p = 0; p < 4; ++p)
+        for (uint p = 0; p < 16; ++p)
             WRITE_CHANNEL(preload_to_delay[2][p], out[p]);
     }
 }
@@ -805,9 +876,9 @@ __attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
 kernel void delay_3(const uint n_channel_bundles)
 {
-    const float4 zeros = {0, 0, 0, 0};
-    float4 in[4];
-    float4 out[4];
+    const float zeros = {0};
+    float in[16];
+    float out[16];
 
     uint M = 0;
     for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
@@ -816,73 +887,82 @@ kernel void delay_3(const uint n_channel_bundles)
 
         if (m == 0) {
             #pragma unroll
-            for (uint p = 0; p < 4; ++p)
+            for (uint p = 0; p < 16; ++p)
                 in[p] = READ_CHANNEL(preload_to_delay[2][p]);
         }
 
         switch (m) {
             case 0:
                 #pragma unroll
-                for (uint p = 0; p < 4; ++p) {
-                    out[p].s0 = in[p].s0;
-                    out[p].s1 = in[p].s0;
-                    out[p].s2 = in[p].s0;
-                    out[p].s3 = in[p].s1;
+                for (uint p = 0; p < 16; ++p) {
+                    out[p] = in[p];
                 }
                 break;
             case 1:
                 #pragma unroll
-                for (uint p = 0; p < 4; ++p) {
-                    out[p].s0 = in[p].s1;
-                    out[p].s1 = in[p].s1;
-                    out[p].s2 = in[p].s2;
-                    out[p].s3 = in[p].s2;
+                for (uint p = 0; p < 16; ++p) {
+                    out[p] = in[p];
                 }
                 break;
             case 2:
                 #pragma unroll
-                for (uint p = 0; p < 4; ++p) {
-                    out[p].s0 = in[p].s2;
-                    out[p].s1 = in[p].s3;
-                    out[p].s2 = in[p].s3;
-                    out[p].s3 = in[p].s3;
+                for (uint p = 0; p < 16; ++p) {
+                    out[p] = in[p];
                 }
                 break;
             default:
                 #pragma unroll
-                for (uint p = 0; p < 4; ++p)
+                for (uint p = 0; p < 16; ++p)
                     out[p] = zeros;
                 break;
         }
 
         #pragma unroll
-        for (uint p = 0; p < 4; ++p)
+        for (uint p = 0; p < 16; ++p)
             WRITE_CHANNEL(delay_to_detect[2][p], out[p]);
     }
 }
 
 __attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
-kernel void preload_4(global float4 * restrict fop,
+kernel void preload_4(global float * restrict fop,
                       const uint n_rows,
                       const uint base_row_rem,
                       const uint filter_offset_0,
+                      const uint filter_offset_1,
+                      const uint filter_offset_2,
+                      const uint filter_offset_3,
                       const uint n_channel_bundles)
 {
-    const float4 zeros = {0, 0, 0, 0};
-    float4 load[1];
-    float4 out[4];
+    const float zeros = {0};
+    float load[4];
+    float out[16];
 
     for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
         load[0] = 0 < n_rows ? fop[filter_offset_0 + bundle] : zeros;
+        load[1] = 1 < n_rows ? fop[filter_offset_1 + bundle] : zeros;
+        load[2] = 2 < n_rows ? fop[filter_offset_2 + bundle] : zeros;
+        load[3] = 3 < n_rows ? fop[filter_offset_3 + bundle] : zeros;
 
         out[0] = load[0];
         out[1] = load[0];
         out[2] = load[0];
         out[3] = load[0];
+        out[4] = load[1];
+        out[5] = load[1];
+        out[6] = load[1];
+        out[7] = load[1];
+        out[8] = load[2];
+        out[9] = load[2];
+        out[10] = load[2];
+        out[11] = load[2];
+        out[12] = load[3];
+        out[13] = load[3];
+        out[14] = load[3];
+        out[15] = load[3];
 
         #pragma unroll
-        for (uint p = 0; p < 4; ++p)
+        for (uint p = 0; p < 16; ++p)
             WRITE_CHANNEL(preload_to_delay[3][p], out[p]);
     }
 }
@@ -891,9 +971,9 @@ __attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
 kernel void delay_4(const uint n_channel_bundles)
 {
-    const float4 zeros = {0, 0, 0, 0};
-    float4 in[4];
-    float4 out[4];
+    const float zeros = {0};
+    float in[16];
+    float out[16];
 
     uint M = 0;
     for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
@@ -902,84 +982,88 @@ kernel void delay_4(const uint n_channel_bundles)
 
         if (m == 0) {
             #pragma unroll
-            for (uint p = 0; p < 4; ++p)
+            for (uint p = 0; p < 16; ++p)
                 in[p] = READ_CHANNEL(preload_to_delay[3][p]);
         }
 
         switch (m) {
             case 0:
                 #pragma unroll
-                for (uint p = 0; p < 4; ++p) {
-                    out[p].s0 = in[p].s0;
-                    out[p].s1 = in[p].s0;
-                    out[p].s2 = in[p].s0;
-                    out[p].s3 = in[p].s0;
+                for (uint p = 0; p < 16; ++p) {
+                    out[p] = in[p];
                 }
                 break;
             case 1:
                 #pragma unroll
-                for (uint p = 0; p < 4; ++p) {
-                    out[p].s0 = in[p].s1;
-                    out[p].s1 = in[p].s1;
-                    out[p].s2 = in[p].s1;
-                    out[p].s3 = in[p].s1;
+                for (uint p = 0; p < 16; ++p) {
+                    out[p] = in[p];
                 }
                 break;
             case 2:
                 #pragma unroll
-                for (uint p = 0; p < 4; ++p) {
-                    out[p].s0 = in[p].s2;
-                    out[p].s1 = in[p].s2;
-                    out[p].s2 = in[p].s2;
-                    out[p].s3 = in[p].s2;
+                for (uint p = 0; p < 16; ++p) {
+                    out[p] = in[p];
                 }
                 break;
             case 3:
                 #pragma unroll
-                for (uint p = 0; p < 4; ++p) {
-                    out[p].s0 = in[p].s3;
-                    out[p].s1 = in[p].s3;
-                    out[p].s2 = in[p].s3;
-                    out[p].s3 = in[p].s3;
+                for (uint p = 0; p < 16; ++p) {
+                    out[p] = in[p];
                 }
                 break;
             default:
                 #pragma unroll
-                for (uint p = 0; p < 4; ++p)
+                for (uint p = 0; p < 16; ++p)
                     out[p] = zeros;
                 break;
         }
 
         #pragma unroll
-        for (uint p = 0; p < 4; ++p)
+        for (uint p = 0; p < 16; ++p)
             WRITE_CHANNEL(delay_to_detect[3][p], out[p]);
     }
 }
 
 __attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
-kernel void preload_5(global float4 * restrict fop,
+kernel void preload_5(global float * restrict fop,
                       const uint n_rows,
                       const uint base_row_rem,
                       const uint filter_offset_0,
                       const uint filter_offset_1,
+                      const uint filter_offset_2,
+                      const uint filter_offset_3,
                       const uint n_channel_bundles)
 {
-    const float4 zeros = {0, 0, 0, 0};
-    float4 load[2];
-    float4 out[4];
+    const float zeros = {0};
+    float load[4];
+    float out[16];
 
     for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
         load[0] = 0 < n_rows ? fop[filter_offset_0 + bundle] : zeros;
         load[1] = 1 < n_rows ? fop[filter_offset_1 + bundle] : zeros;
+        load[2] = 2 < n_rows ? fop[filter_offset_2 + bundle] : zeros;
+        load[3] = 3 < n_rows ? fop[filter_offset_3 + bundle] : zeros;
 
         out[0] = load[0];
         out[1] = base_row_rem < 4 ? load[0] : load[1];
         out[2] = base_row_rem < 3 ? load[0] : load[1];
         out[3] = base_row_rem < 2 ? load[0] : load[1];
+        out[4] = base_row_rem < 1 ? load[0] : load[1];
+        out[5] = load[1];
+        out[6] = base_row_rem < 4 ? load[1] : load[2];
+        out[7] = base_row_rem < 3 ? load[1] : load[2];
+        out[8] = base_row_rem < 2 ? load[1] : load[2];
+        out[9] = base_row_rem < 1 ? load[1] : load[2];
+        out[10] = load[2];
+        out[11] = base_row_rem < 4 ? load[2] : load[3];
+        out[12] = base_row_rem < 3 ? load[2] : load[3];
+        out[13] = base_row_rem < 2 ? load[2] : load[3];
+        out[14] = base_row_rem < 1 ? load[2] : load[3];
+        out[15] = load[3];
 
         #pragma unroll
-        for (uint p = 0; p < 4; ++p)
+        for (uint p = 0; p < 16; ++p)
             WRITE_CHANNEL(preload_to_delay[4][p], out[p]);
     }
 }
@@ -988,9 +1072,9 @@ __attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
 kernel void delay_5(const uint n_channel_bundles)
 {
-    const float4 zeros = {0, 0, 0, 0};
-    float4 in[4];
-    float4 out[4];
+    const float zeros = {0};
+    float in[16];
+    float out[16];
 
     uint M = 0;
     for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
@@ -999,93 +1083,94 @@ kernel void delay_5(const uint n_channel_bundles)
 
         if (m == 0) {
             #pragma unroll
-            for (uint p = 0; p < 4; ++p)
+            for (uint p = 0; p < 16; ++p)
                 in[p] = READ_CHANNEL(preload_to_delay[4][p]);
         }
 
         switch (m) {
             case 0:
                 #pragma unroll
-                for (uint p = 0; p < 4; ++p) {
-                    out[p].s0 = in[p].s0;
-                    out[p].s1 = in[p].s0;
-                    out[p].s2 = in[p].s0;
-                    out[p].s3 = in[p].s0;
+                for (uint p = 0; p < 16; ++p) {
+                    out[p] = in[p];
                 }
                 break;
             case 1:
                 #pragma unroll
-                for (uint p = 0; p < 4; ++p) {
-                    out[p].s0 = in[p].s0;
-                    out[p].s1 = in[p].s1;
-                    out[p].s2 = in[p].s1;
-                    out[p].s3 = in[p].s1;
+                for (uint p = 0; p < 16; ++p) {
+                    out[p] = in[p];
                 }
                 break;
             case 2:
                 #pragma unroll
-                for (uint p = 0; p < 4; ++p) {
-                    out[p].s0 = in[p].s1;
-                    out[p].s1 = in[p].s1;
-                    out[p].s2 = in[p].s2;
-                    out[p].s3 = in[p].s2;
+                for (uint p = 0; p < 16; ++p) {
+                    out[p] = in[p];
                 }
                 break;
             case 3:
                 #pragma unroll
-                for (uint p = 0; p < 4; ++p) {
-                    out[p].s0 = in[p].s2;
-                    out[p].s1 = in[p].s2;
-                    out[p].s2 = in[p].s2;
-                    out[p].s3 = in[p].s3;
+                for (uint p = 0; p < 16; ++p) {
+                    out[p] = in[p];
                 }
                 break;
             case 4:
                 #pragma unroll
-                for (uint p = 0; p < 4; ++p) {
-                    out[p].s0 = in[p].s3;
-                    out[p].s1 = in[p].s3;
-                    out[p].s2 = in[p].s3;
-                    out[p].s3 = in[p].s3;
+                for (uint p = 0; p < 16; ++p) {
+                    out[p] = in[p];
                 }
                 break;
             default:
                 #pragma unroll
-                for (uint p = 0; p < 4; ++p)
+                for (uint p = 0; p < 16; ++p)
                     out[p] = zeros;
                 break;
         }
 
         #pragma unroll
-        for (uint p = 0; p < 4; ++p)
+        for (uint p = 0; p < 16; ++p)
             WRITE_CHANNEL(delay_to_detect[4][p], out[p]);
     }
 }
 
 __attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
-kernel void preload_6(global float4 * restrict fop,
+kernel void preload_6(global float * restrict fop,
                       const uint n_rows,
                       const uint base_row_rem,
                       const uint filter_offset_0,
                       const uint filter_offset_1,
+                      const uint filter_offset_2,
+                      const uint filter_offset_3,
                       const uint n_channel_bundles)
 {
-    const float4 zeros = {0, 0, 0, 0};
-    float4 load[2];
-    float4 out[4];
+    const float zeros = {0};
+    float load[4];
+    float out[16];
 
     for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
         load[0] = 0 < n_rows ? fop[filter_offset_0 + bundle] : zeros;
         load[1] = 1 < n_rows ? fop[filter_offset_1 + bundle] : zeros;
+        load[2] = 2 < n_rows ? fop[filter_offset_2 + bundle] : zeros;
+        load[3] = 3 < n_rows ? fop[filter_offset_3 + bundle] : zeros;
 
         out[0] = load[0];
         out[1] = load[0];
         out[2] = base_row_rem < 4 ? load[0] : load[1];
         out[3] = base_row_rem < 4 ? load[0] : load[1];
+        out[4] = base_row_rem < 2 ? load[0] : load[1];
+        out[5] = base_row_rem < 2 ? load[0] : load[1];
+        out[6] = load[1];
+        out[7] = load[1];
+        out[8] = base_row_rem < 4 ? load[1] : load[2];
+        out[9] = base_row_rem < 4 ? load[1] : load[2];
+        out[10] = base_row_rem < 2 ? load[1] : load[2];
+        out[11] = base_row_rem < 2 ? load[1] : load[2];
+        out[12] = load[2];
+        out[13] = load[2];
+        out[14] = base_row_rem < 4 ? load[2] : load[3];
+        out[15] = base_row_rem < 4 ? load[2] : load[3];
 
         #pragma unroll
-        for (uint p = 0; p < 4; ++p)
+        for (uint p = 0; p < 16; ++p)
             WRITE_CHANNEL(preload_to_delay[5][p], out[p]);
     }
 }
@@ -1094,9 +1179,9 @@ __attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
 kernel void delay_6(const uint n_channel_bundles)
 {
-    const float4 zeros = {0, 0, 0, 0};
-    float4 in[4];
-    float4 out[4];
+    const float zeros = {0};
+    float in[16];
+    float out[16];
 
     uint M = 0;
     for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
@@ -1105,102 +1190,100 @@ kernel void delay_6(const uint n_channel_bundles)
 
         if (m == 0) {
             #pragma unroll
-            for (uint p = 0; p < 4; ++p)
+            for (uint p = 0; p < 16; ++p)
                 in[p] = READ_CHANNEL(preload_to_delay[5][p]);
         }
 
         switch (m) {
             case 0:
                 #pragma unroll
-                for (uint p = 0; p < 4; ++p) {
-                    out[p].s0 = in[p].s0;
-                    out[p].s1 = in[p].s0;
-                    out[p].s2 = in[p].s0;
-                    out[p].s3 = in[p].s0;
+                for (uint p = 0; p < 16; ++p) {
+                    out[p] = in[p];
                 }
                 break;
             case 1:
                 #pragma unroll
-                for (uint p = 0; p < 4; ++p) {
-                    out[p].s0 = in[p].s0;
-                    out[p].s1 = in[p].s0;
-                    out[p].s2 = in[p].s1;
-                    out[p].s3 = in[p].s1;
+                for (uint p = 0; p < 16; ++p) {
+                    out[p] = in[p];
                 }
                 break;
             case 2:
                 #pragma unroll
-                for (uint p = 0; p < 4; ++p) {
-                    out[p].s0 = in[p].s1;
-                    out[p].s1 = in[p].s1;
-                    out[p].s2 = in[p].s1;
-                    out[p].s3 = in[p].s1;
+                for (uint p = 0; p < 16; ++p) {
+                    out[p] = in[p];
                 }
                 break;
             case 3:
                 #pragma unroll
-                for (uint p = 0; p < 4; ++p) {
-                    out[p].s0 = in[p].s2;
-                    out[p].s1 = in[p].s2;
-                    out[p].s2 = in[p].s2;
-                    out[p].s3 = in[p].s2;
+                for (uint p = 0; p < 16; ++p) {
+                    out[p] = in[p];
                 }
                 break;
             case 4:
                 #pragma unroll
-                for (uint p = 0; p < 4; ++p) {
-                    out[p].s0 = in[p].s2;
-                    out[p].s1 = in[p].s2;
-                    out[p].s2 = in[p].s3;
-                    out[p].s3 = in[p].s3;
+                for (uint p = 0; p < 16; ++p) {
+                    out[p] = in[p];
                 }
                 break;
             case 5:
                 #pragma unroll
-                for (uint p = 0; p < 4; ++p) {
-                    out[p].s0 = in[p].s3;
-                    out[p].s1 = in[p].s3;
-                    out[p].s2 = in[p].s3;
-                    out[p].s3 = in[p].s3;
+                for (uint p = 0; p < 16; ++p) {
+                    out[p] = in[p];
                 }
                 break;
             default:
                 #pragma unroll
-                for (uint p = 0; p < 4; ++p)
+                for (uint p = 0; p < 16; ++p)
                     out[p] = zeros;
                 break;
         }
 
         #pragma unroll
-        for (uint p = 0; p < 4; ++p)
+        for (uint p = 0; p < 16; ++p)
             WRITE_CHANNEL(delay_to_detect[5][p], out[p]);
     }
 }
 
 __attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
-kernel void preload_7(global float4 * restrict fop,
+kernel void preload_7(global float * restrict fop,
                       const uint n_rows,
                       const uint base_row_rem,
                       const uint filter_offset_0,
                       const uint filter_offset_1,
+                      const uint filter_offset_2,
+                      const uint filter_offset_3,
                       const uint n_channel_bundles)
 {
-    const float4 zeros = {0, 0, 0, 0};
-    float4 load[2];
-    float4 out[4];
+    const float zeros = {0};
+    float load[4];
+    float out[16];
 
     for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
         load[0] = 0 < n_rows ? fop[filter_offset_0 + bundle] : zeros;
         load[1] = 1 < n_rows ? fop[filter_offset_1 + bundle] : zeros;
+        load[2] = 2 < n_rows ? fop[filter_offset_2 + bundle] : zeros;
+        load[3] = 3 < n_rows ? fop[filter_offset_3 + bundle] : zeros;
 
         out[0] = load[0];
         out[1] = base_row_rem < 6 ? load[0] : load[1];
         out[2] = base_row_rem < 5 ? load[0] : load[1];
         out[3] = base_row_rem < 4 ? load[0] : load[1];
+        out[4] = base_row_rem < 3 ? load[0] : load[1];
+        out[5] = base_row_rem < 2 ? load[0] : load[1];
+        out[6] = base_row_rem < 1 ? load[0] : load[1];
+        out[7] = load[1];
+        out[8] = base_row_rem < 6 ? load[1] : load[2];
+        out[9] = base_row_rem < 5 ? load[1] : load[2];
+        out[10] = base_row_rem < 4 ? load[1] : load[2];
+        out[11] = base_row_rem < 3 ? load[1] : load[2];
+        out[12] = base_row_rem < 2 ? load[1] : load[2];
+        out[13] = base_row_rem < 1 ? load[1] : load[2];
+        out[14] = load[2];
+        out[15] = base_row_rem < 6 ? load[2] : load[3];
 
         #pragma unroll
-        for (uint p = 0; p < 4; ++p)
+        for (uint p = 0; p < 16; ++p)
             WRITE_CHANNEL(preload_to_delay[6][p], out[p]);
     }
 }
@@ -1209,9 +1292,9 @@ __attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
 kernel void delay_7(const uint n_channel_bundles)
 {
-    const float4 zeros = {0, 0, 0, 0};
-    float4 in[4];
-    float4 out[4];
+    const float zeros = {0};
+    float in[16];
+    float out[16];
 
     uint M = 0;
     for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
@@ -1220,109 +1303,102 @@ kernel void delay_7(const uint n_channel_bundles)
 
         if (m == 0) {
             #pragma unroll
-            for (uint p = 0; p < 4; ++p)
+            for (uint p = 0; p < 16; ++p)
                 in[p] = READ_CHANNEL(preload_to_delay[6][p]);
         }
 
         switch (m) {
             case 0:
                 #pragma unroll
-                for (uint p = 0; p < 4; ++p) {
-                    out[p].s0 = in[p].s0;
-                    out[p].s1 = in[p].s0;
-                    out[p].s2 = in[p].s0;
-                    out[p].s3 = in[p].s0;
+                for (uint p = 0; p < 16; ++p) {
+                    out[p] = in[p];
                 }
                 break;
             case 1:
                 #pragma unroll
-                for (uint p = 0; p < 4; ++p) {
-                    out[p].s0 = in[p].s0;
-                    out[p].s1 = in[p].s0;
-                    out[p].s2 = in[p].s0;
-                    out[p].s3 = in[p].s1;
+                for (uint p = 0; p < 16; ++p) {
+                    out[p] = in[p];
                 }
                 break;
             case 2:
                 #pragma unroll
-                for (uint p = 0; p < 4; ++p) {
-                    out[p].s0 = in[p].s1;
-                    out[p].s1 = in[p].s1;
-                    out[p].s2 = in[p].s1;
-                    out[p].s3 = in[p].s1;
+                for (uint p = 0; p < 16; ++p) {
+                    out[p] = in[p];
                 }
                 break;
             case 3:
                 #pragma unroll
-                for (uint p = 0; p < 4; ++p) {
-                    out[p].s0 = in[p].s1;
-                    out[p].s1 = in[p].s1;
-                    out[p].s2 = in[p].s2;
-                    out[p].s3 = in[p].s2;
+                for (uint p = 0; p < 16; ++p) {
+                    out[p] = in[p];
                 }
                 break;
             case 4:
                 #pragma unroll
-                for (uint p = 0; p < 4; ++p) {
-                    out[p].s0 = in[p].s2;
-                    out[p].s1 = in[p].s2;
-                    out[p].s2 = in[p].s2;
-                    out[p].s3 = in[p].s2;
+                for (uint p = 0; p < 16; ++p) {
+                    out[p] = in[p];
                 }
                 break;
             case 5:
                 #pragma unroll
-                for (uint p = 0; p < 4; ++p) {
-                    out[p].s0 = in[p].s2;
-                    out[p].s1 = in[p].s3;
-                    out[p].s2 = in[p].s3;
-                    out[p].s3 = in[p].s3;
+                for (uint p = 0; p < 16; ++p) {
+                    out[p] = in[p];
                 }
                 break;
             case 6:
                 #pragma unroll
-                for (uint p = 0; p < 4; ++p) {
-                    out[p].s0 = in[p].s3;
-                    out[p].s1 = in[p].s3;
-                    out[p].s2 = in[p].s3;
-                    out[p].s3 = in[p].s3;
+                for (uint p = 0; p < 16; ++p) {
+                    out[p] = in[p];
                 }
                 break;
             default:
                 #pragma unroll
-                for (uint p = 0; p < 4; ++p)
+                for (uint p = 0; p < 16; ++p)
                     out[p] = zeros;
                 break;
         }
 
         #pragma unroll
-        for (uint p = 0; p < 4; ++p)
+        for (uint p = 0; p < 16; ++p)
             WRITE_CHANNEL(delay_to_detect[6][p], out[p]);
     }
 }
 
 __attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
-kernel void preload_8(global float4 * restrict fop,
+kernel void preload_8(global float * restrict fop,
                       const uint n_rows,
                       const uint base_row_rem,
                       const uint filter_offset_0,
+                      const uint filter_offset_1,
                       const uint n_channel_bundles)
 {
-    const float4 zeros = {0, 0, 0, 0};
-    float4 load[1];
-    float4 out[4];
+    const float zeros = {0};
+    float load[2];
+    float out[16];
 
     for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
         load[0] = 0 < n_rows ? fop[filter_offset_0 + bundle] : zeros;
+        load[1] = 1 < n_rows ? fop[filter_offset_1 + bundle] : zeros;
 
         out[0] = load[0];
         out[1] = load[0];
         out[2] = load[0];
         out[3] = load[0];
+        out[4] = load[0];
+        out[5] = load[0];
+        out[6] = load[0];
+        out[7] = load[0];
+        out[8] = load[1];
+        out[9] = load[1];
+        out[10] = load[1];
+        out[11] = load[1];
+        out[12] = load[1];
+        out[13] = load[1];
+        out[14] = load[1];
+        out[15] = load[1];
 
         #pragma unroll
-        for (uint p = 0; p < 4; ++p)
+        for (uint p = 0; p < 16; ++p)
             WRITE_CHANNEL(preload_to_delay[7][p], out[p]);
     }
 }
@@ -1331,9 +1407,9 @@ __attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
 kernel void delay_8(const uint n_channel_bundles)
 {
-    const float4 zeros = {0, 0, 0, 0};
-    float4 in[4];
-    float4 out[4];
+    const float zeros = {0};
+    float in[16];
+    float out[16];
 
     uint M = 0;
     for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
@@ -1342,92 +1418,68 @@ kernel void delay_8(const uint n_channel_bundles)
 
         if (m == 0) {
             #pragma unroll
-            for (uint p = 0; p < 4; ++p)
+            for (uint p = 0; p < 16; ++p)
                 in[p] = READ_CHANNEL(preload_to_delay[7][p]);
         }
 
         switch (m) {
             case 0:
                 #pragma unroll
-                for (uint p = 0; p < 4; ++p) {
-                    out[p].s0 = in[p].s0;
-                    out[p].s1 = in[p].s0;
-                    out[p].s2 = in[p].s0;
-                    out[p].s3 = in[p].s0;
+                for (uint p = 0; p < 16; ++p) {
+                    out[p] = in[p];
                 }
                 break;
             case 1:
                 #pragma unroll
-                for (uint p = 0; p < 4; ++p) {
-                    out[p].s0 = in[p].s0;
-                    out[p].s1 = in[p].s0;
-                    out[p].s2 = in[p].s0;
-                    out[p].s3 = in[p].s0;
+                for (uint p = 0; p < 16; ++p) {
+                    out[p] = in[p];
                 }
                 break;
             case 2:
                 #pragma unroll
-                for (uint p = 0; p < 4; ++p) {
-                    out[p].s0 = in[p].s1;
-                    out[p].s1 = in[p].s1;
-                    out[p].s2 = in[p].s1;
-                    out[p].s3 = in[p].s1;
+                for (uint p = 0; p < 16; ++p) {
+                    out[p] = in[p];
                 }
                 break;
             case 3:
                 #pragma unroll
-                for (uint p = 0; p < 4; ++p) {
-                    out[p].s0 = in[p].s1;
-                    out[p].s1 = in[p].s1;
-                    out[p].s2 = in[p].s1;
-                    out[p].s3 = in[p].s1;
+                for (uint p = 0; p < 16; ++p) {
+                    out[p] = in[p];
                 }
                 break;
             case 4:
                 #pragma unroll
-                for (uint p = 0; p < 4; ++p) {
-                    out[p].s0 = in[p].s2;
-                    out[p].s1 = in[p].s2;
-                    out[p].s2 = in[p].s2;
-                    out[p].s3 = in[p].s2;
+                for (uint p = 0; p < 16; ++p) {
+                    out[p] = in[p];
                 }
                 break;
             case 5:
                 #pragma unroll
-                for (uint p = 0; p < 4; ++p) {
-                    out[p].s0 = in[p].s2;
-                    out[p].s1 = in[p].s2;
-                    out[p].s2 = in[p].s2;
-                    out[p].s3 = in[p].s2;
+                for (uint p = 0; p < 16; ++p) {
+                    out[p] = in[p];
                 }
                 break;
             case 6:
                 #pragma unroll
-                for (uint p = 0; p < 4; ++p) {
-                    out[p].s0 = in[p].s3;
-                    out[p].s1 = in[p].s3;
-                    out[p].s2 = in[p].s3;
-                    out[p].s3 = in[p].s3;
+                for (uint p = 0; p < 16; ++p) {
+                    out[p] = in[p];
                 }
                 break;
             case 7:
                 #pragma unroll
-                for (uint p = 0; p < 4; ++p) {
-                    out[p].s0 = in[p].s3;
-                    out[p].s1 = in[p].s3;
-                    out[p].s2 = in[p].s3;
-                    out[p].s3 = in[p].s3;
+                for (uint p = 0; p < 16; ++p) {
+                    out[p] = in[p];
                 }
                 break;
             default:
                 #pragma unroll
-                for (uint p = 0; p < 4; ++p)
+                for (uint p = 0; p < 16; ++p)
                     out[p] = zeros;
                 break;
         }
 
         #pragma unroll
-        for (uint p = 0; p < 4; ++p)
+        for (uint p = 0; p < 16; ++p)
             WRITE_CHANNEL(delay_to_detect[7][p], out[p]);
     }
 }
@@ -1450,52 +1502,52 @@ kernel void detect_1(float threshold,
     const float invalid_amplitude = -1.0f;
 
     for (uint group = 0; group < n_filter_groups; ++group) {
-        uint group_base = group * 4;
-        int filter_num[4];
-        bool filter_mask[4];
+        uint group_base = group * 16;
+        int filter_num[16];
+        bool filter_mask[16];
         #pragma unroll
-        for (uint p = 0; p < 4; ++p) {
+        for (uint p = 0; p < 16; ++p) {
             filter_num[p] = negative_filters ? - group_base - p : group_base + p;
             filter_mask[p] = group_base + p < n_filters;
         }
 
         for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
-            uint bundle_base = bundle * 4;
-            uint channel_num[4];
+            uint bundle_base = bundle * 1;
+            uint channel_num[1];
             #pragma unroll
-            for (uint q = 0; q < 4; ++q)
+            for (uint q = 0; q < 1; ++q)
                 channel_num[q] = bundle_base + q;
 
-            float4 hsum[4];
+            float hsum[16];
 
             #pragma unroll
-            for (uint p = 0; p < 4; ++p) {
-                float4 from_fop = READ_CHANNEL(delay_to_detect[0][p]);
+            for (uint p = 0; p < 16; ++p) {
+                float from_fop = READ_CHANNEL(delay_to_detect[0][p]);
                 hsum[p] = from_fop;
             }
 
             #pragma unroll
-            for (uint p = 0; p < 4; ++p)
+            for (uint p = 0; p < 16; ++p)
                 WRITE_CHANNEL(detect_to_detect[0][p], hsum[p]);
 
             bool cand[16];
 
-            cand[0] = (hsum[0].s0 > threshold) & filter_mask[0];
-            cand[1] = (hsum[0].s1 > threshold) & filter_mask[0];
-            cand[2] = (hsum[0].s2 > threshold) & filter_mask[0];
-            cand[3] = (hsum[0].s3 > threshold) & filter_mask[0];
-            cand[4] = (hsum[1].s0 > threshold) & filter_mask[1];
-            cand[5] = (hsum[1].s1 > threshold) & filter_mask[1];
-            cand[6] = (hsum[1].s2 > threshold) & filter_mask[1];
-            cand[7] = (hsum[1].s3 > threshold) & filter_mask[1];
-            cand[8] = (hsum[2].s0 > threshold) & filter_mask[2];
-            cand[9] = (hsum[2].s1 > threshold) & filter_mask[2];
-            cand[10] = (hsum[2].s2 > threshold) & filter_mask[2];
-            cand[11] = (hsum[2].s3 > threshold) & filter_mask[2];
-            cand[12] = (hsum[3].s0 > threshold) & filter_mask[3];
-            cand[13] = (hsum[3].s1 > threshold) & filter_mask[3];
-            cand[14] = (hsum[3].s2 > threshold) & filter_mask[3];
-            cand[15] = (hsum[3].s3 > threshold) & filter_mask[3];
+            cand[0] = (hsum[0] > threshold) & filter_mask[0];
+            cand[1] = (hsum[1] > threshold) & filter_mask[1];
+            cand[2] = (hsum[2] > threshold) & filter_mask[2];
+            cand[3] = (hsum[3] > threshold) & filter_mask[3];
+            cand[4] = (hsum[4] > threshold) & filter_mask[4];
+            cand[5] = (hsum[5] > threshold) & filter_mask[5];
+            cand[6] = (hsum[6] > threshold) & filter_mask[6];
+            cand[7] = (hsum[7] > threshold) & filter_mask[7];
+            cand[8] = (hsum[8] > threshold) & filter_mask[8];
+            cand[9] = (hsum[9] > threshold) & filter_mask[9];
+            cand[10] = (hsum[10] > threshold) & filter_mask[10];
+            cand[11] = (hsum[11] > threshold) & filter_mask[11];
+            cand[12] = (hsum[12] > threshold) & filter_mask[12];
+            cand[13] = (hsum[13] > threshold) & filter_mask[13];
+            cand[14] = (hsum[14] > threshold) & filter_mask[14];
+            cand[15] = (hsum[15] > threshold) & filter_mask[15];
 
             bool any_cand = cand[0] | cand[1] | cand[2] | cand[3] | cand[4] | cand[5] | cand[6] | cand[7] | cand[8] | cand[9] | cand[10] | cand[11] | cand[12] | cand[13] | cand[14] | cand[15];
             if (any_cand) {
@@ -1503,37 +1555,37 @@ kernel void detect_1(float threshold,
                 float amp[16];
 
                 loc[0] = cand[0] ? encode_location(1, filter_num[0], channel_num[0]) : invalid_location;
-                amp[0] = cand[0] ? hsum[0].s0 : invalid_amplitude;
-                loc[1] = cand[1] ? encode_location(1, filter_num[0], channel_num[1]) : invalid_location;
-                amp[1] = cand[1] ? hsum[0].s1 : invalid_amplitude;
-                loc[2] = cand[2] ? encode_location(1, filter_num[0], channel_num[2]) : invalid_location;
-                amp[2] = cand[2] ? hsum[0].s2 : invalid_amplitude;
-                loc[3] = cand[3] ? encode_location(1, filter_num[0], channel_num[3]) : invalid_location;
-                amp[3] = cand[3] ? hsum[0].s3 : invalid_amplitude;
-                loc[4] = cand[4] ? encode_location(1, filter_num[1], channel_num[0]) : invalid_location;
-                amp[4] = cand[4] ? hsum[1].s0 : invalid_amplitude;
-                loc[5] = cand[5] ? encode_location(1, filter_num[1], channel_num[1]) : invalid_location;
-                amp[5] = cand[5] ? hsum[1].s1 : invalid_amplitude;
-                loc[6] = cand[6] ? encode_location(1, filter_num[1], channel_num[2]) : invalid_location;
-                amp[6] = cand[6] ? hsum[1].s2 : invalid_amplitude;
-                loc[7] = cand[7] ? encode_location(1, filter_num[1], channel_num[3]) : invalid_location;
-                amp[7] = cand[7] ? hsum[1].s3 : invalid_amplitude;
-                loc[8] = cand[8] ? encode_location(1, filter_num[2], channel_num[0]) : invalid_location;
-                amp[8] = cand[8] ? hsum[2].s0 : invalid_amplitude;
-                loc[9] = cand[9] ? encode_location(1, filter_num[2], channel_num[1]) : invalid_location;
-                amp[9] = cand[9] ? hsum[2].s1 : invalid_amplitude;
-                loc[10] = cand[10] ? encode_location(1, filter_num[2], channel_num[2]) : invalid_location;
-                amp[10] = cand[10] ? hsum[2].s2 : invalid_amplitude;
-                loc[11] = cand[11] ? encode_location(1, filter_num[2], channel_num[3]) : invalid_location;
-                amp[11] = cand[11] ? hsum[2].s3 : invalid_amplitude;
-                loc[12] = cand[12] ? encode_location(1, filter_num[3], channel_num[0]) : invalid_location;
-                amp[12] = cand[12] ? hsum[3].s0 : invalid_amplitude;
-                loc[13] = cand[13] ? encode_location(1, filter_num[3], channel_num[1]) : invalid_location;
-                amp[13] = cand[13] ? hsum[3].s1 : invalid_amplitude;
-                loc[14] = cand[14] ? encode_location(1, filter_num[3], channel_num[2]) : invalid_location;
-                amp[14] = cand[14] ? hsum[3].s2 : invalid_amplitude;
-                loc[15] = cand[15] ? encode_location(1, filter_num[3], channel_num[3]) : invalid_location;
-                amp[15] = cand[15] ? hsum[3].s3 : invalid_amplitude;
+                amp[0] = cand[0] ? hsum[0] : invalid_amplitude;
+                loc[1] = cand[1] ? encode_location(1, filter_num[1], channel_num[0]) : invalid_location;
+                amp[1] = cand[1] ? hsum[1] : invalid_amplitude;
+                loc[2] = cand[2] ? encode_location(1, filter_num[2], channel_num[0]) : invalid_location;
+                amp[2] = cand[2] ? hsum[2] : invalid_amplitude;
+                loc[3] = cand[3] ? encode_location(1, filter_num[3], channel_num[0]) : invalid_location;
+                amp[3] = cand[3] ? hsum[3] : invalid_amplitude;
+                loc[4] = cand[4] ? encode_location(1, filter_num[4], channel_num[0]) : invalid_location;
+                amp[4] = cand[4] ? hsum[4] : invalid_amplitude;
+                loc[5] = cand[5] ? encode_location(1, filter_num[5], channel_num[0]) : invalid_location;
+                amp[5] = cand[5] ? hsum[5] : invalid_amplitude;
+                loc[6] = cand[6] ? encode_location(1, filter_num[6], channel_num[0]) : invalid_location;
+                amp[6] = cand[6] ? hsum[6] : invalid_amplitude;
+                loc[7] = cand[7] ? encode_location(1, filter_num[7], channel_num[0]) : invalid_location;
+                amp[7] = cand[7] ? hsum[7] : invalid_amplitude;
+                loc[8] = cand[8] ? encode_location(1, filter_num[8], channel_num[0]) : invalid_location;
+                amp[8] = cand[8] ? hsum[8] : invalid_amplitude;
+                loc[9] = cand[9] ? encode_location(1, filter_num[9], channel_num[0]) : invalid_location;
+                amp[9] = cand[9] ? hsum[9] : invalid_amplitude;
+                loc[10] = cand[10] ? encode_location(1, filter_num[10], channel_num[0]) : invalid_location;
+                amp[10] = cand[10] ? hsum[10] : invalid_amplitude;
+                loc[11] = cand[11] ? encode_location(1, filter_num[11], channel_num[0]) : invalid_location;
+                amp[11] = cand[11] ? hsum[11] : invalid_amplitude;
+                loc[12] = cand[12] ? encode_location(1, filter_num[12], channel_num[0]) : invalid_location;
+                amp[12] = cand[12] ? hsum[12] : invalid_amplitude;
+                loc[13] = cand[13] ? encode_location(1, filter_num[13], channel_num[0]) : invalid_location;
+                amp[13] = cand[13] ? hsum[13] : invalid_amplitude;
+                loc[14] = cand[14] ? encode_location(1, filter_num[14], channel_num[0]) : invalid_location;
+                amp[14] = cand[14] ? hsum[14] : invalid_amplitude;
+                loc[15] = cand[15] ? encode_location(1, filter_num[15], channel_num[0]) : invalid_location;
+                amp[15] = cand[15] ? hsum[15] : invalid_amplitude;
 
                 uint slot = next;
                 next = (next + 1) & 63;
@@ -1581,53 +1633,53 @@ kernel void detect_2(float threshold,
     const float invalid_amplitude = -1.0f;
 
     for (uint group = 0; group < n_filter_groups; ++group) {
-        uint group_base = group * 4;
-        int filter_num[4];
-        bool filter_mask[4];
+        uint group_base = group * 16;
+        int filter_num[16];
+        bool filter_mask[16];
         #pragma unroll
-        for (uint p = 0; p < 4; ++p) {
+        for (uint p = 0; p < 16; ++p) {
             filter_num[p] = negative_filters ? - group_base - p : group_base + p;
             filter_mask[p] = group_base + p < n_filters;
         }
 
         for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
-            uint bundle_base = bundle * 4;
-            uint channel_num[4];
+            uint bundle_base = bundle * 1;
+            uint channel_num[1];
             #pragma unroll
-            for (uint q = 0; q < 4; ++q)
+            for (uint q = 0; q < 1; ++q)
                 channel_num[q] = bundle_base + q;
 
-            float4 hsum[4];
+            float hsum[16];
 
             #pragma unroll
-            for (uint p = 0; p < 4; ++p) {
-                float4 from_prev_hp = READ_CHANNEL(detect_to_detect[0][p]);
-                float4 from_sp = READ_CHANNEL(delay_to_detect[1][p]);
+            for (uint p = 0; p < 16; ++p) {
+                float from_prev_hp = READ_CHANNEL(detect_to_detect[0][p]);
+                float from_sp = READ_CHANNEL(delay_to_detect[1][p]);
                 hsum[p] = from_prev_hp + from_sp;
             }
 
             #pragma unroll
-            for (uint p = 0; p < 4; ++p)
+            for (uint p = 0; p < 16; ++p)
                 WRITE_CHANNEL(detect_to_detect[1][p], hsum[p]);
 
             bool cand[16];
 
-            cand[0] = (hsum[0].s0 > threshold) & filter_mask[0];
-            cand[1] = (hsum[0].s1 > threshold) & filter_mask[0];
-            cand[2] = (hsum[0].s2 > threshold) & filter_mask[0];
-            cand[3] = (hsum[0].s3 > threshold) & filter_mask[0];
-            cand[4] = (hsum[1].s0 > threshold) & filter_mask[1];
-            cand[5] = (hsum[1].s1 > threshold) & filter_mask[1];
-            cand[6] = (hsum[1].s2 > threshold) & filter_mask[1];
-            cand[7] = (hsum[1].s3 > threshold) & filter_mask[1];
-            cand[8] = (hsum[2].s0 > threshold) & filter_mask[2];
-            cand[9] = (hsum[2].s1 > threshold) & filter_mask[2];
-            cand[10] = (hsum[2].s2 > threshold) & filter_mask[2];
-            cand[11] = (hsum[2].s3 > threshold) & filter_mask[2];
-            cand[12] = (hsum[3].s0 > threshold) & filter_mask[3];
-            cand[13] = (hsum[3].s1 > threshold) & filter_mask[3];
-            cand[14] = (hsum[3].s2 > threshold) & filter_mask[3];
-            cand[15] = (hsum[3].s3 > threshold) & filter_mask[3];
+            cand[0] = (hsum[0] > threshold) & filter_mask[0];
+            cand[1] = (hsum[1] > threshold) & filter_mask[1];
+            cand[2] = (hsum[2] > threshold) & filter_mask[2];
+            cand[3] = (hsum[3] > threshold) & filter_mask[3];
+            cand[4] = (hsum[4] > threshold) & filter_mask[4];
+            cand[5] = (hsum[5] > threshold) & filter_mask[5];
+            cand[6] = (hsum[6] > threshold) & filter_mask[6];
+            cand[7] = (hsum[7] > threshold) & filter_mask[7];
+            cand[8] = (hsum[8] > threshold) & filter_mask[8];
+            cand[9] = (hsum[9] > threshold) & filter_mask[9];
+            cand[10] = (hsum[10] > threshold) & filter_mask[10];
+            cand[11] = (hsum[11] > threshold) & filter_mask[11];
+            cand[12] = (hsum[12] > threshold) & filter_mask[12];
+            cand[13] = (hsum[13] > threshold) & filter_mask[13];
+            cand[14] = (hsum[14] > threshold) & filter_mask[14];
+            cand[15] = (hsum[15] > threshold) & filter_mask[15];
 
             bool any_cand = cand[0] | cand[1] | cand[2] | cand[3] | cand[4] | cand[5] | cand[6] | cand[7] | cand[8] | cand[9] | cand[10] | cand[11] | cand[12] | cand[13] | cand[14] | cand[15];
             if (any_cand) {
@@ -1635,37 +1687,37 @@ kernel void detect_2(float threshold,
                 float amp[16];
 
                 loc[0] = cand[0] ? encode_location(2, filter_num[0], channel_num[0]) : invalid_location;
-                amp[0] = cand[0] ? hsum[0].s0 : invalid_amplitude;
-                loc[1] = cand[1] ? encode_location(2, filter_num[0], channel_num[1]) : invalid_location;
-                amp[1] = cand[1] ? hsum[0].s1 : invalid_amplitude;
-                loc[2] = cand[2] ? encode_location(2, filter_num[0], channel_num[2]) : invalid_location;
-                amp[2] = cand[2] ? hsum[0].s2 : invalid_amplitude;
-                loc[3] = cand[3] ? encode_location(2, filter_num[0], channel_num[3]) : invalid_location;
-                amp[3] = cand[3] ? hsum[0].s3 : invalid_amplitude;
-                loc[4] = cand[4] ? encode_location(2, filter_num[1], channel_num[0]) : invalid_location;
-                amp[4] = cand[4] ? hsum[1].s0 : invalid_amplitude;
-                loc[5] = cand[5] ? encode_location(2, filter_num[1], channel_num[1]) : invalid_location;
-                amp[5] = cand[5] ? hsum[1].s1 : invalid_amplitude;
-                loc[6] = cand[6] ? encode_location(2, filter_num[1], channel_num[2]) : invalid_location;
-                amp[6] = cand[6] ? hsum[1].s2 : invalid_amplitude;
-                loc[7] = cand[7] ? encode_location(2, filter_num[1], channel_num[3]) : invalid_location;
-                amp[7] = cand[7] ? hsum[1].s3 : invalid_amplitude;
-                loc[8] = cand[8] ? encode_location(2, filter_num[2], channel_num[0]) : invalid_location;
-                amp[8] = cand[8] ? hsum[2].s0 : invalid_amplitude;
-                loc[9] = cand[9] ? encode_location(2, filter_num[2], channel_num[1]) : invalid_location;
-                amp[9] = cand[9] ? hsum[2].s1 : invalid_amplitude;
-                loc[10] = cand[10] ? encode_location(2, filter_num[2], channel_num[2]) : invalid_location;
-                amp[10] = cand[10] ? hsum[2].s2 : invalid_amplitude;
-                loc[11] = cand[11] ? encode_location(2, filter_num[2], channel_num[3]) : invalid_location;
-                amp[11] = cand[11] ? hsum[2].s3 : invalid_amplitude;
-                loc[12] = cand[12] ? encode_location(2, filter_num[3], channel_num[0]) : invalid_location;
-                amp[12] = cand[12] ? hsum[3].s0 : invalid_amplitude;
-                loc[13] = cand[13] ? encode_location(2, filter_num[3], channel_num[1]) : invalid_location;
-                amp[13] = cand[13] ? hsum[3].s1 : invalid_amplitude;
-                loc[14] = cand[14] ? encode_location(2, filter_num[3], channel_num[2]) : invalid_location;
-                amp[14] = cand[14] ? hsum[3].s2 : invalid_amplitude;
-                loc[15] = cand[15] ? encode_location(2, filter_num[3], channel_num[3]) : invalid_location;
-                amp[15] = cand[15] ? hsum[3].s3 : invalid_amplitude;
+                amp[0] = cand[0] ? hsum[0] : invalid_amplitude;
+                loc[1] = cand[1] ? encode_location(2, filter_num[1], channel_num[0]) : invalid_location;
+                amp[1] = cand[1] ? hsum[1] : invalid_amplitude;
+                loc[2] = cand[2] ? encode_location(2, filter_num[2], channel_num[0]) : invalid_location;
+                amp[2] = cand[2] ? hsum[2] : invalid_amplitude;
+                loc[3] = cand[3] ? encode_location(2, filter_num[3], channel_num[0]) : invalid_location;
+                amp[3] = cand[3] ? hsum[3] : invalid_amplitude;
+                loc[4] = cand[4] ? encode_location(2, filter_num[4], channel_num[0]) : invalid_location;
+                amp[4] = cand[4] ? hsum[4] : invalid_amplitude;
+                loc[5] = cand[5] ? encode_location(2, filter_num[5], channel_num[0]) : invalid_location;
+                amp[5] = cand[5] ? hsum[5] : invalid_amplitude;
+                loc[6] = cand[6] ? encode_location(2, filter_num[6], channel_num[0]) : invalid_location;
+                amp[6] = cand[6] ? hsum[6] : invalid_amplitude;
+                loc[7] = cand[7] ? encode_location(2, filter_num[7], channel_num[0]) : invalid_location;
+                amp[7] = cand[7] ? hsum[7] : invalid_amplitude;
+                loc[8] = cand[8] ? encode_location(2, filter_num[8], channel_num[0]) : invalid_location;
+                amp[8] = cand[8] ? hsum[8] : invalid_amplitude;
+                loc[9] = cand[9] ? encode_location(2, filter_num[9], channel_num[0]) : invalid_location;
+                amp[9] = cand[9] ? hsum[9] : invalid_amplitude;
+                loc[10] = cand[10] ? encode_location(2, filter_num[10], channel_num[0]) : invalid_location;
+                amp[10] = cand[10] ? hsum[10] : invalid_amplitude;
+                loc[11] = cand[11] ? encode_location(2, filter_num[11], channel_num[0]) : invalid_location;
+                amp[11] = cand[11] ? hsum[11] : invalid_amplitude;
+                loc[12] = cand[12] ? encode_location(2, filter_num[12], channel_num[0]) : invalid_location;
+                amp[12] = cand[12] ? hsum[12] : invalid_amplitude;
+                loc[13] = cand[13] ? encode_location(2, filter_num[13], channel_num[0]) : invalid_location;
+                amp[13] = cand[13] ? hsum[13] : invalid_amplitude;
+                loc[14] = cand[14] ? encode_location(2, filter_num[14], channel_num[0]) : invalid_location;
+                amp[14] = cand[14] ? hsum[14] : invalid_amplitude;
+                loc[15] = cand[15] ? encode_location(2, filter_num[15], channel_num[0]) : invalid_location;
+                amp[15] = cand[15] ? hsum[15] : invalid_amplitude;
 
                 uint slot = next;
                 next = (next + 1) & 63;
@@ -1720,53 +1772,53 @@ kernel void detect_3(float threshold,
     const float invalid_amplitude = -1.0f;
 
     for (uint group = 0; group < n_filter_groups; ++group) {
-        uint group_base = group * 4;
-        int filter_num[4];
-        bool filter_mask[4];
+        uint group_base = group * 16;
+        int filter_num[16];
+        bool filter_mask[16];
         #pragma unroll
-        for (uint p = 0; p < 4; ++p) {
+        for (uint p = 0; p < 16; ++p) {
             filter_num[p] = negative_filters ? - group_base - p : group_base + p;
             filter_mask[p] = group_base + p < n_filters;
         }
 
         for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
-            uint bundle_base = bundle * 4;
-            uint channel_num[4];
+            uint bundle_base = bundle * 1;
+            uint channel_num[1];
             #pragma unroll
-            for (uint q = 0; q < 4; ++q)
+            for (uint q = 0; q < 1; ++q)
                 channel_num[q] = bundle_base + q;
 
-            float4 hsum[4];
+            float hsum[16];
 
             #pragma unroll
-            for (uint p = 0; p < 4; ++p) {
-                float4 from_prev_hp = READ_CHANNEL(detect_to_detect[1][p]);
-                float4 from_sp = READ_CHANNEL(delay_to_detect[2][p]);
+            for (uint p = 0; p < 16; ++p) {
+                float from_prev_hp = READ_CHANNEL(detect_to_detect[1][p]);
+                float from_sp = READ_CHANNEL(delay_to_detect[2][p]);
                 hsum[p] = from_prev_hp + from_sp;
             }
 
             #pragma unroll
-            for (uint p = 0; p < 4; ++p)
+            for (uint p = 0; p < 16; ++p)
                 WRITE_CHANNEL(detect_to_detect[2][p], hsum[p]);
 
             bool cand[16];
 
-            cand[0] = (hsum[0].s0 > threshold) & filter_mask[0];
-            cand[1] = (hsum[0].s1 > threshold) & filter_mask[0];
-            cand[2] = (hsum[0].s2 > threshold) & filter_mask[0];
-            cand[3] = (hsum[0].s3 > threshold) & filter_mask[0];
-            cand[4] = (hsum[1].s0 > threshold) & filter_mask[1];
-            cand[5] = (hsum[1].s1 > threshold) & filter_mask[1];
-            cand[6] = (hsum[1].s2 > threshold) & filter_mask[1];
-            cand[7] = (hsum[1].s3 > threshold) & filter_mask[1];
-            cand[8] = (hsum[2].s0 > threshold) & filter_mask[2];
-            cand[9] = (hsum[2].s1 > threshold) & filter_mask[2];
-            cand[10] = (hsum[2].s2 > threshold) & filter_mask[2];
-            cand[11] = (hsum[2].s3 > threshold) & filter_mask[2];
-            cand[12] = (hsum[3].s0 > threshold) & filter_mask[3];
-            cand[13] = (hsum[3].s1 > threshold) & filter_mask[3];
-            cand[14] = (hsum[3].s2 > threshold) & filter_mask[3];
-            cand[15] = (hsum[3].s3 > threshold) & filter_mask[3];
+            cand[0] = (hsum[0] > threshold) & filter_mask[0];
+            cand[1] = (hsum[1] > threshold) & filter_mask[1];
+            cand[2] = (hsum[2] > threshold) & filter_mask[2];
+            cand[3] = (hsum[3] > threshold) & filter_mask[3];
+            cand[4] = (hsum[4] > threshold) & filter_mask[4];
+            cand[5] = (hsum[5] > threshold) & filter_mask[5];
+            cand[6] = (hsum[6] > threshold) & filter_mask[6];
+            cand[7] = (hsum[7] > threshold) & filter_mask[7];
+            cand[8] = (hsum[8] > threshold) & filter_mask[8];
+            cand[9] = (hsum[9] > threshold) & filter_mask[9];
+            cand[10] = (hsum[10] > threshold) & filter_mask[10];
+            cand[11] = (hsum[11] > threshold) & filter_mask[11];
+            cand[12] = (hsum[12] > threshold) & filter_mask[12];
+            cand[13] = (hsum[13] > threshold) & filter_mask[13];
+            cand[14] = (hsum[14] > threshold) & filter_mask[14];
+            cand[15] = (hsum[15] > threshold) & filter_mask[15];
 
             bool any_cand = cand[0] | cand[1] | cand[2] | cand[3] | cand[4] | cand[5] | cand[6] | cand[7] | cand[8] | cand[9] | cand[10] | cand[11] | cand[12] | cand[13] | cand[14] | cand[15];
             if (any_cand) {
@@ -1774,37 +1826,37 @@ kernel void detect_3(float threshold,
                 float amp[16];
 
                 loc[0] = cand[0] ? encode_location(3, filter_num[0], channel_num[0]) : invalid_location;
-                amp[0] = cand[0] ? hsum[0].s0 : invalid_amplitude;
-                loc[1] = cand[1] ? encode_location(3, filter_num[0], channel_num[1]) : invalid_location;
-                amp[1] = cand[1] ? hsum[0].s1 : invalid_amplitude;
-                loc[2] = cand[2] ? encode_location(3, filter_num[0], channel_num[2]) : invalid_location;
-                amp[2] = cand[2] ? hsum[0].s2 : invalid_amplitude;
-                loc[3] = cand[3] ? encode_location(3, filter_num[0], channel_num[3]) : invalid_location;
-                amp[3] = cand[3] ? hsum[0].s3 : invalid_amplitude;
-                loc[4] = cand[4] ? encode_location(3, filter_num[1], channel_num[0]) : invalid_location;
-                amp[4] = cand[4] ? hsum[1].s0 : invalid_amplitude;
-                loc[5] = cand[5] ? encode_location(3, filter_num[1], channel_num[1]) : invalid_location;
-                amp[5] = cand[5] ? hsum[1].s1 : invalid_amplitude;
-                loc[6] = cand[6] ? encode_location(3, filter_num[1], channel_num[2]) : invalid_location;
-                amp[6] = cand[6] ? hsum[1].s2 : invalid_amplitude;
-                loc[7] = cand[7] ? encode_location(3, filter_num[1], channel_num[3]) : invalid_location;
-                amp[7] = cand[7] ? hsum[1].s3 : invalid_amplitude;
-                loc[8] = cand[8] ? encode_location(3, filter_num[2], channel_num[0]) : invalid_location;
-                amp[8] = cand[8] ? hsum[2].s0 : invalid_amplitude;
-                loc[9] = cand[9] ? encode_location(3, filter_num[2], channel_num[1]) : invalid_location;
-                amp[9] = cand[9] ? hsum[2].s1 : invalid_amplitude;
-                loc[10] = cand[10] ? encode_location(3, filter_num[2], channel_num[2]) : invalid_location;
-                amp[10] = cand[10] ? hsum[2].s2 : invalid_amplitude;
-                loc[11] = cand[11] ? encode_location(3, filter_num[2], channel_num[3]) : invalid_location;
-                amp[11] = cand[11] ? hsum[2].s3 : invalid_amplitude;
-                loc[12] = cand[12] ? encode_location(3, filter_num[3], channel_num[0]) : invalid_location;
-                amp[12] = cand[12] ? hsum[3].s0 : invalid_amplitude;
-                loc[13] = cand[13] ? encode_location(3, filter_num[3], channel_num[1]) : invalid_location;
-                amp[13] = cand[13] ? hsum[3].s1 : invalid_amplitude;
-                loc[14] = cand[14] ? encode_location(3, filter_num[3], channel_num[2]) : invalid_location;
-                amp[14] = cand[14] ? hsum[3].s2 : invalid_amplitude;
-                loc[15] = cand[15] ? encode_location(3, filter_num[3], channel_num[3]) : invalid_location;
-                amp[15] = cand[15] ? hsum[3].s3 : invalid_amplitude;
+                amp[0] = cand[0] ? hsum[0] : invalid_amplitude;
+                loc[1] = cand[1] ? encode_location(3, filter_num[1], channel_num[0]) : invalid_location;
+                amp[1] = cand[1] ? hsum[1] : invalid_amplitude;
+                loc[2] = cand[2] ? encode_location(3, filter_num[2], channel_num[0]) : invalid_location;
+                amp[2] = cand[2] ? hsum[2] : invalid_amplitude;
+                loc[3] = cand[3] ? encode_location(3, filter_num[3], channel_num[0]) : invalid_location;
+                amp[3] = cand[3] ? hsum[3] : invalid_amplitude;
+                loc[4] = cand[4] ? encode_location(3, filter_num[4], channel_num[0]) : invalid_location;
+                amp[4] = cand[4] ? hsum[4] : invalid_amplitude;
+                loc[5] = cand[5] ? encode_location(3, filter_num[5], channel_num[0]) : invalid_location;
+                amp[5] = cand[5] ? hsum[5] : invalid_amplitude;
+                loc[6] = cand[6] ? encode_location(3, filter_num[6], channel_num[0]) : invalid_location;
+                amp[6] = cand[6] ? hsum[6] : invalid_amplitude;
+                loc[7] = cand[7] ? encode_location(3, filter_num[7], channel_num[0]) : invalid_location;
+                amp[7] = cand[7] ? hsum[7] : invalid_amplitude;
+                loc[8] = cand[8] ? encode_location(3, filter_num[8], channel_num[0]) : invalid_location;
+                amp[8] = cand[8] ? hsum[8] : invalid_amplitude;
+                loc[9] = cand[9] ? encode_location(3, filter_num[9], channel_num[0]) : invalid_location;
+                amp[9] = cand[9] ? hsum[9] : invalid_amplitude;
+                loc[10] = cand[10] ? encode_location(3, filter_num[10], channel_num[0]) : invalid_location;
+                amp[10] = cand[10] ? hsum[10] : invalid_amplitude;
+                loc[11] = cand[11] ? encode_location(3, filter_num[11], channel_num[0]) : invalid_location;
+                amp[11] = cand[11] ? hsum[11] : invalid_amplitude;
+                loc[12] = cand[12] ? encode_location(3, filter_num[12], channel_num[0]) : invalid_location;
+                amp[12] = cand[12] ? hsum[12] : invalid_amplitude;
+                loc[13] = cand[13] ? encode_location(3, filter_num[13], channel_num[0]) : invalid_location;
+                amp[13] = cand[13] ? hsum[13] : invalid_amplitude;
+                loc[14] = cand[14] ? encode_location(3, filter_num[14], channel_num[0]) : invalid_location;
+                amp[14] = cand[14] ? hsum[14] : invalid_amplitude;
+                loc[15] = cand[15] ? encode_location(3, filter_num[15], channel_num[0]) : invalid_location;
+                amp[15] = cand[15] ? hsum[15] : invalid_amplitude;
 
                 uint slot = next;
                 next = (next + 1) & 63;
@@ -1859,53 +1911,53 @@ kernel void detect_4(float threshold,
     const float invalid_amplitude = -1.0f;
 
     for (uint group = 0; group < n_filter_groups; ++group) {
-        uint group_base = group * 4;
-        int filter_num[4];
-        bool filter_mask[4];
+        uint group_base = group * 16;
+        int filter_num[16];
+        bool filter_mask[16];
         #pragma unroll
-        for (uint p = 0; p < 4; ++p) {
+        for (uint p = 0; p < 16; ++p) {
             filter_num[p] = negative_filters ? - group_base - p : group_base + p;
             filter_mask[p] = group_base + p < n_filters;
         }
 
         for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
-            uint bundle_base = bundle * 4;
-            uint channel_num[4];
+            uint bundle_base = bundle * 1;
+            uint channel_num[1];
             #pragma unroll
-            for (uint q = 0; q < 4; ++q)
+            for (uint q = 0; q < 1; ++q)
                 channel_num[q] = bundle_base + q;
 
-            float4 hsum[4];
+            float hsum[16];
 
             #pragma unroll
-            for (uint p = 0; p < 4; ++p) {
-                float4 from_prev_hp = READ_CHANNEL(detect_to_detect[2][p]);
-                float4 from_sp = READ_CHANNEL(delay_to_detect[3][p]);
+            for (uint p = 0; p < 16; ++p) {
+                float from_prev_hp = READ_CHANNEL(detect_to_detect[2][p]);
+                float from_sp = READ_CHANNEL(delay_to_detect[3][p]);
                 hsum[p] = from_prev_hp + from_sp;
             }
 
             #pragma unroll
-            for (uint p = 0; p < 4; ++p)
+            for (uint p = 0; p < 16; ++p)
                 WRITE_CHANNEL(detect_to_detect[3][p], hsum[p]);
 
             bool cand[16];
 
-            cand[0] = (hsum[0].s0 > threshold) & filter_mask[0];
-            cand[1] = (hsum[0].s1 > threshold) & filter_mask[0];
-            cand[2] = (hsum[0].s2 > threshold) & filter_mask[0];
-            cand[3] = (hsum[0].s3 > threshold) & filter_mask[0];
-            cand[4] = (hsum[1].s0 > threshold) & filter_mask[1];
-            cand[5] = (hsum[1].s1 > threshold) & filter_mask[1];
-            cand[6] = (hsum[1].s2 > threshold) & filter_mask[1];
-            cand[7] = (hsum[1].s3 > threshold) & filter_mask[1];
-            cand[8] = (hsum[2].s0 > threshold) & filter_mask[2];
-            cand[9] = (hsum[2].s1 > threshold) & filter_mask[2];
-            cand[10] = (hsum[2].s2 > threshold) & filter_mask[2];
-            cand[11] = (hsum[2].s3 > threshold) & filter_mask[2];
-            cand[12] = (hsum[3].s0 > threshold) & filter_mask[3];
-            cand[13] = (hsum[3].s1 > threshold) & filter_mask[3];
-            cand[14] = (hsum[3].s2 > threshold) & filter_mask[3];
-            cand[15] = (hsum[3].s3 > threshold) & filter_mask[3];
+            cand[0] = (hsum[0] > threshold) & filter_mask[0];
+            cand[1] = (hsum[1] > threshold) & filter_mask[1];
+            cand[2] = (hsum[2] > threshold) & filter_mask[2];
+            cand[3] = (hsum[3] > threshold) & filter_mask[3];
+            cand[4] = (hsum[4] > threshold) & filter_mask[4];
+            cand[5] = (hsum[5] > threshold) & filter_mask[5];
+            cand[6] = (hsum[6] > threshold) & filter_mask[6];
+            cand[7] = (hsum[7] > threshold) & filter_mask[7];
+            cand[8] = (hsum[8] > threshold) & filter_mask[8];
+            cand[9] = (hsum[9] > threshold) & filter_mask[9];
+            cand[10] = (hsum[10] > threshold) & filter_mask[10];
+            cand[11] = (hsum[11] > threshold) & filter_mask[11];
+            cand[12] = (hsum[12] > threshold) & filter_mask[12];
+            cand[13] = (hsum[13] > threshold) & filter_mask[13];
+            cand[14] = (hsum[14] > threshold) & filter_mask[14];
+            cand[15] = (hsum[15] > threshold) & filter_mask[15];
 
             bool any_cand = cand[0] | cand[1] | cand[2] | cand[3] | cand[4] | cand[5] | cand[6] | cand[7] | cand[8] | cand[9] | cand[10] | cand[11] | cand[12] | cand[13] | cand[14] | cand[15];
             if (any_cand) {
@@ -1913,37 +1965,37 @@ kernel void detect_4(float threshold,
                 float amp[16];
 
                 loc[0] = cand[0] ? encode_location(4, filter_num[0], channel_num[0]) : invalid_location;
-                amp[0] = cand[0] ? hsum[0].s0 : invalid_amplitude;
-                loc[1] = cand[1] ? encode_location(4, filter_num[0], channel_num[1]) : invalid_location;
-                amp[1] = cand[1] ? hsum[0].s1 : invalid_amplitude;
-                loc[2] = cand[2] ? encode_location(4, filter_num[0], channel_num[2]) : invalid_location;
-                amp[2] = cand[2] ? hsum[0].s2 : invalid_amplitude;
-                loc[3] = cand[3] ? encode_location(4, filter_num[0], channel_num[3]) : invalid_location;
-                amp[3] = cand[3] ? hsum[0].s3 : invalid_amplitude;
-                loc[4] = cand[4] ? encode_location(4, filter_num[1], channel_num[0]) : invalid_location;
-                amp[4] = cand[4] ? hsum[1].s0 : invalid_amplitude;
-                loc[5] = cand[5] ? encode_location(4, filter_num[1], channel_num[1]) : invalid_location;
-                amp[5] = cand[5] ? hsum[1].s1 : invalid_amplitude;
-                loc[6] = cand[6] ? encode_location(4, filter_num[1], channel_num[2]) : invalid_location;
-                amp[6] = cand[6] ? hsum[1].s2 : invalid_amplitude;
-                loc[7] = cand[7] ? encode_location(4, filter_num[1], channel_num[3]) : invalid_location;
-                amp[7] = cand[7] ? hsum[1].s3 : invalid_amplitude;
-                loc[8] = cand[8] ? encode_location(4, filter_num[2], channel_num[0]) : invalid_location;
-                amp[8] = cand[8] ? hsum[2].s0 : invalid_amplitude;
-                loc[9] = cand[9] ? encode_location(4, filter_num[2], channel_num[1]) : invalid_location;
-                amp[9] = cand[9] ? hsum[2].s1 : invalid_amplitude;
-                loc[10] = cand[10] ? encode_location(4, filter_num[2], channel_num[2]) : invalid_location;
-                amp[10] = cand[10] ? hsum[2].s2 : invalid_amplitude;
-                loc[11] = cand[11] ? encode_location(4, filter_num[2], channel_num[3]) : invalid_location;
-                amp[11] = cand[11] ? hsum[2].s3 : invalid_amplitude;
-                loc[12] = cand[12] ? encode_location(4, filter_num[3], channel_num[0]) : invalid_location;
-                amp[12] = cand[12] ? hsum[3].s0 : invalid_amplitude;
-                loc[13] = cand[13] ? encode_location(4, filter_num[3], channel_num[1]) : invalid_location;
-                amp[13] = cand[13] ? hsum[3].s1 : invalid_amplitude;
-                loc[14] = cand[14] ? encode_location(4, filter_num[3], channel_num[2]) : invalid_location;
-                amp[14] = cand[14] ? hsum[3].s2 : invalid_amplitude;
-                loc[15] = cand[15] ? encode_location(4, filter_num[3], channel_num[3]) : invalid_location;
-                amp[15] = cand[15] ? hsum[3].s3 : invalid_amplitude;
+                amp[0] = cand[0] ? hsum[0] : invalid_amplitude;
+                loc[1] = cand[1] ? encode_location(4, filter_num[1], channel_num[0]) : invalid_location;
+                amp[1] = cand[1] ? hsum[1] : invalid_amplitude;
+                loc[2] = cand[2] ? encode_location(4, filter_num[2], channel_num[0]) : invalid_location;
+                amp[2] = cand[2] ? hsum[2] : invalid_amplitude;
+                loc[3] = cand[3] ? encode_location(4, filter_num[3], channel_num[0]) : invalid_location;
+                amp[3] = cand[3] ? hsum[3] : invalid_amplitude;
+                loc[4] = cand[4] ? encode_location(4, filter_num[4], channel_num[0]) : invalid_location;
+                amp[4] = cand[4] ? hsum[4] : invalid_amplitude;
+                loc[5] = cand[5] ? encode_location(4, filter_num[5], channel_num[0]) : invalid_location;
+                amp[5] = cand[5] ? hsum[5] : invalid_amplitude;
+                loc[6] = cand[6] ? encode_location(4, filter_num[6], channel_num[0]) : invalid_location;
+                amp[6] = cand[6] ? hsum[6] : invalid_amplitude;
+                loc[7] = cand[7] ? encode_location(4, filter_num[7], channel_num[0]) : invalid_location;
+                amp[7] = cand[7] ? hsum[7] : invalid_amplitude;
+                loc[8] = cand[8] ? encode_location(4, filter_num[8], channel_num[0]) : invalid_location;
+                amp[8] = cand[8] ? hsum[8] : invalid_amplitude;
+                loc[9] = cand[9] ? encode_location(4, filter_num[9], channel_num[0]) : invalid_location;
+                amp[9] = cand[9] ? hsum[9] : invalid_amplitude;
+                loc[10] = cand[10] ? encode_location(4, filter_num[10], channel_num[0]) : invalid_location;
+                amp[10] = cand[10] ? hsum[10] : invalid_amplitude;
+                loc[11] = cand[11] ? encode_location(4, filter_num[11], channel_num[0]) : invalid_location;
+                amp[11] = cand[11] ? hsum[11] : invalid_amplitude;
+                loc[12] = cand[12] ? encode_location(4, filter_num[12], channel_num[0]) : invalid_location;
+                amp[12] = cand[12] ? hsum[12] : invalid_amplitude;
+                loc[13] = cand[13] ? encode_location(4, filter_num[13], channel_num[0]) : invalid_location;
+                amp[13] = cand[13] ? hsum[13] : invalid_amplitude;
+                loc[14] = cand[14] ? encode_location(4, filter_num[14], channel_num[0]) : invalid_location;
+                amp[14] = cand[14] ? hsum[14] : invalid_amplitude;
+                loc[15] = cand[15] ? encode_location(4, filter_num[15], channel_num[0]) : invalid_location;
+                amp[15] = cand[15] ? hsum[15] : invalid_amplitude;
 
                 uint slot = next;
                 next = (next + 1) & 63;
@@ -1998,53 +2050,53 @@ kernel void detect_5(float threshold,
     const float invalid_amplitude = -1.0f;
 
     for (uint group = 0; group < n_filter_groups; ++group) {
-        uint group_base = group * 4;
-        int filter_num[4];
-        bool filter_mask[4];
+        uint group_base = group * 16;
+        int filter_num[16];
+        bool filter_mask[16];
         #pragma unroll
-        for (uint p = 0; p < 4; ++p) {
+        for (uint p = 0; p < 16; ++p) {
             filter_num[p] = negative_filters ? - group_base - p : group_base + p;
             filter_mask[p] = group_base + p < n_filters;
         }
 
         for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
-            uint bundle_base = bundle * 4;
-            uint channel_num[4];
+            uint bundle_base = bundle * 1;
+            uint channel_num[1];
             #pragma unroll
-            for (uint q = 0; q < 4; ++q)
+            for (uint q = 0; q < 1; ++q)
                 channel_num[q] = bundle_base + q;
 
-            float4 hsum[4];
+            float hsum[16];
 
             #pragma unroll
-            for (uint p = 0; p < 4; ++p) {
-                float4 from_prev_hp = READ_CHANNEL(detect_to_detect[3][p]);
-                float4 from_sp = READ_CHANNEL(delay_to_detect[4][p]);
+            for (uint p = 0; p < 16; ++p) {
+                float from_prev_hp = READ_CHANNEL(detect_to_detect[3][p]);
+                float from_sp = READ_CHANNEL(delay_to_detect[4][p]);
                 hsum[p] = from_prev_hp + from_sp;
             }
 
             #pragma unroll
-            for (uint p = 0; p < 4; ++p)
+            for (uint p = 0; p < 16; ++p)
                 WRITE_CHANNEL(detect_to_detect[4][p], hsum[p]);
 
             bool cand[16];
 
-            cand[0] = (hsum[0].s0 > threshold) & filter_mask[0];
-            cand[1] = (hsum[0].s1 > threshold) & filter_mask[0];
-            cand[2] = (hsum[0].s2 > threshold) & filter_mask[0];
-            cand[3] = (hsum[0].s3 > threshold) & filter_mask[0];
-            cand[4] = (hsum[1].s0 > threshold) & filter_mask[1];
-            cand[5] = (hsum[1].s1 > threshold) & filter_mask[1];
-            cand[6] = (hsum[1].s2 > threshold) & filter_mask[1];
-            cand[7] = (hsum[1].s3 > threshold) & filter_mask[1];
-            cand[8] = (hsum[2].s0 > threshold) & filter_mask[2];
-            cand[9] = (hsum[2].s1 > threshold) & filter_mask[2];
-            cand[10] = (hsum[2].s2 > threshold) & filter_mask[2];
-            cand[11] = (hsum[2].s3 > threshold) & filter_mask[2];
-            cand[12] = (hsum[3].s0 > threshold) & filter_mask[3];
-            cand[13] = (hsum[3].s1 > threshold) & filter_mask[3];
-            cand[14] = (hsum[3].s2 > threshold) & filter_mask[3];
-            cand[15] = (hsum[3].s3 > threshold) & filter_mask[3];
+            cand[0] = (hsum[0] > threshold) & filter_mask[0];
+            cand[1] = (hsum[1] > threshold) & filter_mask[1];
+            cand[2] = (hsum[2] > threshold) & filter_mask[2];
+            cand[3] = (hsum[3] > threshold) & filter_mask[3];
+            cand[4] = (hsum[4] > threshold) & filter_mask[4];
+            cand[5] = (hsum[5] > threshold) & filter_mask[5];
+            cand[6] = (hsum[6] > threshold) & filter_mask[6];
+            cand[7] = (hsum[7] > threshold) & filter_mask[7];
+            cand[8] = (hsum[8] > threshold) & filter_mask[8];
+            cand[9] = (hsum[9] > threshold) & filter_mask[9];
+            cand[10] = (hsum[10] > threshold) & filter_mask[10];
+            cand[11] = (hsum[11] > threshold) & filter_mask[11];
+            cand[12] = (hsum[12] > threshold) & filter_mask[12];
+            cand[13] = (hsum[13] > threshold) & filter_mask[13];
+            cand[14] = (hsum[14] > threshold) & filter_mask[14];
+            cand[15] = (hsum[15] > threshold) & filter_mask[15];
 
             bool any_cand = cand[0] | cand[1] | cand[2] | cand[3] | cand[4] | cand[5] | cand[6] | cand[7] | cand[8] | cand[9] | cand[10] | cand[11] | cand[12] | cand[13] | cand[14] | cand[15];
             if (any_cand) {
@@ -2052,37 +2104,37 @@ kernel void detect_5(float threshold,
                 float amp[16];
 
                 loc[0] = cand[0] ? encode_location(5, filter_num[0], channel_num[0]) : invalid_location;
-                amp[0] = cand[0] ? hsum[0].s0 : invalid_amplitude;
-                loc[1] = cand[1] ? encode_location(5, filter_num[0], channel_num[1]) : invalid_location;
-                amp[1] = cand[1] ? hsum[0].s1 : invalid_amplitude;
-                loc[2] = cand[2] ? encode_location(5, filter_num[0], channel_num[2]) : invalid_location;
-                amp[2] = cand[2] ? hsum[0].s2 : invalid_amplitude;
-                loc[3] = cand[3] ? encode_location(5, filter_num[0], channel_num[3]) : invalid_location;
-                amp[3] = cand[3] ? hsum[0].s3 : invalid_amplitude;
-                loc[4] = cand[4] ? encode_location(5, filter_num[1], channel_num[0]) : invalid_location;
-                amp[4] = cand[4] ? hsum[1].s0 : invalid_amplitude;
-                loc[5] = cand[5] ? encode_location(5, filter_num[1], channel_num[1]) : invalid_location;
-                amp[5] = cand[5] ? hsum[1].s1 : invalid_amplitude;
-                loc[6] = cand[6] ? encode_location(5, filter_num[1], channel_num[2]) : invalid_location;
-                amp[6] = cand[6] ? hsum[1].s2 : invalid_amplitude;
-                loc[7] = cand[7] ? encode_location(5, filter_num[1], channel_num[3]) : invalid_location;
-                amp[7] = cand[7] ? hsum[1].s3 : invalid_amplitude;
-                loc[8] = cand[8] ? encode_location(5, filter_num[2], channel_num[0]) : invalid_location;
-                amp[8] = cand[8] ? hsum[2].s0 : invalid_amplitude;
-                loc[9] = cand[9] ? encode_location(5, filter_num[2], channel_num[1]) : invalid_location;
-                amp[9] = cand[9] ? hsum[2].s1 : invalid_amplitude;
-                loc[10] = cand[10] ? encode_location(5, filter_num[2], channel_num[2]) : invalid_location;
-                amp[10] = cand[10] ? hsum[2].s2 : invalid_amplitude;
-                loc[11] = cand[11] ? encode_location(5, filter_num[2], channel_num[3]) : invalid_location;
-                amp[11] = cand[11] ? hsum[2].s3 : invalid_amplitude;
-                loc[12] = cand[12] ? encode_location(5, filter_num[3], channel_num[0]) : invalid_location;
-                amp[12] = cand[12] ? hsum[3].s0 : invalid_amplitude;
-                loc[13] = cand[13] ? encode_location(5, filter_num[3], channel_num[1]) : invalid_location;
-                amp[13] = cand[13] ? hsum[3].s1 : invalid_amplitude;
-                loc[14] = cand[14] ? encode_location(5, filter_num[3], channel_num[2]) : invalid_location;
-                amp[14] = cand[14] ? hsum[3].s2 : invalid_amplitude;
-                loc[15] = cand[15] ? encode_location(5, filter_num[3], channel_num[3]) : invalid_location;
-                amp[15] = cand[15] ? hsum[3].s3 : invalid_amplitude;
+                amp[0] = cand[0] ? hsum[0] : invalid_amplitude;
+                loc[1] = cand[1] ? encode_location(5, filter_num[1], channel_num[0]) : invalid_location;
+                amp[1] = cand[1] ? hsum[1] : invalid_amplitude;
+                loc[2] = cand[2] ? encode_location(5, filter_num[2], channel_num[0]) : invalid_location;
+                amp[2] = cand[2] ? hsum[2] : invalid_amplitude;
+                loc[3] = cand[3] ? encode_location(5, filter_num[3], channel_num[0]) : invalid_location;
+                amp[3] = cand[3] ? hsum[3] : invalid_amplitude;
+                loc[4] = cand[4] ? encode_location(5, filter_num[4], channel_num[0]) : invalid_location;
+                amp[4] = cand[4] ? hsum[4] : invalid_amplitude;
+                loc[5] = cand[5] ? encode_location(5, filter_num[5], channel_num[0]) : invalid_location;
+                amp[5] = cand[5] ? hsum[5] : invalid_amplitude;
+                loc[6] = cand[6] ? encode_location(5, filter_num[6], channel_num[0]) : invalid_location;
+                amp[6] = cand[6] ? hsum[6] : invalid_amplitude;
+                loc[7] = cand[7] ? encode_location(5, filter_num[7], channel_num[0]) : invalid_location;
+                amp[7] = cand[7] ? hsum[7] : invalid_amplitude;
+                loc[8] = cand[8] ? encode_location(5, filter_num[8], channel_num[0]) : invalid_location;
+                amp[8] = cand[8] ? hsum[8] : invalid_amplitude;
+                loc[9] = cand[9] ? encode_location(5, filter_num[9], channel_num[0]) : invalid_location;
+                amp[9] = cand[9] ? hsum[9] : invalid_amplitude;
+                loc[10] = cand[10] ? encode_location(5, filter_num[10], channel_num[0]) : invalid_location;
+                amp[10] = cand[10] ? hsum[10] : invalid_amplitude;
+                loc[11] = cand[11] ? encode_location(5, filter_num[11], channel_num[0]) : invalid_location;
+                amp[11] = cand[11] ? hsum[11] : invalid_amplitude;
+                loc[12] = cand[12] ? encode_location(5, filter_num[12], channel_num[0]) : invalid_location;
+                amp[12] = cand[12] ? hsum[12] : invalid_amplitude;
+                loc[13] = cand[13] ? encode_location(5, filter_num[13], channel_num[0]) : invalid_location;
+                amp[13] = cand[13] ? hsum[13] : invalid_amplitude;
+                loc[14] = cand[14] ? encode_location(5, filter_num[14], channel_num[0]) : invalid_location;
+                amp[14] = cand[14] ? hsum[14] : invalid_amplitude;
+                loc[15] = cand[15] ? encode_location(5, filter_num[15], channel_num[0]) : invalid_location;
+                amp[15] = cand[15] ? hsum[15] : invalid_amplitude;
 
                 uint slot = next;
                 next = (next + 1) & 63;
@@ -2137,53 +2189,53 @@ kernel void detect_6(float threshold,
     const float invalid_amplitude = -1.0f;
 
     for (uint group = 0; group < n_filter_groups; ++group) {
-        uint group_base = group * 4;
-        int filter_num[4];
-        bool filter_mask[4];
+        uint group_base = group * 16;
+        int filter_num[16];
+        bool filter_mask[16];
         #pragma unroll
-        for (uint p = 0; p < 4; ++p) {
+        for (uint p = 0; p < 16; ++p) {
             filter_num[p] = negative_filters ? - group_base - p : group_base + p;
             filter_mask[p] = group_base + p < n_filters;
         }
 
         for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
-            uint bundle_base = bundle * 4;
-            uint channel_num[4];
+            uint bundle_base = bundle * 1;
+            uint channel_num[1];
             #pragma unroll
-            for (uint q = 0; q < 4; ++q)
+            for (uint q = 0; q < 1; ++q)
                 channel_num[q] = bundle_base + q;
 
-            float4 hsum[4];
+            float hsum[16];
 
             #pragma unroll
-            for (uint p = 0; p < 4; ++p) {
-                float4 from_prev_hp = READ_CHANNEL(detect_to_detect[4][p]);
-                float4 from_sp = READ_CHANNEL(delay_to_detect[5][p]);
+            for (uint p = 0; p < 16; ++p) {
+                float from_prev_hp = READ_CHANNEL(detect_to_detect[4][p]);
+                float from_sp = READ_CHANNEL(delay_to_detect[5][p]);
                 hsum[p] = from_prev_hp + from_sp;
             }
 
             #pragma unroll
-            for (uint p = 0; p < 4; ++p)
+            for (uint p = 0; p < 16; ++p)
                 WRITE_CHANNEL(detect_to_detect[5][p], hsum[p]);
 
             bool cand[16];
 
-            cand[0] = (hsum[0].s0 > threshold) & filter_mask[0];
-            cand[1] = (hsum[0].s1 > threshold) & filter_mask[0];
-            cand[2] = (hsum[0].s2 > threshold) & filter_mask[0];
-            cand[3] = (hsum[0].s3 > threshold) & filter_mask[0];
-            cand[4] = (hsum[1].s0 > threshold) & filter_mask[1];
-            cand[5] = (hsum[1].s1 > threshold) & filter_mask[1];
-            cand[6] = (hsum[1].s2 > threshold) & filter_mask[1];
-            cand[7] = (hsum[1].s3 > threshold) & filter_mask[1];
-            cand[8] = (hsum[2].s0 > threshold) & filter_mask[2];
-            cand[9] = (hsum[2].s1 > threshold) & filter_mask[2];
-            cand[10] = (hsum[2].s2 > threshold) & filter_mask[2];
-            cand[11] = (hsum[2].s3 > threshold) & filter_mask[2];
-            cand[12] = (hsum[3].s0 > threshold) & filter_mask[3];
-            cand[13] = (hsum[3].s1 > threshold) & filter_mask[3];
-            cand[14] = (hsum[3].s2 > threshold) & filter_mask[3];
-            cand[15] = (hsum[3].s3 > threshold) & filter_mask[3];
+            cand[0] = (hsum[0] > threshold) & filter_mask[0];
+            cand[1] = (hsum[1] > threshold) & filter_mask[1];
+            cand[2] = (hsum[2] > threshold) & filter_mask[2];
+            cand[3] = (hsum[3] > threshold) & filter_mask[3];
+            cand[4] = (hsum[4] > threshold) & filter_mask[4];
+            cand[5] = (hsum[5] > threshold) & filter_mask[5];
+            cand[6] = (hsum[6] > threshold) & filter_mask[6];
+            cand[7] = (hsum[7] > threshold) & filter_mask[7];
+            cand[8] = (hsum[8] > threshold) & filter_mask[8];
+            cand[9] = (hsum[9] > threshold) & filter_mask[9];
+            cand[10] = (hsum[10] > threshold) & filter_mask[10];
+            cand[11] = (hsum[11] > threshold) & filter_mask[11];
+            cand[12] = (hsum[12] > threshold) & filter_mask[12];
+            cand[13] = (hsum[13] > threshold) & filter_mask[13];
+            cand[14] = (hsum[14] > threshold) & filter_mask[14];
+            cand[15] = (hsum[15] > threshold) & filter_mask[15];
 
             bool any_cand = cand[0] | cand[1] | cand[2] | cand[3] | cand[4] | cand[5] | cand[6] | cand[7] | cand[8] | cand[9] | cand[10] | cand[11] | cand[12] | cand[13] | cand[14] | cand[15];
             if (any_cand) {
@@ -2191,37 +2243,37 @@ kernel void detect_6(float threshold,
                 float amp[16];
 
                 loc[0] = cand[0] ? encode_location(6, filter_num[0], channel_num[0]) : invalid_location;
-                amp[0] = cand[0] ? hsum[0].s0 : invalid_amplitude;
-                loc[1] = cand[1] ? encode_location(6, filter_num[0], channel_num[1]) : invalid_location;
-                amp[1] = cand[1] ? hsum[0].s1 : invalid_amplitude;
-                loc[2] = cand[2] ? encode_location(6, filter_num[0], channel_num[2]) : invalid_location;
-                amp[2] = cand[2] ? hsum[0].s2 : invalid_amplitude;
-                loc[3] = cand[3] ? encode_location(6, filter_num[0], channel_num[3]) : invalid_location;
-                amp[3] = cand[3] ? hsum[0].s3 : invalid_amplitude;
-                loc[4] = cand[4] ? encode_location(6, filter_num[1], channel_num[0]) : invalid_location;
-                amp[4] = cand[4] ? hsum[1].s0 : invalid_amplitude;
-                loc[5] = cand[5] ? encode_location(6, filter_num[1], channel_num[1]) : invalid_location;
-                amp[5] = cand[5] ? hsum[1].s1 : invalid_amplitude;
-                loc[6] = cand[6] ? encode_location(6, filter_num[1], channel_num[2]) : invalid_location;
-                amp[6] = cand[6] ? hsum[1].s2 : invalid_amplitude;
-                loc[7] = cand[7] ? encode_location(6, filter_num[1], channel_num[3]) : invalid_location;
-                amp[7] = cand[7] ? hsum[1].s3 : invalid_amplitude;
-                loc[8] = cand[8] ? encode_location(6, filter_num[2], channel_num[0]) : invalid_location;
-                amp[8] = cand[8] ? hsum[2].s0 : invalid_amplitude;
-                loc[9] = cand[9] ? encode_location(6, filter_num[2], channel_num[1]) : invalid_location;
-                amp[9] = cand[9] ? hsum[2].s1 : invalid_amplitude;
-                loc[10] = cand[10] ? encode_location(6, filter_num[2], channel_num[2]) : invalid_location;
-                amp[10] = cand[10] ? hsum[2].s2 : invalid_amplitude;
-                loc[11] = cand[11] ? encode_location(6, filter_num[2], channel_num[3]) : invalid_location;
-                amp[11] = cand[11] ? hsum[2].s3 : invalid_amplitude;
-                loc[12] = cand[12] ? encode_location(6, filter_num[3], channel_num[0]) : invalid_location;
-                amp[12] = cand[12] ? hsum[3].s0 : invalid_amplitude;
-                loc[13] = cand[13] ? encode_location(6, filter_num[3], channel_num[1]) : invalid_location;
-                amp[13] = cand[13] ? hsum[3].s1 : invalid_amplitude;
-                loc[14] = cand[14] ? encode_location(6, filter_num[3], channel_num[2]) : invalid_location;
-                amp[14] = cand[14] ? hsum[3].s2 : invalid_amplitude;
-                loc[15] = cand[15] ? encode_location(6, filter_num[3], channel_num[3]) : invalid_location;
-                amp[15] = cand[15] ? hsum[3].s3 : invalid_amplitude;
+                amp[0] = cand[0] ? hsum[0] : invalid_amplitude;
+                loc[1] = cand[1] ? encode_location(6, filter_num[1], channel_num[0]) : invalid_location;
+                amp[1] = cand[1] ? hsum[1] : invalid_amplitude;
+                loc[2] = cand[2] ? encode_location(6, filter_num[2], channel_num[0]) : invalid_location;
+                amp[2] = cand[2] ? hsum[2] : invalid_amplitude;
+                loc[3] = cand[3] ? encode_location(6, filter_num[3], channel_num[0]) : invalid_location;
+                amp[3] = cand[3] ? hsum[3] : invalid_amplitude;
+                loc[4] = cand[4] ? encode_location(6, filter_num[4], channel_num[0]) : invalid_location;
+                amp[4] = cand[4] ? hsum[4] : invalid_amplitude;
+                loc[5] = cand[5] ? encode_location(6, filter_num[5], channel_num[0]) : invalid_location;
+                amp[5] = cand[5] ? hsum[5] : invalid_amplitude;
+                loc[6] = cand[6] ? encode_location(6, filter_num[6], channel_num[0]) : invalid_location;
+                amp[6] = cand[6] ? hsum[6] : invalid_amplitude;
+                loc[7] = cand[7] ? encode_location(6, filter_num[7], channel_num[0]) : invalid_location;
+                amp[7] = cand[7] ? hsum[7] : invalid_amplitude;
+                loc[8] = cand[8] ? encode_location(6, filter_num[8], channel_num[0]) : invalid_location;
+                amp[8] = cand[8] ? hsum[8] : invalid_amplitude;
+                loc[9] = cand[9] ? encode_location(6, filter_num[9], channel_num[0]) : invalid_location;
+                amp[9] = cand[9] ? hsum[9] : invalid_amplitude;
+                loc[10] = cand[10] ? encode_location(6, filter_num[10], channel_num[0]) : invalid_location;
+                amp[10] = cand[10] ? hsum[10] : invalid_amplitude;
+                loc[11] = cand[11] ? encode_location(6, filter_num[11], channel_num[0]) : invalid_location;
+                amp[11] = cand[11] ? hsum[11] : invalid_amplitude;
+                loc[12] = cand[12] ? encode_location(6, filter_num[12], channel_num[0]) : invalid_location;
+                amp[12] = cand[12] ? hsum[12] : invalid_amplitude;
+                loc[13] = cand[13] ? encode_location(6, filter_num[13], channel_num[0]) : invalid_location;
+                amp[13] = cand[13] ? hsum[13] : invalid_amplitude;
+                loc[14] = cand[14] ? encode_location(6, filter_num[14], channel_num[0]) : invalid_location;
+                amp[14] = cand[14] ? hsum[14] : invalid_amplitude;
+                loc[15] = cand[15] ? encode_location(6, filter_num[15], channel_num[0]) : invalid_location;
+                amp[15] = cand[15] ? hsum[15] : invalid_amplitude;
 
                 uint slot = next;
                 next = (next + 1) & 63;
@@ -2276,53 +2328,53 @@ kernel void detect_7(float threshold,
     const float invalid_amplitude = -1.0f;
 
     for (uint group = 0; group < n_filter_groups; ++group) {
-        uint group_base = group * 4;
-        int filter_num[4];
-        bool filter_mask[4];
+        uint group_base = group * 16;
+        int filter_num[16];
+        bool filter_mask[16];
         #pragma unroll
-        for (uint p = 0; p < 4; ++p) {
+        for (uint p = 0; p < 16; ++p) {
             filter_num[p] = negative_filters ? - group_base - p : group_base + p;
             filter_mask[p] = group_base + p < n_filters;
         }
 
         for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
-            uint bundle_base = bundle * 4;
-            uint channel_num[4];
+            uint bundle_base = bundle * 1;
+            uint channel_num[1];
             #pragma unroll
-            for (uint q = 0; q < 4; ++q)
+            for (uint q = 0; q < 1; ++q)
                 channel_num[q] = bundle_base + q;
 
-            float4 hsum[4];
+            float hsum[16];
 
             #pragma unroll
-            for (uint p = 0; p < 4; ++p) {
-                float4 from_prev_hp = READ_CHANNEL(detect_to_detect[5][p]);
-                float4 from_sp = READ_CHANNEL(delay_to_detect[6][p]);
+            for (uint p = 0; p < 16; ++p) {
+                float from_prev_hp = READ_CHANNEL(detect_to_detect[5][p]);
+                float from_sp = READ_CHANNEL(delay_to_detect[6][p]);
                 hsum[p] = from_prev_hp + from_sp;
             }
 
             #pragma unroll
-            for (uint p = 0; p < 4; ++p)
+            for (uint p = 0; p < 16; ++p)
                 WRITE_CHANNEL(detect_to_detect[6][p], hsum[p]);
 
             bool cand[16];
 
-            cand[0] = (hsum[0].s0 > threshold) & filter_mask[0];
-            cand[1] = (hsum[0].s1 > threshold) & filter_mask[0];
-            cand[2] = (hsum[0].s2 > threshold) & filter_mask[0];
-            cand[3] = (hsum[0].s3 > threshold) & filter_mask[0];
-            cand[4] = (hsum[1].s0 > threshold) & filter_mask[1];
-            cand[5] = (hsum[1].s1 > threshold) & filter_mask[1];
-            cand[6] = (hsum[1].s2 > threshold) & filter_mask[1];
-            cand[7] = (hsum[1].s3 > threshold) & filter_mask[1];
-            cand[8] = (hsum[2].s0 > threshold) & filter_mask[2];
-            cand[9] = (hsum[2].s1 > threshold) & filter_mask[2];
-            cand[10] = (hsum[2].s2 > threshold) & filter_mask[2];
-            cand[11] = (hsum[2].s3 > threshold) & filter_mask[2];
-            cand[12] = (hsum[3].s0 > threshold) & filter_mask[3];
-            cand[13] = (hsum[3].s1 > threshold) & filter_mask[3];
-            cand[14] = (hsum[3].s2 > threshold) & filter_mask[3];
-            cand[15] = (hsum[3].s3 > threshold) & filter_mask[3];
+            cand[0] = (hsum[0] > threshold) & filter_mask[0];
+            cand[1] = (hsum[1] > threshold) & filter_mask[1];
+            cand[2] = (hsum[2] > threshold) & filter_mask[2];
+            cand[3] = (hsum[3] > threshold) & filter_mask[3];
+            cand[4] = (hsum[4] > threshold) & filter_mask[4];
+            cand[5] = (hsum[5] > threshold) & filter_mask[5];
+            cand[6] = (hsum[6] > threshold) & filter_mask[6];
+            cand[7] = (hsum[7] > threshold) & filter_mask[7];
+            cand[8] = (hsum[8] > threshold) & filter_mask[8];
+            cand[9] = (hsum[9] > threshold) & filter_mask[9];
+            cand[10] = (hsum[10] > threshold) & filter_mask[10];
+            cand[11] = (hsum[11] > threshold) & filter_mask[11];
+            cand[12] = (hsum[12] > threshold) & filter_mask[12];
+            cand[13] = (hsum[13] > threshold) & filter_mask[13];
+            cand[14] = (hsum[14] > threshold) & filter_mask[14];
+            cand[15] = (hsum[15] > threshold) & filter_mask[15];
 
             bool any_cand = cand[0] | cand[1] | cand[2] | cand[3] | cand[4] | cand[5] | cand[6] | cand[7] | cand[8] | cand[9] | cand[10] | cand[11] | cand[12] | cand[13] | cand[14] | cand[15];
             if (any_cand) {
@@ -2330,37 +2382,37 @@ kernel void detect_7(float threshold,
                 float amp[16];
 
                 loc[0] = cand[0] ? encode_location(7, filter_num[0], channel_num[0]) : invalid_location;
-                amp[0] = cand[0] ? hsum[0].s0 : invalid_amplitude;
-                loc[1] = cand[1] ? encode_location(7, filter_num[0], channel_num[1]) : invalid_location;
-                amp[1] = cand[1] ? hsum[0].s1 : invalid_amplitude;
-                loc[2] = cand[2] ? encode_location(7, filter_num[0], channel_num[2]) : invalid_location;
-                amp[2] = cand[2] ? hsum[0].s2 : invalid_amplitude;
-                loc[3] = cand[3] ? encode_location(7, filter_num[0], channel_num[3]) : invalid_location;
-                amp[3] = cand[3] ? hsum[0].s3 : invalid_amplitude;
-                loc[4] = cand[4] ? encode_location(7, filter_num[1], channel_num[0]) : invalid_location;
-                amp[4] = cand[4] ? hsum[1].s0 : invalid_amplitude;
-                loc[5] = cand[5] ? encode_location(7, filter_num[1], channel_num[1]) : invalid_location;
-                amp[5] = cand[5] ? hsum[1].s1 : invalid_amplitude;
-                loc[6] = cand[6] ? encode_location(7, filter_num[1], channel_num[2]) : invalid_location;
-                amp[6] = cand[6] ? hsum[1].s2 : invalid_amplitude;
-                loc[7] = cand[7] ? encode_location(7, filter_num[1], channel_num[3]) : invalid_location;
-                amp[7] = cand[7] ? hsum[1].s3 : invalid_amplitude;
-                loc[8] = cand[8] ? encode_location(7, filter_num[2], channel_num[0]) : invalid_location;
-                amp[8] = cand[8] ? hsum[2].s0 : invalid_amplitude;
-                loc[9] = cand[9] ? encode_location(7, filter_num[2], channel_num[1]) : invalid_location;
-                amp[9] = cand[9] ? hsum[2].s1 : invalid_amplitude;
-                loc[10] = cand[10] ? encode_location(7, filter_num[2], channel_num[2]) : invalid_location;
-                amp[10] = cand[10] ? hsum[2].s2 : invalid_amplitude;
-                loc[11] = cand[11] ? encode_location(7, filter_num[2], channel_num[3]) : invalid_location;
-                amp[11] = cand[11] ? hsum[2].s3 : invalid_amplitude;
-                loc[12] = cand[12] ? encode_location(7, filter_num[3], channel_num[0]) : invalid_location;
-                amp[12] = cand[12] ? hsum[3].s0 : invalid_amplitude;
-                loc[13] = cand[13] ? encode_location(7, filter_num[3], channel_num[1]) : invalid_location;
-                amp[13] = cand[13] ? hsum[3].s1 : invalid_amplitude;
-                loc[14] = cand[14] ? encode_location(7, filter_num[3], channel_num[2]) : invalid_location;
-                amp[14] = cand[14] ? hsum[3].s2 : invalid_amplitude;
-                loc[15] = cand[15] ? encode_location(7, filter_num[3], channel_num[3]) : invalid_location;
-                amp[15] = cand[15] ? hsum[3].s3 : invalid_amplitude;
+                amp[0] = cand[0] ? hsum[0] : invalid_amplitude;
+                loc[1] = cand[1] ? encode_location(7, filter_num[1], channel_num[0]) : invalid_location;
+                amp[1] = cand[1] ? hsum[1] : invalid_amplitude;
+                loc[2] = cand[2] ? encode_location(7, filter_num[2], channel_num[0]) : invalid_location;
+                amp[2] = cand[2] ? hsum[2] : invalid_amplitude;
+                loc[3] = cand[3] ? encode_location(7, filter_num[3], channel_num[0]) : invalid_location;
+                amp[3] = cand[3] ? hsum[3] : invalid_amplitude;
+                loc[4] = cand[4] ? encode_location(7, filter_num[4], channel_num[0]) : invalid_location;
+                amp[4] = cand[4] ? hsum[4] : invalid_amplitude;
+                loc[5] = cand[5] ? encode_location(7, filter_num[5], channel_num[0]) : invalid_location;
+                amp[5] = cand[5] ? hsum[5] : invalid_amplitude;
+                loc[6] = cand[6] ? encode_location(7, filter_num[6], channel_num[0]) : invalid_location;
+                amp[6] = cand[6] ? hsum[6] : invalid_amplitude;
+                loc[7] = cand[7] ? encode_location(7, filter_num[7], channel_num[0]) : invalid_location;
+                amp[7] = cand[7] ? hsum[7] : invalid_amplitude;
+                loc[8] = cand[8] ? encode_location(7, filter_num[8], channel_num[0]) : invalid_location;
+                amp[8] = cand[8] ? hsum[8] : invalid_amplitude;
+                loc[9] = cand[9] ? encode_location(7, filter_num[9], channel_num[0]) : invalid_location;
+                amp[9] = cand[9] ? hsum[9] : invalid_amplitude;
+                loc[10] = cand[10] ? encode_location(7, filter_num[10], channel_num[0]) : invalid_location;
+                amp[10] = cand[10] ? hsum[10] : invalid_amplitude;
+                loc[11] = cand[11] ? encode_location(7, filter_num[11], channel_num[0]) : invalid_location;
+                amp[11] = cand[11] ? hsum[11] : invalid_amplitude;
+                loc[12] = cand[12] ? encode_location(7, filter_num[12], channel_num[0]) : invalid_location;
+                amp[12] = cand[12] ? hsum[12] : invalid_amplitude;
+                loc[13] = cand[13] ? encode_location(7, filter_num[13], channel_num[0]) : invalid_location;
+                amp[13] = cand[13] ? hsum[13] : invalid_amplitude;
+                loc[14] = cand[14] ? encode_location(7, filter_num[14], channel_num[0]) : invalid_location;
+                amp[14] = cand[14] ? hsum[14] : invalid_amplitude;
+                loc[15] = cand[15] ? encode_location(7, filter_num[15], channel_num[0]) : invalid_location;
+                amp[15] = cand[15] ? hsum[15] : invalid_amplitude;
 
                 uint slot = next;
                 next = (next + 1) & 63;
@@ -2415,50 +2467,50 @@ kernel void detect_8(float threshold,
     const float invalid_amplitude = -1.0f;
 
     for (uint group = 0; group < n_filter_groups; ++group) {
-        uint group_base = group * 4;
-        int filter_num[4];
-        bool filter_mask[4];
+        uint group_base = group * 16;
+        int filter_num[16];
+        bool filter_mask[16];
         #pragma unroll
-        for (uint p = 0; p < 4; ++p) {
+        for (uint p = 0; p < 16; ++p) {
             filter_num[p] = negative_filters ? - group_base - p : group_base + p;
             filter_mask[p] = group_base + p < n_filters;
         }
 
         for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
-            uint bundle_base = bundle * 4;
-            uint channel_num[4];
+            uint bundle_base = bundle * 1;
+            uint channel_num[1];
             #pragma unroll
-            for (uint q = 0; q < 4; ++q)
+            for (uint q = 0; q < 1; ++q)
                 channel_num[q] = bundle_base + q;
 
-            float4 hsum[4];
+            float hsum[16];
 
             #pragma unroll
-            for (uint p = 0; p < 4; ++p) {
-                float4 from_prev_hp = READ_CHANNEL(detect_to_detect[6][p]);
-                float4 from_sp = READ_CHANNEL(delay_to_detect[7][p]);
+            for (uint p = 0; p < 16; ++p) {
+                float from_prev_hp = READ_CHANNEL(detect_to_detect[6][p]);
+                float from_sp = READ_CHANNEL(delay_to_detect[7][p]);
                 hsum[p] = from_prev_hp + from_sp;
             }
 
 
             bool cand[16];
 
-            cand[0] = (hsum[0].s0 > threshold) & filter_mask[0];
-            cand[1] = (hsum[0].s1 > threshold) & filter_mask[0];
-            cand[2] = (hsum[0].s2 > threshold) & filter_mask[0];
-            cand[3] = (hsum[0].s3 > threshold) & filter_mask[0];
-            cand[4] = (hsum[1].s0 > threshold) & filter_mask[1];
-            cand[5] = (hsum[1].s1 > threshold) & filter_mask[1];
-            cand[6] = (hsum[1].s2 > threshold) & filter_mask[1];
-            cand[7] = (hsum[1].s3 > threshold) & filter_mask[1];
-            cand[8] = (hsum[2].s0 > threshold) & filter_mask[2];
-            cand[9] = (hsum[2].s1 > threshold) & filter_mask[2];
-            cand[10] = (hsum[2].s2 > threshold) & filter_mask[2];
-            cand[11] = (hsum[2].s3 > threshold) & filter_mask[2];
-            cand[12] = (hsum[3].s0 > threshold) & filter_mask[3];
-            cand[13] = (hsum[3].s1 > threshold) & filter_mask[3];
-            cand[14] = (hsum[3].s2 > threshold) & filter_mask[3];
-            cand[15] = (hsum[3].s3 > threshold) & filter_mask[3];
+            cand[0] = (hsum[0] > threshold) & filter_mask[0];
+            cand[1] = (hsum[1] > threshold) & filter_mask[1];
+            cand[2] = (hsum[2] > threshold) & filter_mask[2];
+            cand[3] = (hsum[3] > threshold) & filter_mask[3];
+            cand[4] = (hsum[4] > threshold) & filter_mask[4];
+            cand[5] = (hsum[5] > threshold) & filter_mask[5];
+            cand[6] = (hsum[6] > threshold) & filter_mask[6];
+            cand[7] = (hsum[7] > threshold) & filter_mask[7];
+            cand[8] = (hsum[8] > threshold) & filter_mask[8];
+            cand[9] = (hsum[9] > threshold) & filter_mask[9];
+            cand[10] = (hsum[10] > threshold) & filter_mask[10];
+            cand[11] = (hsum[11] > threshold) & filter_mask[11];
+            cand[12] = (hsum[12] > threshold) & filter_mask[12];
+            cand[13] = (hsum[13] > threshold) & filter_mask[13];
+            cand[14] = (hsum[14] > threshold) & filter_mask[14];
+            cand[15] = (hsum[15] > threshold) & filter_mask[15];
 
             bool any_cand = cand[0] | cand[1] | cand[2] | cand[3] | cand[4] | cand[5] | cand[6] | cand[7] | cand[8] | cand[9] | cand[10] | cand[11] | cand[12] | cand[13] | cand[14] | cand[15];
             if (any_cand) {
@@ -2466,37 +2518,37 @@ kernel void detect_8(float threshold,
                 float amp[16];
 
                 loc[0] = cand[0] ? encode_location(8, filter_num[0], channel_num[0]) : invalid_location;
-                amp[0] = cand[0] ? hsum[0].s0 : invalid_amplitude;
-                loc[1] = cand[1] ? encode_location(8, filter_num[0], channel_num[1]) : invalid_location;
-                amp[1] = cand[1] ? hsum[0].s1 : invalid_amplitude;
-                loc[2] = cand[2] ? encode_location(8, filter_num[0], channel_num[2]) : invalid_location;
-                amp[2] = cand[2] ? hsum[0].s2 : invalid_amplitude;
-                loc[3] = cand[3] ? encode_location(8, filter_num[0], channel_num[3]) : invalid_location;
-                amp[3] = cand[3] ? hsum[0].s3 : invalid_amplitude;
-                loc[4] = cand[4] ? encode_location(8, filter_num[1], channel_num[0]) : invalid_location;
-                amp[4] = cand[4] ? hsum[1].s0 : invalid_amplitude;
-                loc[5] = cand[5] ? encode_location(8, filter_num[1], channel_num[1]) : invalid_location;
-                amp[5] = cand[5] ? hsum[1].s1 : invalid_amplitude;
-                loc[6] = cand[6] ? encode_location(8, filter_num[1], channel_num[2]) : invalid_location;
-                amp[6] = cand[6] ? hsum[1].s2 : invalid_amplitude;
-                loc[7] = cand[7] ? encode_location(8, filter_num[1], channel_num[3]) : invalid_location;
-                amp[7] = cand[7] ? hsum[1].s3 : invalid_amplitude;
-                loc[8] = cand[8] ? encode_location(8, filter_num[2], channel_num[0]) : invalid_location;
-                amp[8] = cand[8] ? hsum[2].s0 : invalid_amplitude;
-                loc[9] = cand[9] ? encode_location(8, filter_num[2], channel_num[1]) : invalid_location;
-                amp[9] = cand[9] ? hsum[2].s1 : invalid_amplitude;
-                loc[10] = cand[10] ? encode_location(8, filter_num[2], channel_num[2]) : invalid_location;
-                amp[10] = cand[10] ? hsum[2].s2 : invalid_amplitude;
-                loc[11] = cand[11] ? encode_location(8, filter_num[2], channel_num[3]) : invalid_location;
-                amp[11] = cand[11] ? hsum[2].s3 : invalid_amplitude;
-                loc[12] = cand[12] ? encode_location(8, filter_num[3], channel_num[0]) : invalid_location;
-                amp[12] = cand[12] ? hsum[3].s0 : invalid_amplitude;
-                loc[13] = cand[13] ? encode_location(8, filter_num[3], channel_num[1]) : invalid_location;
-                amp[13] = cand[13] ? hsum[3].s1 : invalid_amplitude;
-                loc[14] = cand[14] ? encode_location(8, filter_num[3], channel_num[2]) : invalid_location;
-                amp[14] = cand[14] ? hsum[3].s2 : invalid_amplitude;
-                loc[15] = cand[15] ? encode_location(8, filter_num[3], channel_num[3]) : invalid_location;
-                amp[15] = cand[15] ? hsum[3].s3 : invalid_amplitude;
+                amp[0] = cand[0] ? hsum[0] : invalid_amplitude;
+                loc[1] = cand[1] ? encode_location(8, filter_num[1], channel_num[0]) : invalid_location;
+                amp[1] = cand[1] ? hsum[1] : invalid_amplitude;
+                loc[2] = cand[2] ? encode_location(8, filter_num[2], channel_num[0]) : invalid_location;
+                amp[2] = cand[2] ? hsum[2] : invalid_amplitude;
+                loc[3] = cand[3] ? encode_location(8, filter_num[3], channel_num[0]) : invalid_location;
+                amp[3] = cand[3] ? hsum[3] : invalid_amplitude;
+                loc[4] = cand[4] ? encode_location(8, filter_num[4], channel_num[0]) : invalid_location;
+                amp[4] = cand[4] ? hsum[4] : invalid_amplitude;
+                loc[5] = cand[5] ? encode_location(8, filter_num[5], channel_num[0]) : invalid_location;
+                amp[5] = cand[5] ? hsum[5] : invalid_amplitude;
+                loc[6] = cand[6] ? encode_location(8, filter_num[6], channel_num[0]) : invalid_location;
+                amp[6] = cand[6] ? hsum[6] : invalid_amplitude;
+                loc[7] = cand[7] ? encode_location(8, filter_num[7], channel_num[0]) : invalid_location;
+                amp[7] = cand[7] ? hsum[7] : invalid_amplitude;
+                loc[8] = cand[8] ? encode_location(8, filter_num[8], channel_num[0]) : invalid_location;
+                amp[8] = cand[8] ? hsum[8] : invalid_amplitude;
+                loc[9] = cand[9] ? encode_location(8, filter_num[9], channel_num[0]) : invalid_location;
+                amp[9] = cand[9] ? hsum[9] : invalid_amplitude;
+                loc[10] = cand[10] ? encode_location(8, filter_num[10], channel_num[0]) : invalid_location;
+                amp[10] = cand[10] ? hsum[10] : invalid_amplitude;
+                loc[11] = cand[11] ? encode_location(8, filter_num[11], channel_num[0]) : invalid_location;
+                amp[11] = cand[11] ? hsum[11] : invalid_amplitude;
+                loc[12] = cand[12] ? encode_location(8, filter_num[12], channel_num[0]) : invalid_location;
+                amp[12] = cand[12] ? hsum[12] : invalid_amplitude;
+                loc[13] = cand[13] ? encode_location(8, filter_num[13], channel_num[0]) : invalid_location;
+                amp[13] = cand[13] ? hsum[13] : invalid_amplitude;
+                loc[14] = cand[14] ? encode_location(8, filter_num[14], channel_num[0]) : invalid_location;
+                amp[14] = cand[14] ? hsum[14] : invalid_amplitude;
+                loc[15] = cand[15] ? encode_location(8, filter_num[15], channel_num[0]) : invalid_location;
+                amp[15] = cand[15] ? hsum[15] : invalid_amplitude;
 
                 uint slot = next;
                 next = (next + 1) & 63;

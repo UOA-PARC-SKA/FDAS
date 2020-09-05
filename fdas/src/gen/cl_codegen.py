@@ -92,8 +92,8 @@ def main():
     hms_n_planes = 8
     hms_detection_sz = 64
 
-    hms_group_sz = 4
-    hms_bundle_sz = 4
+    hms_group_sz = 16
+    hms_bundle_sz = 1
     hms_bundle_ty = "float" if hms_bundle_sz == 1 else f"float{hms_bundle_sz}"
     hms_dual_channel = False
 
