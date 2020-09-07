@@ -22,6 +22,7 @@
 from math import gcd, ceil
 from collections import defaultdict
 from mako.template import Template
+from argparse import ArgumentParser
 
 
 def get_output_mapping(n_out, k):
@@ -56,18 +57,26 @@ def bit_rev(x, bits):
 
 
 def main():
-    # TODO: build an ArgumentParser around this
+    parser = ArgumentParser(description="Generates FDAS architecture tailored to parameters")
+
+    parser.add_argument('-c', dest='cl_file', metavar='path', default='../device/fdas_gen.cl')
+    parser.add_argument('-g', dest='gen_info_file', metavar='path', default='../host/gen_info.h')
+    parser.add_argument('--n-engines', dest='fft_n_engines', type=int, default=4)
+    parser.add_argument('--group-sz', dest='hms_group_sz', type=int, default=8)
+    parser.add_argument('--bundle-sz', dest='hms_bundle_sz', type=int, default=2)
+    parser.add_argument('--mode', dest='mode', choices=["fpga", "emu"], default="fpga")
+
+    args = parser.parse_args()
 
     # Input parameters
-    mode = 'fpga'
-    if mode == 'fpga':
+    if args.mode == 'fpga':
         n_filters_per_accel_sign = 42
         n_taps = 421
-    elif mode == 'emu':
+    elif args.mode == 'emu':
         n_filters_per_accel_sign = 10
         n_taps = 106
     else:
-        raise RuntimeError(f"unknown mode: {mode}")
+        raise RuntimeError(f"unknown mode: {args.mode}")
 
     n_filters = n_filters_per_accel_sign + 1 + n_filters_per_accel_sign
 
@@ -81,7 +90,7 @@ def main():
     fft_n_points_per_terminal_log = fft_n_points_log - fft_n_parallel_log
     fft_n_points_per_terminal = 2 ** fft_n_points_per_terminal_log
 
-    fft_n_engines = 4
+    fft_n_engines = args.fft_n_engines
 
     # Frequency-domain FIR filter implementation with overlap-save algorithm
     fdf_tile_sz = fft_n_points
@@ -92,8 +101,8 @@ def main():
     hms_n_planes = 8
     hms_detection_sz = 64
 
-    hms_group_sz = 16
-    hms_bundle_sz = 1
+    hms_group_sz = args.hms_group_sz
+    hms_bundle_sz = args.hms_bundle_sz
     hms_bundle_ty = "float" if hms_bundle_sz == 1 else f"float{hms_bundle_sz}"
     hms_dual_channel = False
 
@@ -136,7 +145,7 @@ def main():
  */
 """
 
-    with open("../device/fdas_gen.cl", 'wt') as fdas_file:
+    with open(args.cl_file, 'wt') as fdas_file:
         fdas_file.write(copyright_header)
         fdas_file.write('#include "fft_4p.cl"\n')
         fdas_file.write(channels_template.render(**fdas_configuration))
@@ -153,7 +162,7 @@ def main():
             fdas_file.write(detect_template.render(k=h + 1, **fdas_configuration))
         fdas_file.write(store_cands_template.render(**fdas_configuration))
 
-    with open("../host/gen_info.h", 'wt') as gen_info_file:
+    with open(args.gen_info_file, 'wt') as gen_info_file:
         gen_info_file.write(copyright_header)
         gen_info_file.write(gen_info_template.render(**fdas_configuration))
 
