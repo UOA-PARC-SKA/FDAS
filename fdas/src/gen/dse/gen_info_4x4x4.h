@@ -48,6 +48,7 @@ namespace HMS {
     static const cl_uint  detection_sz              = 64;
     static const cl_uint  group_sz                  = 4;
     static const cl_uint  bundle_sz                 = 4;
+    static const cl_uint  slot_sz                   = 16;
     static const cl_uint  dual_channnel             = 0;
 
     static const     cl_uint lcm = 840;

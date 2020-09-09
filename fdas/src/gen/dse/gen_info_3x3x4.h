@@ -36,7 +36,7 @@ namespace FFT {
     static const cl_uint  n_parallel_log            = 2;
     static const cl_uint  n_points_per_terminal     = 512;
     static const cl_uint  n_points_per_terminal_log = 9;
-    static const cl_uint  n_engines                 = 4;
+    static const cl_uint  n_engines                 = 3;
 }
 namespace FDF {
     static const cl_uint  tile_sz                   = 2048;
