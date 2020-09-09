@@ -49,6 +49,7 @@ namespace HMS {
     static const cl_uint  detection_sz              = ${hms_detection_sz};
     static const cl_uint  group_sz                  = ${hms_group_sz};
     static const cl_uint  bundle_sz                 = ${hms_bundle_sz};
+    static const cl_uint  slot_sz                   = ${hms_slot_sz};
     static const cl_uint  dual_channnel             = ${int(hms_dual_channel)};
 
     static const     cl_uint lcm = ${lcm(list(range(1, hms_n_planes + 1)))};

@@ -5,11 +5,11 @@ kernel void store_cands(global uint * restrict detection_location,
 {
     for (uint d = 0; d < ${hms_n_planes * hms_detection_sz}; ++d) {
         #pragma unroll
-        for (uint x = 0; x < ${hms_group_sz * hms_bundle_sz}; ++x) {
+        for (uint x = 0; x < ${hms_slot_sz}; ++x) {
             uint location = READ_CHANNEL(detect_location_out[${hms_n_planes - 1}][x]);
             float amplitude = READ_CHANNEL(detect_amplitude_out[${hms_n_planes - 1}][x]);
-            detection_location[d * ${hms_group_sz * hms_bundle_sz} + x] = location;
-            detection_amplitude[d * ${hms_group_sz * hms_bundle_sz} + x] = amplitude;
+            detection_location[d * ${hms_slot_sz} + x] = location;
+            detection_amplitude[d * ${hms_slot_sz} + x] = amplitude;
         }
     }
 }

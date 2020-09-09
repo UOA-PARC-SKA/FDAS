@@ -25,11 +25,12 @@ kernel void detect_${k}(float threshold,
                      uint n_channel_bundles)
 {
 <%
+    from math import ceil, log2
     bundle_idx = lambda i: f".s{i:X}" if hms_bundle_sz > 1 else ""
     assert hms_detection_sz <= 64 and bin(hms_detection_sz).count('1') == 1  # power of 2
 %>\
-    uint location_buffer[${hms_detection_sz}][${hms_group_sz * hms_bundle_sz}];
-    float amplitude_buffer[${hms_detection_sz}][${hms_group_sz * hms_bundle_sz}];
+    uint location_buffer[${hms_detection_sz}][${hms_slot_sz}];
+    float amplitude_buffer[${hms_detection_sz}][${hms_slot_sz}];
 
     ulong valid = 0l;
     uint next = 0;
@@ -87,8 +88,8 @@ kernel void detect_${k}(float threshold,
 
             bool any_cand = ${' | '.join(f"cand[{x}]" for x in range(hms_group_sz * hms_bundle_sz))};
             if (any_cand) {
-                uint loc[${hms_group_sz * hms_bundle_sz}];
-                float amp[${hms_group_sz * hms_bundle_sz}];
+                uint loc[${hms_slot_sz}];
+                float amp[${hms_slot_sz}];
 
             % for p in range(hms_group_sz):
             % for q in range(hms_bundle_sz):
@@ -97,12 +98,16 @@ kernel void detect_${k}(float threshold,
                 amp[${x}] = cand[${x}] ? hsum[${p}]${bundle_idx(q)} : invalid_amplitude;
             % endfor
             % endfor
+            % for x in range(hms_group_sz * hms_bundle_sz, hms_slot_sz):
+                loc[${x}] = invalid_location;
+                amp[${x}] = invalid_amplitude;
+            % endfor
 
                 uint slot = next;
                 next = (next + 1) & ${hms_detection_sz - 1};
 
                 #pragma unroll
-                for (uint x = 0; x < ${hms_group_sz * hms_bundle_sz}; ++x) {
+                for (uint x = 0; x < ${hms_slot_sz}; ++x) {
                     location_buffer[slot][x] = loc[x];
                     amplitude_buffer[slot][x] = amp[x];
                 }
@@ -116,7 +121,7 @@ kernel void detect_${k}(float threshold,
         for (uint d = 0; d < ${hms_detection_sz}; ++d) {
             bool is_valid = (valid & (1l << d)) > 0;
             #pragma unroll
-            for (uint x = 0; x < ${hms_group_sz * hms_bundle_sz}; ++x) {
+            for (uint x = 0; x < ${hms_slot_sz}; ++x) {
             % if k == 1:
                 uint location = is_valid ? location_buffer[d][x] : invalid_location;
                 float amplitude = is_valid ? amplitude_buffer[d][x] : invalid_amplitude;
