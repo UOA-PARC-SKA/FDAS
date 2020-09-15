@@ -185,7 +185,7 @@ bool FDAS::check_dimensions(const FDAS::ShapeType &input_shape, const FDAS::Shap
         return false;
     }
 
-    if (input_shape[0] < FDF_INPUT_SZ) {
+    if (input_shape[0] < N_CHANNELS) {
         log << "[ERROR] Not enough input points" << endl;
         return false;
     }
@@ -230,10 +230,11 @@ bool FDAS::perform_ft_convolution(const FDAS::InputType &input, const FDAS::Shap
     cl_chk(square_and_discard_kernel->setArg<cl::Buffer>(0, *fop_buffer));
 
     // Copy input to device
-    cl_float2 zeros[FDF_TILE_OVERLAP];
-    memset(zeros, 0x0, sizeof(cl_float2) * FDF_TILE_OVERLAP);
+    cl_float2 zeros[FDF_TILE_SZ];
+    memset(zeros, 0x0, sizeof(cl_float2) * FDF_TILE_SZ);
     cl_chk(buffer_q.enqueueWriteBuffer(*input_buffer, true, 0, sizeof(cl_float2) * FDF_TILE_OVERLAP, zeros));
-    cl_chk(buffer_q.enqueueWriteBuffer(*input_buffer, true, sizeof(cl_float2) * FDF_TILE_OVERLAP, sizeof(cl_float2) * FDF_INPUT_SZ, input.data()));
+    cl_chk(buffer_q.enqueueWriteBuffer(*input_buffer, true, sizeof(cl_float2) * FDF_TILE_OVERLAP, sizeof(cl_float2) * N_CHANNELS, input.data()));
+    cl_chk(buffer_q.enqueueWriteBuffer(*input_buffer, true, sizeof(cl_float2) * (FDF_TILE_OVERLAP + N_CHANNELS), sizeof(cl_float2) * (FDF_PADDED_INPUT_SZ - FDF_TILE_OVERLAP - N_CHANNELS), zeros));
     cl_chk(buffer_q.enqueueWriteBuffer(*templates_buffer, true, 0, sizeof(cl_float2) * FDF_TEMPLATES_SZ, templates.data()));
     cl_chk(buffer_q.finish());
 
@@ -299,7 +300,7 @@ bool FDAS::retrieve_FOP(FDAS::FOPType &fop, FDAS::ShapeType &fop_shape) {
     cl_chk(buffer_q.enqueueReadBuffer(*fop_buffer, true, 0, sizeof(cl_float) * FOP_SZ, fop.data()));
     cl_chk(buffer_q.finish());
     fop_shape.push_back(N_FILTERS);
-    fop_shape.push_back(FDF_OUTPUT_SZ);
+    fop_shape.push_back(N_CHANNELS);
 
     return true;
 }
@@ -314,7 +315,7 @@ bool FDAS::retrieve_harmonic_planes(FDAS::HPType &harmonic_planes, FDAS::ShapeTy
     cl_chk(buffer_q.finish());
     harmonic_planes_shape.push_back(HMS_N_PLANES - 1);
     harmonic_planes_shape.push_back(N_FILTERS);
-    harmonic_planes_shape.push_back(FDF_OUTPUT_SZ);
+    harmonic_planes_shape.push_back(N_CHANNELS);
 
     return true;
 }
@@ -331,6 +332,14 @@ bool FDAS::retrieve_candidates(FDAS::DetLocType &detection_location, FDAS::Shape
 
     detection_location_shape.push_back(N_CANDIDATES);
     detection_amplitude_shape.push_back(N_CANDIDATES);
+
+    return true;
+}
+
+bool FDAS::inject_FOP(FDAS::FOPType &fop, FDAS::ShapeType &fop_shape) {
+    cl::CommandQueue buffer_q(*context, default_device, CL_QUEUE_PROFILING_ENABLE);
+    cl_chk(buffer_q.enqueueWriteBuffer(*fop_buffer, true, 0, sizeof(cl_float) * FOP_SZ, fop.data()));
+    cl_chk(buffer_q.finish());
 
     return true;
 }

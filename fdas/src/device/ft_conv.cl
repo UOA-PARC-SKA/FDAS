@@ -401,7 +401,7 @@ kernel void ifft()
  * (1 tile = FFT_N_POINTS_PER_TERMINAL work items, 1 batch)) in order to correctly associate the incoming data with a
  * tile and filter batch number.
  *
- * The FOP is written as a two-dimensional array `fop[N_FILTERS][FDF_OUTPUT_SZ]` in global memory. A single work item
+ * The FOP is written as a two-dimensional array `fop[N_FILTERS][N_CHANNELS]` in global memory. A single work item
  * exhibits a column-wise access pattern, and we currently rely on the the memory system's ability to coalesce at least
  * some of these accesses behind the scenes.
  */
@@ -435,8 +435,8 @@ kernel void square_and_discard(global float * restrict fop)
             // `element` is the index of the current item in its destination tile in the FOP, i.e. shifted by the
             // amount of overlap we need to discard
             int element = p * FFT_N_POINTS_PER_TERMINAL + step - FDF_TILE_OVERLAP;
-            if (element >= 0)
-                fop[(batch + f) * FDF_OUTPUT_SZ + tile * FDF_TILE_PAYLOAD + element] = buf[f][q];
+            if (element >= 0 && tile * FDF_TILE_PAYLOAD + element < N_CHANNELS)
+                fop[(batch + f) * N_CHANNELS + tile * FDF_TILE_PAYLOAD + element] = buf[f][q];
         }
     }
 }

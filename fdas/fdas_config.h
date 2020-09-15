@@ -48,7 +48,7 @@
 
 #elif defined(FDAS_EMU)
 
-#define N_CHANNELS                     (62176)
+#define N_CHANNELS                     (1 << 16)
 #define N_FILTERS_PER_ACCEL_SIGN       (10)
 #define N_FILTERS                      (N_FILTERS_PER_ACCEL_SIGN + 1 + N_FILTERS_PER_ACCEL_SIGN)
 #define N_TAPS                         (106)
@@ -88,19 +88,17 @@
 #define FDF_TILE_PAYLOAD               (FDF_TILE_SZ - FDF_TILE_OVERLAP)
 
 // Number of tiles required to handle the input spectrum
+#if N_CHANNELS % FDF_TILE_PAYLOAD == 0
 #define FDF_N_TILES                    (N_CHANNELS / FDF_TILE_PAYLOAD)
-
-// Number of channels that will actually be processed (some of high-frequency channels will be discarded)
-#define FDF_INPUT_SZ                   (FDF_N_TILES * FDF_TILE_PAYLOAD)
+#else
+#define FDF_N_TILES                    (N_CHANNELS / FDF_TILE_PAYLOAD + 1)
+#endif
 
 // Buffer size required to store zero-padded input
-#define FDF_PADDED_INPUT_SZ            (FDF_TILE_OVERLAP + FDF_INPUT_SZ)
+#define FDF_PADDED_INPUT_SZ            (FDF_TILE_OVERLAP + FDF_N_TILES * FDF_TILE_PAYLOAD)
 
 // Buffer size required to store zero-padded/partially overlapped and tiled input
 #define FDF_TILED_INPUT_SZ             (FDF_N_TILES * FDF_TILE_SZ)
-
-// Result size after applying one filter to all input tiles and discarding the overlapping elements
-#define FDF_OUTPUT_SZ                  (FDF_INPUT_SZ)
 
 // Buffer size to hold all filter coefficients
 #define FDF_TEMPLATES_SZ               (N_FILTERS * FDF_TILE_SZ)
@@ -108,7 +106,7 @@
 // === Filter-output plane =============================================================================================
 
 // Size of the filter-output plane (and of the harmonic planes as well)
-#define FOP_SZ                         (1l * N_FILTERS * FDF_OUTPUT_SZ)
+#define FOP_SZ                         (1l * N_FILTERS * N_CHANNELS)
 
 // === Harmonic summing ================================================================================================
 

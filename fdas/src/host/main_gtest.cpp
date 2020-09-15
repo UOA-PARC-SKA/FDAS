@@ -118,6 +118,13 @@ TEST_P(FDASTest, FT_Convolution) {
                            }
     ));
     npy::SaveArrayAsNumpy(fop_file(), false, fop_shape.size(), fop_shape.data(), fop);
+}
+
+TEST_P(FDASTest, Harmonic_Summing) {
+    FDAS pipeline(std::cerr);
+    ASSERT_TRUE(pipeline.initialise_accelerator(bitstream_file, FDAS::choose_first_platform, FDAS::choose_accelerator_devices));
+
+    ASSERT_TRUE(pipeline.inject_FOP(fop_ref, fop_shape_ref));
 
     ASSERT_TRUE(pipeline.perform_harmonic_summing(thresholds, thresholds_shape));
     if (HMS_STORE_PLANES) {

@@ -30,7 +30,7 @@
  *  -N_FILTERS_PER_ACCEL_SIGN *───────────────────────────┐
  *             ▲            ┆ │                           │
  *             │           -1 │                           │
- *     template/filter (f)  0 ├───────────────────────────┤FDF_OUTPUT_SZ
+ *     template/filter (f)  0 ├───────────────────────────┤N_CHANNELS
  *             │            1 │                           │
  *             ▼            ┆ │                           │
  *   N_FILTERS_PER_ACCEL_SIGN └───────────────────────────┘
@@ -39,7 +39,7 @@
  * It is important to keep in mind that while indices in the range [0, N_FILTERS) are used to access the FOP in memory,
  * the filter templates are actually numbered -N_FILTERS_PER_ACCEL_SIGN, ..., -1, 0, 1, ..., N_FILTERS_PER_ACCEL_SIGN
  * in the underlying science. It follows that the origin of the FOP (template 0, channel 0) has the memory address
- * `&fop[N_FILTERS_PER_ACCEL_SIGN * FDF_OUTPUT_SZ]`.
+ * `&fop[N_FILTERS_PER_ACCEL_SIGN * N_CHANNELS]`.
  *
  * We compute HMS_N_PLANES harmonic planes HP_k, defined as:
  *   HP_1(f,c) = FOP(f,c)                                             (1)
@@ -74,7 +74,7 @@
 #define HMS_UNROLL
 
 // Computes an index for accessing the FOP buffer
-#define FOP_IDX(filt, chan) ((filt + N_FILTERS_PER_ACCEL_SIGN) * FDF_OUTPUT_SZ + chan)
+#define FOP_IDX(filt, chan) ((filt + N_FILTERS_PER_ACCEL_SIGN) * N_CHANNELS + chan)
 
 #ifdef HMS_BASELINE
 /*
@@ -116,7 +116,7 @@ kernel void harmonic_summing(global float * restrict fop,
     // MAIN LOOP: Iterates over all (f,c) coordinates in the FOP
     #pragma loop_coalesce 2
     for (int f = -N_FILTERS_PER_ACCEL_SIGN; f <= N_FILTERS_PER_ACCEL_SIGN; ++f) {
-        for (uint c = 0; c < FDF_OUTPUT_SZ; ++c) {
+        for (uint c = 0; c < N_CHANNELS; ++c) {
             float hsum = 0.0f;
 
             // Iteratively compute HP_1(f,c), HP_2(f,c), ...
@@ -226,7 +226,7 @@ kernel void harmonic_summing(global volatile float * restrict fop,       // `vol
     //            inner loop
     for (int f = -N_FILTERS_PER_ACCEL_SIGN; f <= N_FILTERS_PER_ACCEL_SIGN; ++f) {
         HMS_CHANNEL_LOOP_UNROLL
-        for (uint c = 0; c < FDF_OUTPUT_SZ; ++c) {
+        for (uint c = 0; c < N_CHANNELS; ++c) {
             float hsum = 0.0f;
 
             // Completely unrolled to perform loading and thresholding for all HPs at once

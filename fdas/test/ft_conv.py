@@ -158,10 +158,7 @@ def compute_test_data(tim_file, args):
         tile_sz = args.test_data_tile_sz
         tile_olap = max_tmpl_len - 1  # overlap
         tile_pld = tile_sz - tile_olap  # payload
-        n_tile = n_chan // tile_pld
-        if n_tile * tile_pld < n_chan:
-            print(f"[WARN] Input tiling will discard the upper {n_chan - n_tile * tile_pld} channels")
-            n_chan = n_tile * tile_pld
+        n_tile = int(np.ceil(n_chan / tile_pld))
         tiles = np.empty((n_tile, tile_sz), dtype=np.complex64)
         for i in range(n_tile):
             if i == 0:
@@ -171,8 +168,14 @@ def compute_test_data(tim_file, args):
                 # all other tiles overlap with previous one
                 tiles[i][:tile_olap] = tiles[i - 1][-tile_olap:]
 
-            # fill the rest of tile with input data
-            tiles[i][tile_olap:] = ft[i * tile_pld:(i + 1) * tile_pld]
+            if i < n_tile - 1:
+                # fill the rest of tile with input data
+                tiles[i][tile_olap:] = ft[i * tile_pld:(i + 1) * tile_pld]
+            else:
+                # last tile: fill with the remaining input data, and pad with zeros
+                n_chan_last_tile = n_chan - i * tile_pld
+                tiles[i][tile_olap:tile_olap + n_chan_last_tile] = ft[i * tile_pld:]
+                tiles[i][tile_olap + n_chan_last_tile:] = np.zeros(tile_pld - n_chan_last_tile, dtype=np.complex64)
 
         # perform tile-wise Fourier transformation
         tiles = scipy.fft.fft(tiles)

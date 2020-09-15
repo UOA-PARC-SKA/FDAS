@@ -57,6 +57,8 @@ public:
 
     bool retrieve_FOP(FOPType &fop, ShapeType &fop_shape);
 
+    bool inject_FOP(FOPType &fop, ShapeType &fop_shape);
+
     bool retrieve_harmonic_planes(HPType &harmonic_planes, ShapeType &harmonic_planes_shape);
 
     bool retrieve_candidates(DetLocType &detection_location, ShapeType &detection_location_shape,
