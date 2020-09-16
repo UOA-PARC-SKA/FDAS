@@ -38,6 +38,8 @@ def main():
     test_args = parser.add_argument_group("test data")
     test_args.add_argument("--num-planes", dest='test_data_n_plane', type=int, metavar='n', default=8,
                            help="set number of harmonic planes to compute, i.e. FOP = HP_1, HP_2, ..., HP_n")
+    test_args.add_argument("--num-candidates-per-plane", dest='test_data_n_cand_per_plane', type=int, metavar='n',
+                           default=64, help="set desired number of candidates per plane (default: 64)")
 
     args = parser.parse_args()
 
@@ -96,11 +98,11 @@ def compute_test_data(fop_file, args):
     # save the planes
     np.save(f"{od}/hps_ref.npy", hps[1:])
 
-    # produce mock-up (!) thresholds
+    # produce mock-up (!) thresholds, resulting in the requested number of candidates per plane
     thrsh = np.empty(n_plane, dtype=np.float32)
     for h in range(n_plane):
-        rms = np.sqrt(np.mean(np.square(hps)))
-        thrsh[h] = (2.6 + h * 0.2) * rms
+        thrsh[h] = np.quantile(hps[h], q=1 - args.test_data_n_cand_per_plane / fop.size)
+        print(f"[INFO] Threshold for HP_{h + 1} is {thrsh[h]}")
 
     np.save(f"{od}/thresholds.npy", thrsh)
 
