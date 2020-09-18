@@ -328,11 +328,14 @@ kernel void mux_and_mult(global float2 * restrict tiles,
 
     #pragma unroll
     for (uint f = 0; f < N_FILTERS_PARALLEL; ++f) {
-        #pragma unroll
-        for (uint p = 0; p < FFT_N_PARALLEL; ++p) {
-            float2 prod = complex_mult(tiles    [tile        * FDF_TILE_SZ + step * FFT_N_PARALLEL + p],
-                                       templates[(batch + f) * FDF_TILE_SZ + step * FFT_N_PARALLEL + p]);
-            WRITE_CHANNEL(fft_in[f][p], prod);
+        uint tmpl = batch + f;
+        if (tmpl < N_FILTERS) {
+            #pragma unroll
+            for (uint p = 0; p < FFT_N_PARALLEL; ++p) {
+                float2 prod = complex_mult(tiles    [tile * FDF_TILE_SZ + step * FFT_N_PARALLEL + p],
+                                           templates[tmpl * FDF_TILE_SZ + step * FFT_N_PARALLEL + p]);
+                WRITE_CHANNEL(fft_in[f][p], prod);
+            }
         }
     }
 }
@@ -396,24 +399,34 @@ kernel void square_and_discard(global float * restrict fop,
     // Query all incoming channels, and compute the normalised spectral power of each point
     #pragma unroll
     for (uint f = 0; f < N_FILTERS_PARALLEL; ++f) {
-        #pragma unroll
-        for (uint p = 0; p < FFT_N_PARALLEL; ++p)
-            buf[f][p] = power_norm(READ_CHANNEL(fft_out[f][p]));
+        uint tmpl = batch + f;
+        if (tmpl < N_FILTERS) {
+            #pragma unroll
+            for (uint p = 0; p < FFT_N_PARALLEL; ++p)
+                buf[f][p] = power_norm(READ_CHANNEL(fft_out[f][p]));
+        } else {
+            #pragma unroll
+            for (uint p = 0; p < FFT_N_PARALLEL; ++p)
+                buf[f][p] = 0.0f;
+        }
     }
 
     // Discard invalid parts of tiles (cf. overlap-save algorithm) while writing to the FOP
     #pragma unroll
     for (uint f = 0; f < N_FILTERS_PARALLEL; ++f) {
-        #pragma unroll
-        for (uint p = 0; p < FFT_N_PARALLEL; ++p) {
-            // We need to undo the bit-reversal of the chunk indices, as the buffer was populated with FFT-ordered data
-            uint q = bit_reversed(p, FFT_N_PARALLEL_LOG);
+        uint tmpl = batch + f;
+        if (tmpl < N_FILTERS) {
+            #pragma unroll
+            for (uint p = 0; p < FFT_N_PARALLEL; ++p) {
+                // We need to undo the bit-reversal of the chunk indices, as the buffer was populated with FFT-ordered data
+                uint q = bit_reversed(p, FFT_N_PARALLEL_LOG);
 
-            // `element` is the index of the current item in its destination tile in the FOP, i.e. shifted by the
-            // amount of overlap we need to discard
-            int element = p * FFT_N_POINTS_PER_TERMINAL + step - FDF_TILE_OVERLAP;
-            if (element >= 0 && tile * FDF_TILE_PAYLOAD + element < n_channels)
-                fop[(batch + f) * n_channels + tile * FDF_TILE_PAYLOAD + element] = buf[f][q];
+                // `element` is the index of the current item in its destination tile in the FOP, i.e. shifted by the
+                // amount of overlap we need to discard
+                int element = p * FFT_N_POINTS_PER_TERMINAL + step - FDF_TILE_OVERLAP;
+                if (element >= 0 && tile * FDF_TILE_PAYLOAD + element < n_channels)
+                    fop[tmpl * n_channels + tile * FDF_TILE_PAYLOAD + element] = buf[f][q];
+            }
         }
     }
 }

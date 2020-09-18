@@ -74,6 +74,7 @@ public:
 private:
     cl_uint n_channels;
     cl_uint n_tiles;
+    cl_uint padding_last_tile;
     cl_uint padded_input_sz;
     cl_uint tiled_input_sz;
     cl_uint templates_sz;

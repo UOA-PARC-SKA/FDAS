@@ -151,8 +151,13 @@ bool FDAS::initialise_accelerator(std::string bitstream_file_name,
 
     // Buffers
     n_channels = n_input_channels;
-    n_tiles = (int) ceilf((float) n_channels / FDF_TILE_PAYLOAD);
-    padded_input_sz = FDF_TILE_OVERLAP + n_tiles * FDF_TILE_PAYLOAD;
+    n_tiles = n_channels / FDF_TILE_PAYLOAD + 1;
+    padding_last_tile = FDF_TILE_PAYLOAD - n_input_channels % FDF_TILE_PAYLOAD;
+    if (padding_last_tile == FDF_TILE_PAYLOAD) {
+        --n_tiles;
+        padding_last_tile = 0;
+    }
+    padded_input_sz = FDF_TILE_OVERLAP + n_channels + padding_last_tile; // NB: == (n_tiles - 1) * FDF_TILE_PAYLOAD + FDF_TILE_SZ;
     tiled_input_sz = n_tiles * FDF_TILE_SZ;
     templates_sz = N_FILTERS * FDF_TILE_SZ;
     fop_sz = N_FILTERS * n_input_channels;
@@ -232,7 +237,12 @@ bool FDAS::perform_ft_convolution(const FDAS::InputType &input, const FDAS::Shap
         ifft_queues.emplace_back(cl::CommandQueue(*context, default_device));
     cl::CommandQueue square_and_discard_q(*context, default_device);
 
-    const cl_uint n_batches = N_FILTERS / N_FILTERS_PARALLEL; // must divide evenly!
+    cl_uint n_batches = N_FILTERS / N_FILTERS_PARALLEL + 1;
+    cl_uint n_tmpl_in_last_batch = N_FILTERS % N_FILTERS_PARALLEL;
+    if (n_tmpl_in_last_batch == 0) {
+        --n_batches;
+        n_tmpl_in_last_batch = N_FILTERS_PARALLEL;
+    }
 
     // NDRange configuration
     cl::NDRange prep_local(FFT_N_POINTS_PER_TERMINAL);
@@ -248,8 +258,10 @@ bool FDAS::perform_ft_convolution(const FDAS::InputType &input, const FDAS::Shap
 
     cl_chk(mux_and_mult_kernel->setArg<cl::Buffer>(0, *tiles_buffer));
     cl_chk(mux_and_mult_kernel->setArg<cl::Buffer>(1, *templates_buffer));
-    for (int e = 0; e < N_FILTERS_PARALLEL; ++e)
-        cl_chk(ifft_kernels[e]->setArg<cl_uint>(0, n_batches * n_tiles));
+    for (int e = 0; e < N_FILTERS_PARALLEL; ++e) {
+        cl_uint n_batches_e = e < n_tmpl_in_last_batch ? n_batches : n_batches - 1;
+        cl_chk(ifft_kernels[e]->setArg<cl_uint>(0, n_batches_e * n_tiles));
+    }
     cl_chk(square_and_discard_kernel->setArg<cl::Buffer>(0, *fop_buffer));
     cl_chk(square_and_discard_kernel->setArg<cl_uint>(1, n_channels));
 
@@ -258,7 +270,7 @@ bool FDAS::perform_ft_convolution(const FDAS::InputType &input, const FDAS::Shap
     memset(zeros, 0x0, sizeof(cl_float2) * FDF_TILE_SZ);
     cl_chk(buffer_q.enqueueWriteBuffer(*input_buffer, true, 0, sizeof(cl_float2) * FDF_TILE_OVERLAP, zeros));
     cl_chk(buffer_q.enqueueWriteBuffer(*input_buffer, true, sizeof(cl_float2) * FDF_TILE_OVERLAP, sizeof(cl_float2) * n_channels, input.data()));
-    cl_chk(buffer_q.enqueueWriteBuffer(*input_buffer, true, sizeof(cl_float2) * (FDF_TILE_OVERLAP + n_channels), sizeof(cl_float2) * (padded_input_sz - n_channels - FDF_TILE_OVERLAP), zeros));
+    cl_chk(buffer_q.enqueueWriteBuffer(*input_buffer, true, sizeof(cl_float2) * (FDF_TILE_OVERLAP + n_channels), sizeof(cl_float2) * padding_last_tile, zeros));
     cl_chk(buffer_q.enqueueWriteBuffer(*templates_buffer, true, 0, sizeof(cl_float2) * templates_sz, templates.data()));
     cl_chk(buffer_q.finish());
 

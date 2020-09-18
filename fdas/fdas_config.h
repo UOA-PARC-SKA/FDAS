@@ -36,9 +36,8 @@
 // Maximum number of filter taps
 #define N_TAPS                         (421)
 
-// Set how many filters are processed in parallel. Currently, the number of parallel filters must evenly divide the
-// total number of filters
-#define N_FILTERS_PARALLEL             (5)
+// Set how many filters are processed in parallel
+#define N_FILTERS_PARALLEL             (4)
 
 // === FFT engine configuration ========================================================================================
 
