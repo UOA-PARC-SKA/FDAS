@@ -151,7 +151,7 @@ inline float power_norm(float2 a)
  *                     a)                    │                 b)                  │            c)
  */
 __attribute__((reqd_work_group_size(FFT_N_POINTS_PER_TERMINAL, 1, 1)))
-kernel void tile_input(global float2 * restrict input)
+kernel void tile_input(global volatile float2 * restrict input)
 {
     // Buffer used to reorder the chunks in the current tile. Each chunk resides in its own memory bank.
     local float2 __attribute__((bank_bits(10,9))) buf[FFT_N_PARALLEL][FFT_N_POINTS_PER_TERMINAL];
@@ -319,8 +319,8 @@ kernel void store_tiles(global float2 * restrict tiles)
  * output channels without reordering.
  */
 __attribute__((reqd_work_group_size(FFT_N_POINTS_PER_TERMINAL, 1, 1)))
-kernel void mux_and_mult(global float2 * restrict tiles,
-                         global float2 * restrict templates)
+kernel void mux_and_mult(global volatile float2 * restrict tiles,
+                         global volatile float2 * restrict templates)
 {
     uint batch = get_group_id(1) * N_FILTERS_PARALLEL;
     uint tile = get_group_id(0);

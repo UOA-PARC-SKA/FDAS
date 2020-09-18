@@ -227,6 +227,12 @@ kernel void harmonic_summing(global volatile float * restrict fop,       // `vol
         }
     }
 
+    // Preload the thresholds
+    float thrsh[HMS_N_PLANES];
+    #pragma unroll
+    for (uint h = 0; h < HMS_N_PLANES; ++h)
+        thrsh[h] = thresholds[h];
+
     // MAIN LOOP: Iterates over all (f,c) coordinates in the FOP, handling HMS_X-many channels per iteration of the
     //            inner loop
     for (int f = -N_FILTERS_PER_ACCEL_SIGN; f <= N_FILTERS_PER_ACCEL_SIGN; ++f) {
@@ -247,7 +253,7 @@ kernel void harmonic_summing(global volatile float * restrict fop,       // `vol
                 hsum += fop[fop_idx(f_k, c_k, n_channels)];
 
                 // If we have a candidate, store it in the detection buffers and perform bookkeeping
-                if (hsum > thresholds[h]) {
+                if (hsum > thrsh[h]) {
                     uint x = c % HMS_X;
                     uint slot = next_slot[x][h];
                     location_buf[slot][x][h] = HMS_ENCODE_LOCATION(k, f, c);
