@@ -93,13 +93,11 @@
 // Include a 4-parallel FFT engine
 #include "fft_4p.cl"
 
-// Channels from and to the (forward) FFT engine
-channel float2 fft_in[FFT_N_PARALLEL] __attribute__((depth(0)));
-channel float2 fft_out[FFT_N_PARALLEL] __attribute__((depth(0)));
-
-// Channels from and to the inverse FFT engines
-channel float2 ifft_in[N_FILTERS_PARALLEL][FFT_N_PARALLEL] __attribute__((depth(0)));
-channel float2 ifft_out[N_FILTERS_PARALLEL][FFT_N_PARALLEL] __attribute__((depth(0)));
+// Channels from and to the FFT engines. Indices 0..N_FILTERS_PARALLEL-1 are
+// connected to the iFFT engines; index N_FILTERS_PARALLEL is used by to the
+// (forward) FFT engine
+channel float2 fft_in[N_FILTERS_PARALLEL + 1][FFT_N_PARALLEL] __attribute__((depth(0)));
+channel float2 fft_out[N_FILTERS_PARALLEL + 1][FFT_N_PARALLEL] __attribute__((depth(0)));
 
 // Performs the FFT-typical bit-reversal
 inline uint bit_reversed(uint x, uint bits)
@@ -178,25 +176,23 @@ kernel void tile_input(global float2 * restrict input)
     // Feed FFT_N_PARALLEL points to the FFT engine [Fig. c)]
     #pragma unroll
     for (uint p = 0; p < FFT_N_PARALLEL; ++p)
-        WRITE_CHANNEL(fft_in[p], buf[p][step]);
+        WRITE_CHANNEL(fft_in[N_FILTERS_PARALLEL][p], buf[p][step]);
 }
 
 /*
- * `fft` -- single-work item kernel, autorun
- *
- * The kernel uses a pipelined radix-2^2 feed-forward FFT architecture, as described in:
+ * The kernels use a pipelined radix-2^2 feed-forward FFT architecture, as described in:
  *   M. Garrido, J. Grajal, M. A. Sanchez, and O. Gustafsson, ‘Pipelined Radix-2^k Feedforward FFT Architectures’,
  *     IEEE Trans. VLSI Syst., vol. 21, no. 1, 2013, doi: 10.1109/TVLSI.2011.2178275
  *
  * See also 'fft_4p.cl' for more implementation details.
  *
- * The kernel expects that FDF_N_TILES tiles are fed back-to-back to the input channels. The FFT engine requires
+ * This implementation expects that `n_tiles` tiles are fed back-to-back to the input channels. The FFT engine requires
  * FFT_N_POINTS_PER_TERMINAL steps to process the tile, but its outputs are in bit-reversed order. Therefore we collect
  * all points in their natural order, and write them to the output channels with an additional delay of
- * FFT_N_POINTS_PER_TERMINAL steps. The kernel automatically flushes the engine with zeros after all tiles have been
+ * FFT_N_POINTS_PER_TERMINAL steps. This function automatically flushes the engine with zeros after all tiles have been
  * consumed, and handles the double buffering required for the continuous output reordering.
  *
- * The data flow through the kernel (and the FFT engine in particular, cf. Fig. 3 in the paper) is illustrated below:
+ * The data flow through the FFT engine (cf. Fig. 3 in the paper) is illustrated below:
  *
  *  N = FFT_N_POINTS, P = FFT_N_PARALLEL, M = FFT_N_POINTS_PER_TERMINAL = N / P
  *              ~~~ shown here for N = 2048, P = 4 and M = 512 ~~~                              x is stored in:   x is written to
@@ -223,10 +219,9 @@ kernel void tile_input(global float2 * restrict input)
  *                                                                                                  (double
  *                                                                                                 buffering)
  */
-__attribute__((autorun))
-__attribute__((max_global_work_dim(0)))
-__attribute__((num_compute_units(1)))
-kernel void fft()
+inline void do_fft(const uint n_tiles,
+                   const uint is_inverse,
+                   const uint channel_num)
 {
     // (Double) buffers used for result re-ordering
     float2 __attribute__((bank_bits(11))) buf[2][FFT_N_POINTS_PER_TERMINAL][FFT_N_PARALLEL];
@@ -237,9 +232,9 @@ kernel void fft()
     // Buffers to hold engine's input/output in each iteration
     float2x4 data;
 
-    // Process FDF_N_TILES actual tiles, +2 tiles of zeros in order to flush the engine and the output reordering stage
+    // Process n_tiles actual tiles, +2 tiles of zeros in order to flush the engine and the output reordering stage
     #pragma loop_coalesce
-    for (uint t = 0; t < FDF_N_TILES + 2; ++t) {
+    for (uint t = 0; t < n_tiles + 2; ++t) {
         for (uint s = 0; s < FFT_N_POINTS_PER_TERMINAL; ++s) {
             if (t >= 1) {
                 // Valid results are available after FFT_N_POINTS_PER_TERMINAL steps, i.e. after 1 tile was consumed
@@ -251,23 +246,36 @@ kernel void fft()
                 // Valid results in natural order are available after 2 tiles were consumed
                 #pragma unroll
                 for (uint p = 0; p < FFT_N_PARALLEL; ++p)
-                    WRITE_CHANNEL(fft_out[p], buf[t & 1][s][p]);
+                    WRITE_CHANNEL(fft_out[channel_num][p], buf[t & 1][s][p]);
             }
 
             // Read actual input from the channels, respectively inject zeros to flush the pipeline
-            if (t < FDF_N_TILES) {
+            if (t < n_tiles) {
                 #pragma unroll
                 for (uint p = 0; p < FFT_N_PARALLEL; ++p)
-                    data.i[p] = READ_CHANNEL(fft_in[p]);
+                    data.i[p] = READ_CHANNEL(fft_in[channel_num][p]);
             } else {
                 data.i0 = data.i1 = data.i2 = data.i3 = 0;
             }
 
             // Perform one step of the FFT engine
-            data = fft_step(data, s, fft_delay_elements, 0 /* = forward FFT */, FFT_N_POINTS_LOG);
+            data = fft_step(data, s, fft_delay_elements, is_inverse, FFT_N_POINTS_LOG);
         }
     }
 }
+
+// Macro to instantiate FFT engine as a kernel
+#define FFT_KERNEL(name, is_inverse, channel_num) \
+__attribute__((max_global_work_dim(0)))           \
+kernel void name (const uint n_tiles)             \
+{                                                 \
+    do_fft(n_tiles, is_inverse, channel_num);     \
+}
+
+/*
+ * `fft` -- single-work item kernel
+ */
+FFT_KERNEL(fft, 0, N_FILTERS_PARALLEL)
 
 /*
  * `store_tiles` -- NDRange kernel
@@ -296,7 +304,7 @@ kernel void store_tiles(global float2 * restrict tiles)
 
     #pragma unroll
     for (uint p = 0; p < FFT_N_PARALLEL; ++p)
-       tiles[tile * FDF_TILE_SZ + step * FFT_N_PARALLEL + p] = READ_CHANNEL(fft_out[p]);
+       tiles[tile * FDF_TILE_SZ + step * FFT_N_PARALLEL + p] = READ_CHANNEL(fft_out[N_FILTERS_PARALLEL][p]);
 }
 
 /*
@@ -324,72 +332,40 @@ kernel void mux_and_mult(global float2 * restrict tiles,
         for (uint p = 0; p < FFT_N_PARALLEL; ++p) {
             float2 prod = complex_mult(tiles    [tile        * FDF_TILE_SZ + step * FFT_N_PARALLEL + p],
                                        templates[(batch + f) * FDF_TILE_SZ + step * FFT_N_PARALLEL + p]);
-            WRITE_CHANNEL(ifft_in[f][p], prod);
+            WRITE_CHANNEL(fft_in[f][p], prod);
         }
     }
 }
 
 /*
- * `ifft` -- single-work item kernel, autorun, N_FILTERS_PARALLEL instances
- *
- * This kernel is almost identical to `fft`. Differences:
- *  - hard-wired to perform inverse FFT
- *  - instantiated N_FILTERS_PARALLEL times
- *  - processes (N_FILTER_BATCHES * FDF_N_TILES)-many tiles, as provided by kernel `mux_and_mult`
+ * `ifft_<n>` -- single-work item kernels
  *
  * Note: Ideally, we would leave one instance configurable to perform both directions of the FT, and save kernel `fft`
  *       altogether. However it seems difficult to use a particular compute unit in different stages of the pipeline
  *       (main problem: each channel is statically connected to a source and a sink kernel).
  */
-__attribute__((autorun))
-__attribute__((max_global_work_dim(0)))
-__attribute__((num_compute_units(N_FILTERS_PARALLEL)))
-kernel void ifft()
-{
-    // The compute unit ID is used to connect each instance to the correct set of I/O channels
-    uint cid = get_compute_id(0);
-
-    // (Double) buffers used for result re-ordering
-    float2 __attribute__((bank_bits(11))) buf[2][FFT_N_POINTS_PER_TERMINAL][FFT_N_PARALLEL];
-
-    // Sliding window arrays, used internally by the FFT engine for data reordering
-    float2 fft_delay_elements[FFT_N_POINTS + FFT_N_PARALLEL * (FFT_N_POINTS_LOG - 3)];
-
-    // Buffers to hold engine's input/output in each iteration
-    float2x4 data;
-
-    // Process N_FILTER_BATCHES * FDF_N_TILES actual tiles, +2 tiles of zeros in order to flush the engine and the
-    // output reordering stage
-    #pragma loop_coalesce
-    for (uint t = 0; t < N_FILTER_BATCHES * FDF_N_TILES + 2; ++t) {
-        for (uint s = 0; s < FFT_N_POINTS_PER_TERMINAL; ++s) {
-            if (t >= 1) {
-                // Valid results are available after FFT_N_POINTS_PER_TERMINAL steps, i.e. after 1 tile was consumed
-                #pragma unroll
-                for (uint p = 0; p < FFT_N_PARALLEL; ++p)
-                    buf[1 - (t & 1)][bit_reversed(s, FFT_N_POINTS_PER_TERMINAL_LOG)][p] = data.i[p];
-            }
-            if (t >= 2) {
-                // Valid results in natural order are available after 2 tiles were consumed
-                #pragma unroll
-                for (uint p = 0; p < FFT_N_PARALLEL; ++p)
-                    WRITE_CHANNEL(ifft_out[cid][p], buf[t & 1][s][p]);
-            }
-
-            // Read actual input from the channels, respectively inject zeros to flush the pipeline
-            if (t < N_FILTER_BATCHES * FDF_N_TILES) {
-                #pragma unroll
-                for (uint p = 0; p < FFT_N_PARALLEL; ++p)
-                    data.i[p] = READ_CHANNEL(ifft_in[cid][p]);
-            } else {
-                data.i0 = data.i1 = data.i2 = data.i3 = 0;
-            }
-
-            // Perform one step of the FFT engine
-            data = fft_step(data, s, fft_delay_elements, 1 /* = inverse FFT */, FFT_N_POINTS_LOG);
-        }
-    }
-}
+FFT_KERNEL(ifft_0, 1, 0)
+#if N_FILTERS_PARALLEL > 1
+FFT_KERNEL(ifft_1, 1, 1)
+#if N_FILTERS_PARALLEL > 2
+FFT_KERNEL(ifft_2, 1, 2)
+#if N_FILTERS_PARALLEL > 3
+FFT_KERNEL(ifft_3, 1, 3)
+#if N_FILTERS_PARALLEL > 4
+FFT_KERNEL(ifft_4, 1, 4)
+#if N_FILTERS_PARALLEL > 5
+FFT_KERNEL(ifft_5, 1, 5)
+#if N_FILTERS_PARALLEL > 6
+FFT_KERNEL(ifft_6, 1, 6)
+#if N_FILTERS_PARALLEL > 7
+#error "Instantiate more iFFT kernels"
+#endif
+#endif
+#endif
+#endif
+#endif
+#endif
+#endif
 
 /*
  * `square_and_discard` -- NDRange kernel, 2D
@@ -406,7 +382,8 @@ kernel void ifft()
  * some of these accesses behind the scenes.
  */
 __attribute__((reqd_work_group_size(FFT_N_POINTS_PER_TERMINAL, 1, 1)))
-kernel void square_and_discard(global float * restrict fop)
+kernel void square_and_discard(global float * restrict fop,
+                               const uint n_channels)
 {
     // Private buffer to collect the output from one step of the `ifft` instances
     float buf[N_FILTERS_PARALLEL][FFT_N_PARALLEL];
@@ -421,7 +398,7 @@ kernel void square_and_discard(global float * restrict fop)
     for (uint f = 0; f < N_FILTERS_PARALLEL; ++f) {
         #pragma unroll
         for (uint p = 0; p < FFT_N_PARALLEL; ++p)
-            buf[f][p] = power_norm(READ_CHANNEL(ifft_out[f][p]));
+            buf[f][p] = power_norm(READ_CHANNEL(fft_out[f][p]));
     }
 
     // Discard invalid parts of tiles (cf. overlap-save algorithm) while writing to the FOP
@@ -435,8 +412,8 @@ kernel void square_and_discard(global float * restrict fop)
             // `element` is the index of the current item in its destination tile in the FOP, i.e. shifted by the
             // amount of overlap we need to discard
             int element = p * FFT_N_POINTS_PER_TERMINAL + step - FDF_TILE_OVERLAP;
-            if (element >= 0 && tile * FDF_TILE_PAYLOAD + element < N_CHANNELS)
-                fop[(batch + f) * N_CHANNELS + tile * FDF_TILE_PAYLOAD + element] = buf[f][q];
+            if (element >= 0 && tile * FDF_TILE_PAYLOAD + element < n_channels)
+                fop[(batch + f) * n_channels + tile * FDF_TILE_PAYLOAD + element] = buf[f][q];
         }
     }
 }

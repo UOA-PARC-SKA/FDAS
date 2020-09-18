@@ -96,7 +96,7 @@ protected:
 
 TEST_P(FDASTest, FT_Convolution) {
     FDAS pipeline(std::cerr);
-    ASSERT_TRUE(pipeline.initialise_accelerator(bitstream_file, FDAS::choose_first_platform, FDAS::choose_accelerator_devices));
+    ASSERT_TRUE(pipeline.initialise_accelerator(bitstream_file, FDAS::choose_first_platform, FDAS::choose_accelerator_devices, input.size()));
 
     ASSERT_TRUE(pipeline.perform_ft_convolution(input, input_shape, templates, templates_shape));
 
@@ -122,7 +122,7 @@ TEST_P(FDASTest, FT_Convolution) {
 
 TEST_P(FDASTest, Harmonic_Summing) {
     FDAS pipeline(std::cerr);
-    ASSERT_TRUE(pipeline.initialise_accelerator(bitstream_file, FDAS::choose_first_platform, FDAS::choose_accelerator_devices));
+    ASSERT_TRUE(pipeline.initialise_accelerator(bitstream_file, FDAS::choose_first_platform, FDAS::choose_accelerator_devices, input.size()));
 
     ASSERT_TRUE(pipeline.inject_FOP(fop_ref, fop_shape_ref));
 
@@ -192,13 +192,8 @@ int main(int argc, char **argv) {
 
     ::testing::InitGoogleTest(&argc, argv);
 
-    if (TARGET_IS_FPGA) {
-        FDASTest::bitstream_file = "bin/fdas.aocx";
-        FDASTest::templates_file = "../../fdas/tmpl/fdas_templates_85_350_ft_p4.npy";
-    } else {
-        FDASTest::bitstream_file = "bin/fdas_emu.aocx";
-        FDASTest::templates_file = "../../fdas/tmpl/fdas_templates_21_87.5_ft_p4.npy";
-    }
+    FDASTest::bitstream_file = "bin/fdas.aocx";
+    FDASTest::templates_file = "../../fdas/tmpl/fdas_templates_85_350_ft_p4.npy";
 
     return RUN_ALL_TESTS();
 }

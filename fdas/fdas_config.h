@@ -27,11 +27,6 @@
 
 // === Inputs ==========================================================================================================
 
-#if defined(FDAS_FPGA)
-
-// Number of channels in the input spectrum
-#define N_CHANNELS                     (1 << 22)
-
 // The filter templates correspond to different accelerations to test for. There are two equally-sized groups of
 // templates which only differ in the sign of the acceleration. Additionally, one filter, located between the groups,
 // just forwards the input signal.
@@ -41,25 +36,9 @@
 // Maximum number of filter taps
 #define N_TAPS                         (421)
 
-// Set how many filters are processed in parallel, and in consequence, how many batches are needed to apply all filters.
-// Currently, the batch size must evenly divide the total number of filters
+// Set how many filters are processed in parallel. Currently, the number of parallel filters must evenly divide the
+// total number of filters
 #define N_FILTERS_PARALLEL             (5)
-#define N_FILTER_BATCHES               (N_FILTERS / N_FILTERS_PARALLEL)
-
-#elif defined(FDAS_EMU)
-
-#define N_CHANNELS                     (1 << 16)
-#define N_FILTERS_PER_ACCEL_SIGN       (10)
-#define N_FILTERS                      (N_FILTERS_PER_ACCEL_SIGN + 1 + N_FILTERS_PER_ACCEL_SIGN)
-#define N_TAPS                         (106)
-#define N_FILTERS_PARALLEL             (3)
-#define N_FILTER_BATCHES               (N_FILTERS / N_FILTERS_PARALLEL)
-
-#else
-
-#error("FDAS mode undefined")
-
-#endif
 
 // === FFT engine configuration ========================================================================================
 
@@ -87,27 +66,6 @@
 #define FDF_TILE_OVERLAP               (N_TAPS - 1)
 #define FDF_TILE_PAYLOAD               (FDF_TILE_SZ - FDF_TILE_OVERLAP)
 
-// Number of tiles required to handle the input spectrum
-#if N_CHANNELS % FDF_TILE_PAYLOAD == 0
-#define FDF_N_TILES                    (N_CHANNELS / FDF_TILE_PAYLOAD)
-#else
-#define FDF_N_TILES                    (N_CHANNELS / FDF_TILE_PAYLOAD + 1)
-#endif
-
-// Buffer size required to store zero-padded input
-#define FDF_PADDED_INPUT_SZ            (FDF_TILE_OVERLAP + FDF_N_TILES * FDF_TILE_PAYLOAD)
-
-// Buffer size required to store zero-padded/partially overlapped and tiled input
-#define FDF_TILED_INPUT_SZ             (FDF_N_TILES * FDF_TILE_SZ)
-
-// Buffer size to hold all filter coefficients
-#define FDF_TEMPLATES_SZ               (N_FILTERS * FDF_TILE_SZ)
-
-// === Filter-output plane =============================================================================================
-
-// Size of the filter-output plane (and of the harmonic planes as well)
-#define FOP_SZ                         (1l * N_FILTERS * N_CHANNELS)
-
 // === Harmonic summing ================================================================================================
 
 // Number of harmonic planes to consider, i.e. FOP = HP_1, HP_2, ..., HP_{HMS_N_PLANES}
@@ -118,9 +76,6 @@
 
 // If true, explicitly write harmonic planes to memory, otherwise compare FOP amplitudes to thresholds on-the-fly
 #define HMS_STORE_PLANES               (false)
-
-// Buffer size to store the harmonic planes (-1 because the FOP is already in its own buffer).
-#define HMS_PLANES_SZ                  (1l * (HMS_N_PLANES - 1) * FOP_SZ)
 
 // Format used to encode a detection location in a 32-bit unsigned integer:
 //   ┌───┬───────┬──────────────────────┐
@@ -141,12 +96,3 @@
 
 // Maximum number of pulsar candidates returned from the FDAS module
 #define N_CANDIDATES                   (HMS_N_PLANES * HMS_DETECTION_SZ)
-
-// === Misc ============================================================================================================
-
-// Define a value that we can be used directly in C++ code
-#if defined(FDAS_FPGA)
-#define TARGET_IS_FPGA                 (true)
-#else
-#define TARGET_IS_FPGA                 (false)
-#endif

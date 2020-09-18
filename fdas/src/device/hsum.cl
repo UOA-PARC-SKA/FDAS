@@ -74,7 +74,10 @@
 #define HMS_UNROLL
 
 // Computes an index for accessing the FOP buffer
-#define FOP_IDX(filt, chan) ((filt + N_FILTERS_PER_ACCEL_SIGN) * N_CHANNELS + chan)
+inline ulong fop_idx(int filt, uint chan, uint n_channels)
+{
+    return (filt + N_FILTERS_PER_ACCEL_SIGN) * n_channels + chan;
+}
 
 #ifdef HMS_BASELINE
 /*
@@ -88,6 +91,7 @@
  */
 __attribute__((max_global_work_dim(0)))
 kernel void harmonic_summing(global float * restrict fop,
+                             const uint n_channels,
                              global float * restrict thresholds,
                              global uint * restrict detection_location,
                              global float * restrict detection_amplitude
@@ -116,7 +120,7 @@ kernel void harmonic_summing(global float * restrict fop,
     // MAIN LOOP: Iterates over all (f,c) coordinates in the FOP
     #pragma loop_coalesce 2
     for (int f = -N_FILTERS_PER_ACCEL_SIGN; f <= N_FILTERS_PER_ACCEL_SIGN; ++f) {
-        for (uint c = 0; c < N_CHANNELS; ++c) {
+        for (uint c = 0; c < n_channels; ++c) {
             float hsum = 0.0f;
 
             // Iteratively compute HP_1(f,c), HP_2(f,c), ...
@@ -129,7 +133,7 @@ kernel void harmonic_summing(global float * restrict fop,
                 int c_k = c / k;
 
                 // After adding SP_k(f,c), `hsum` represents HP_k(f,c)
-                hsum += fop[FOP_IDX(f_k, c_k)];
+                hsum += fop[fop_idx(f_k, c_k, n_channels)];
 
                 // If we have a candidate, store it in the detection buffers and perform bookkeeping
                 if (hsum > thresholds[h]) {
@@ -142,7 +146,7 @@ kernel void harmonic_summing(global float * restrict fop,
 
                 #if HMS_STORE_PLANES
                 if (h > 0) // do not copy the FOP
-                    harmonic_planes[(h-1) * FOP_SZ + FOP_IDX(f, c)] = hsum;
+                    harmonic_planes[(h-1) * (N_FILTERS * n_channels) + fop_idx(f, c, n_channels)] = hsum;
                 #endif
             }
         }
@@ -199,6 +203,7 @@ kernel void harmonic_summing(global float * restrict fop,
  */
 __attribute__((max_global_work_dim(0)))
 kernel void harmonic_summing(global volatile float * restrict fop,       // `volatile` to disable private caches
+                             const uint n_channels,
                              global float * restrict thresholds,
                              global uint * restrict detection_location,
                              global float * restrict detection_amplitude
@@ -226,7 +231,7 @@ kernel void harmonic_summing(global volatile float * restrict fop,       // `vol
     //            inner loop
     for (int f = -N_FILTERS_PER_ACCEL_SIGN; f <= N_FILTERS_PER_ACCEL_SIGN; ++f) {
         HMS_CHANNEL_LOOP_UNROLL
-        for (uint c = 0; c < N_CHANNELS; ++c) {
+        for (uint c = 0; c < n_channels; ++c) {
             float hsum = 0.0f;
 
             // Completely unrolled to perform loading and thresholding for all HPs at once
@@ -239,7 +244,7 @@ kernel void harmonic_summing(global volatile float * restrict fop,       // `vol
                 int c_k = c / k;
 
                 // After adding SP_k(f,c), `hsum` represents HP_k(f,c)
-                hsum += fop[FOP_IDX(f_k, c_k)];
+                hsum += fop[fop_idx(f_k, c_k, n_channels)];
 
                 // If we have a candidate, store it in the detection buffers and perform bookkeeping
                 if (hsum > thresholds[h]) {
@@ -253,7 +258,7 @@ kernel void harmonic_summing(global volatile float * restrict fop,       // `vol
 
                 #if HMS_STORE_PLANES
                 if (h > 0) // do not copy the FOP
-                    harmonic_planes[(h-1) * FOP_SZ + FOP_IDX(f, c)] = hsum;
+                    harmonic_planes[(h-1) * (N_FILTERS * n_channels) + fop_idx(f, c, n_channels)] = hsum;
                 #endif
             }
         }
@@ -275,5 +280,3 @@ kernel void harmonic_summing(global volatile float * restrict fop,       // `vol
     }
 }
 #endif
-
-#undef FOP_IDX
