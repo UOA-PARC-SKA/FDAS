@@ -118,7 +118,6 @@ kernel void harmonic_summing(global float * restrict fop,
     }
 
     // MAIN LOOP: Iterates over all (f,c) coordinates in the FOP
-    #pragma loop_coalesce 2
     for (int f = -N_FILTERS_PER_ACCEL_SIGN; f <= N_FILTERS_PER_ACCEL_SIGN; ++f) {
         for (uint c = 0; c < n_channels; ++c) {
             float hsum = 0.0f;
@@ -153,7 +152,6 @@ kernel void harmonic_summing(global float * restrict fop,
     }
 
     // Write detection buffers to global memory (sequentially)
-    #pragma loop_coalesce
     for (uint h = 0; h < HMS_N_PLANES; ++h) {
         for (uint d = 0; d < HMS_DETECTION_SZ; ++d) {
             if (valid[h] & (1l << d)) {

@@ -233,7 +233,6 @@ inline void do_fft(const uint n_tiles,
     float2x4 data;
 
     // Process n_tiles actual tiles, +2 tiles of zeros in order to flush the engine and the output reordering stage
-    #pragma loop_coalesce
     for (uint t = 0; t < n_tiles + 2; ++t) {
         for (uint s = 0; s < FFT_N_POINTS_PER_TERMINAL; ++s) {
             if (t >= 1) {
