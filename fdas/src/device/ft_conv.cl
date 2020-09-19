@@ -325,14 +325,23 @@ kernel void mux_and_mult(global volatile float2 * restrict tiles,
     uint tile = get_group_id(0);
     uint step = get_local_id(0);
 
+    float2 tile_load[FFT_N_PARALLEL];
+    #pragma unroll
+    for (uint p = 0; p < FFT_N_PARALLEL; ++p)
+        tile_load[p] = tiles[tile * FDF_TILE_SZ + step * FFT_N_PARALLEL + p];
+
     #pragma unroll
     for (uint f = 0; f < N_FILTERS_PARALLEL; ++f) {
         uint tmpl = batch + f;
         if (tmpl < N_FILTERS) {
+            float2 tmpl_load[FFT_N_PARALLEL];
+            #pragma unroll
+            for (uint p = 0; p < FFT_N_PARALLEL; ++p)
+                tmpl_load[p] = templates[tmpl * FDF_TILE_SZ + step * FFT_N_PARALLEL + p];
+
             #pragma unroll
             for (uint p = 0; p < FFT_N_PARALLEL; ++p) {
-                float2 prod = complex_mult(tiles    [tile * FDF_TILE_SZ + step * FFT_N_PARALLEL + p],
-                                           templates[tmpl * FDF_TILE_SZ + step * FFT_N_PARALLEL + p]);
+                float2 prod = complex_mult(tile_load[p], tmpl_load[p]);
                 WRITE_CHANNEL(fft_in[f][p], prod);
             }
         }
