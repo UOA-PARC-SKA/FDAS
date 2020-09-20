@@ -19,12 +19,13 @@
  */
 
 /*
- * The kernels in this file convolve the contents of global memory `input` with the FIR filter templates in `templates`
- * and write the resulting filter-output plane to `fop`.
+ * The kernels in this file convolve the contents of global memory `input` with the templates in `templates` and write
+ * the result to `fop`, the so-called filter-output plane. (From n DSP viewpoint, the convolution is equivalent to
+ * applying an FIR _filter_ to the input signal.)
  *
- * The overall architecture is shown below. We are using an overlap-save algorithm in the frequency domain,
- * parameterised by the macro definitions in fdas_config.h. See the comments on the individual kernels for a description
- * of their input/output data formats.
+ * The overall architecture is shown below. We are using an overlap-save algorithm on the Fourier-transformed input and
+ * template coefficients, parameterised by the macro definitions in fdas_config.h. See the comments on the individual
+ * kernels for a description of their input/output data formats.
  *
  *                                            FFT_N_PARALLEL
  *                                               channels
@@ -32,29 +33,29 @@
  *  ╔═══════════════════╗        ┃              ┃───────▶┃        ┃───────▶┃             ┃        ╔══════════════════╗
  *  ║       input       ║═══════▶┃  tile_input  ┃───────▶┃  fft   ┃───────▶┃ store_tiles ┃═══════▶║      tiles       ║
  *  ╚═══════════════════╝        ┃              ┃───────▶┃        ┃───────▶┃             ┃        ╚══════════════════╝
- *   FDF_PADDED_INPUT_SZ         ┃              ┃───────▶┃        ┃───────▶┃             ┃         FDF_TILED_INPUT_SZ
+ *    <padded_input_sz>          ┃              ┃───────▶┃        ┃───────▶┃             ┃          <tiled_input_sz>
  *         * float2              ┗━━━━━━━━━━━━━━┛        ┗━━━━━━━━┛        ┗━━━━━━━━━━━━━┛              * float2
  *                                NDRange                    Task           NDRange
  *       linear order                                                                               tiled, FFT-order
- *                                  1 workgroup       (FDF_N_TILES + 2)       1 workgroup
+ *                                  1 workgroup        (<n_tiles> + 2)        1 workgroup
  *                                = NPPT items         * NPPT iterations    = NPPT items
  *
  *                                covers 1 tile       incl. bit-reversal    covers 1 tile
  *
  *
  *
- *                                          N_FILTERS_PARALLEL
+ *                                             FTC_GROUP_SZ
  *                                           * FFT_N_PARALLEL
  *                                               channels
  *                               ┏━━━━━━━━━━━━━━┓        ┏━━━━━━━━┓        ┏━━━━━━━━━━━━━━┓
  *   ╔══════════════════╗        ┃              ┃───────▶┃        ┃───────▶┃              ┃        ╔═══════════════╗
- *   ║      tiles       ║═══════▶┃              ┃───────▶┃  ifft  ┃───────▶┃              ┃═══════▶║      fop      ║
+ *   ║      tiles       ║═══════▶┃              ┃───────▶┃ ifft_0 ┃───────▶┃              ┃═══════▶║      fop      ║
  *   ╚══════════════════╝        ┃              ┃───────▶┃        ┃───────▶┃              ┃        ╚═══════════════╝
- *    FDF_TILED_INPUT_SZ         ┃              ┃───────▶┃        ┃───────▶┃              ┃         FOP_SZ * float
+ *     <tiled_input_sz>          ┃              ┃───────▶┃        ┃───────▶┃              ┃         <fop_sz> * float
  *         * float2              ┃              ┃        ┗━━━━━━━━┛        ┃              ┃
- *                               ┃              ┃        ┏━━━━━━━━┓        ┃              ┃          linear order
- *     tiled, FFT-order          ┃              ┃───────▶┃        ┃───────▶┃              ┃         dim 1: filters
- *                               ┃              ┃───────▶┃  ifft  ┃───────▶┃              ┃         dim 2: channels
+ *                               ┃              ┃        ┏━━━━━━━━┓        ┃              ┃           linear order
+ *     tiled, FFT-order          ┃              ┃───────▶┃        ┃───────▶┃              ┃         dim 1: templates
+ *                               ┃              ┃───────▶┃ ifft_1 ┃───────▶┃              ┃       dim 2: frequency bins
  *                               ┃              ┃───────▶┃        ┃───────▶┃  square_and  ┃
  *                               ┃ mux_and_mult ┃───────▶┃        ┃───────▶┃   _discard   ┃
  *                               ┃              ┃        ┗━━━━━━━━┛        ┃              ┃
@@ -62,19 +63,19 @@
  *   ╔══════════════════╗        ┃              ┃   .        .        .    ┃              ┃
  *   ║    templates     ║═══════▶┃              ┃   .        .        .    ┃              ┃
  *   ╚══════════════════╝        ┃              ┃        ┏━━━━━━━━┓        ┃              ┃
- *     FDF_TEMPLATES_SZ          ┃              ┃───────▶┃        ┃───────▶┃              ┃
- *         * float2              ┃              ┃───────▶┃  ifft  ┃───────▶┃              ┃
+ *      <templates_sz>           ┃              ┃───────▶┃        ┃───────▶┃              ┃
+ *         * float2              ┃              ┃───────▶┃ ifft_N ┃───────▶┃              ┃
  *                               ┃              ┃───────▶┃        ┃───────▶┃              ┃
  *     tiled, FFT-order          ┃              ┃───────▶┃        ┃───────▶┃              ┃
  *                               ┗━━━━━━━━━━━━━━┛        ┗━━━━━━━━┛        ┗━━━━━━━━━━━━━━┛
- *                                NDRange (2D)             Task x           NDRange (2D)
- *                                                   N_FILTERS_PARALLEL
+ *                                NDRange (2D)          FTC_GROUP_SZ        NDRange (2D)
+ *                                                          tasks
  *                                  1 workgroup                               1 workgroup
- *                                = NPPT items        (N_FILTER_BATCHES     = NPPT items
- *                                                     * FDF_N_TILES + 2)
- *                                covers 1 tile,       * NPPT iterations    covers 1 tile,
- *                                1 filter batch                            1 filter batch
- *                                                   incl. bit-reversal
+ *                                = NPPT items           <n_groups>         = NPPT items
+ *                                                    * (<n_tiles> + 2)
+ *                                covers 1 tile,      * NPPT iterations     covers 1 tile,
+ *                                1 group of                                1 group of
+ *                                templates          incl. bit-reversal     templates
  *
  *
  *
@@ -86,18 +87,18 @@
  *    ╔════════╗                                    FFT-order is: (for 2K-tiles, 4-parallel FFT)
  *    ║ global ║   ═══════▶ global memory access        0, 1024,  512, 1536,
  *    ╚════════╝                                        1, 1025,  513, 1537,
- *                                                    ...,  ...,  ...,  ...,
- *                                                    511, 1535, 1023, 2047
+ *                 <xyz_sz> runtime parameter         ...,  ...,  ...,  ...,
+ *                          computed by host          511, 1535, 1023, 2047
  */
 
 // Include a 4-parallel FFT engine
 #include "fft_4p.cl"
 
-// Channels from and to the FFT engines. Indices 0..N_FILTERS_PARALLEL-1 are
-// connected to the iFFT engines; index N_FILTERS_PARALLEL is used by to the
+// Channels from and to the FFT engines. Indices 0..FTC_GROUP_SZ-1 are
+// connected to the iFFT engines; index FTC_GROUP_SZ is used by to the
 // (forward) FFT engine
-channel float2 fft_in[N_FILTERS_PARALLEL + 1][FFT_N_PARALLEL] __attribute__((depth(0)));
-channel float2 fft_out[N_FILTERS_PARALLEL + 1][FFT_N_PARALLEL] __attribute__((depth(0)));
+channel float2 fft_in[FTC_GROUP_SZ + 1][FFT_N_PARALLEL] __attribute__((depth(0)));
+channel float2 fft_out[FTC_GROUP_SZ + 1][FFT_N_PARALLEL] __attribute__((depth(0)));
 
 // Performs the FFT-typical bit-reversal
 inline uint bit_reversed(uint x, uint bits)
@@ -132,9 +133,9 @@ inline float power_norm(float2 a)
  *
  * Each work group loads one tile (which partially overlaps with its neighbours, [Fig. a)]) linearly into a buffer. The
  * buffer is used to split the tile into FFT_N_PARALLEL chunks. Then, each of the FFT_N_POINTS_PER_TERMINAL work items
- * feed one point from each chunk to the FFT engine, obeying the required arrival order (see kernel `fft` for details).
+ * feed one point from each chunk to the FFT engine, obeying the required arrival order (see `do_fft` for details).
  *
- *  |─────────FDF_PADDED_INPUT_SZ────────|   │                                     │
+ *  |───────── <padded_input_sz> ────────|   │                                     │
  *  ┌────────────────────────────────────┐   │   ┌───────────────────────────┐     │  ┌──────┐
  *  │               input                │   │   │           tile            │     │  │buf[0]│─────▶ fft_in[0]
  *  └────────────────────────────────────┘   │   └───────────────────────────┘     │  └──────┘
@@ -144,9 +145,9 @@ inline float power_norm(float2 a)
  *         │  tile  │    │  tile  │          │   │buf[0]│buf[2]│buf[1]│buf[3]│     │  ┌──────┐
  *         └────────┘    └────────┘          │   └──────┴──────┴──────┴──────┘     │  │buf[2]│─────▶ fft_in[2]
  *                                           │                                     │  └──────┘
- *  |────────|  FDF_TILE_SZ                  │   |──────| "chunk"                  │  ┌──────┐
- *  |──────|    FDF_TILE_PAYLOAD             │     FFT_N_POINTS_PER_TERMINAL       │  │buf[3]│─────▶ fft_in[3]
- *         |─|  FDF_TILE_OVERLAP             │   = FFT_N_POINTS / FFT_N_PARALLEL   │  └──────┘
+ *  |────────|  FTC_TILE_SZ                  │   |──────| "chunk"                  │  ┌──────┐
+ *  |──────|    FTC_TILE_PAYLOAD             │     FFT_N_POINTS_PER_TERMINAL       │  │buf[3]│─────▶ fft_in[3]
+ *         |─|  FTC_TILE_OVERLAP             │   = FFT_N_POINTS / FFT_N_PARALLEL   │  └──────┘
  *                                           │                                     │
  *                     a)                    │                 b)                  │            c)
  */
@@ -166,7 +167,7 @@ kernel void tile_input(global volatile float2 * restrict input)
     // Load a bundle of FFT_N_PARALLEL points from `input`, and store them in the correct chunk buffer [Fig. b)]
     #pragma unroll
     for (uint p = 0; p < FFT_N_PARALLEL; ++p)
-        buf[chunk_rev][bundle * FFT_N_PARALLEL + p] = input[tile   * FDF_TILE_PAYLOAD +
+        buf[chunk_rev][bundle * FFT_N_PARALLEL + p] = input[tile   * FTC_TILE_PAYLOAD +
                                                             chunk  * FFT_N_POINTS_PER_TERMINAL +
                                                             bundle * FFT_N_PARALLEL + p];
 
@@ -176,11 +177,11 @@ kernel void tile_input(global volatile float2 * restrict input)
     // Feed FFT_N_PARALLEL points to the FFT engine [Fig. c)]
     #pragma unroll
     for (uint p = 0; p < FFT_N_PARALLEL; ++p)
-        WRITE_CHANNEL(fft_in[N_FILTERS_PARALLEL][p], buf[p][step]);
+        WRITE_CHANNEL(fft_in[FTC_GROUP_SZ][p], buf[p][step]);
 }
 
 /*
- * The kernels use a pipelined radix-2^2 feed-forward FFT architecture, as described in:
+ * We use a pipelined radix-2^2 feed-forward FFT architecture, as described in:
  *   M. Garrido, J. Grajal, M. A. Sanchez, and O. Gustafsson, ‘Pipelined Radix-2^k Feedforward FFT Architectures’,
  *     IEEE Trans. VLSI Syst., vol. 21, no. 1, 2013, doi: 10.1109/TVLSI.2011.2178275
  *
@@ -232,25 +233,25 @@ inline void do_fft(const uint n_tiles,
     // Buffers to hold engine's input/output in each iteration
     float2x4 data;
 
-    // Process n_tiles actual tiles, +2 tiles of zeros in order to flush the engine and the output reordering stage
+    // Process `n_tiles` actual tiles, +2 tiles of zeros in order to flush the engine and the output reordering stage
     #pragma loop_coalesce
-    for (uint t = 0; t < n_tiles + 2; ++t) {
-        for (uint s = 0; s < FFT_N_POINTS_PER_TERMINAL; ++s) {
-            if (t >= 1) {
+    for (uint tile = 0; tile < n_tiles + 2; ++tile) {
+        for (uint step = 0; step < FFT_N_POINTS_PER_TERMINAL; ++step) {
+            if (tile >= 1) {
                 // Valid results are available after FFT_N_POINTS_PER_TERMINAL steps, i.e. after 1 tile was consumed
                 #pragma unroll
                 for (uint p = 0; p < FFT_N_PARALLEL; ++p)
-                    buf[1 - (t & 1)][bit_reversed(s, FFT_N_POINTS_PER_TERMINAL_LOG)][p] = data.i[p];
+                    buf[1 - (tile & 1)][bit_reversed(step, FFT_N_POINTS_PER_TERMINAL_LOG)][p] = data.i[p];
             }
-            if (t >= 2) {
+            if (tile >= 2) {
                 // Valid results in natural order are available after 2 tiles were consumed
                 #pragma unroll
                 for (uint p = 0; p < FFT_N_PARALLEL; ++p)
-                    WRITE_CHANNEL(fft_out[channel_num][p], buf[t & 1][s][p]);
+                    WRITE_CHANNEL(fft_out[channel_num][p], buf[tile & 1][step][p]);
             }
 
             // Read actual input from the channels, respectively inject zeros to flush the pipeline
-            if (t < n_tiles) {
+            if (tile < n_tiles) {
                 #pragma unroll
                 for (uint p = 0; p < FFT_N_PARALLEL; ++p)
                     data.i[p] = READ_CHANNEL(fft_in[channel_num][p]);
@@ -259,7 +260,7 @@ inline void do_fft(const uint n_tiles,
             }
 
             // Perform one step of the FFT engine
-            data = fft_step(data, s, fft_delay_elements, is_inverse, FFT_N_POINTS_LOG);
+            data = fft_step(data, step, fft_delay_elements, is_inverse, FFT_N_POINTS_LOG);
         }
     }
 }
@@ -275,7 +276,7 @@ kernel void name (const uint n_tiles)             \
 /*
  * `fft` -- single-work item kernel
  */
-FFT_KERNEL(fft, 0, N_FILTERS_PARALLEL)
+FFT_KERNEL(fft, 0, FTC_GROUP_SZ)
 
 /*
  * `store_tiles` -- NDRange kernel
@@ -304,15 +305,16 @@ kernel void store_tiles(global float2 * restrict tiles)
 
     #pragma unroll
     for (uint p = 0; p < FFT_N_PARALLEL; ++p)
-       tiles[tile * FDF_TILE_SZ + step * FFT_N_PARALLEL + p] = READ_CHANNEL(fft_out[N_FILTERS_PARALLEL][p]);
+       tiles[tile * FTC_TILE_SZ + step * FFT_N_PARALLEL + p] = READ_CHANNEL(fft_out[FTC_GROUP_SZ][p]);
 }
 
 /*
  * `mux_and_mul` -- NDRange kernel, 2D
  *
- * Multiplies a tile with a batch of filters (i.e. N_FILTERS_PARALLEL-many) in parallel, and feeds the results to the
- * `ifft` kernel instances. This kernel operates on a two-dimensional NDRange: dimension 0 represents the tiles,
- * dimension 1 the filter batches. The work group size is (1 tile = FFT_N_POINTS_PER_TERMINAL work items, 1 batch).
+ * Multiplies a tile with a group of templates (i.e. FTC_GROUP_SZ-many) in parallel, and feeds the results to the
+ * `ifft_<n>` kernel instances. This kernel operates on a two-dimensional NDRange: dimension 0 represents the tiles,
+ * dimension 1 the template groups. The work group size is:
+ *   (1 tile = FFT_N_POINTS_PER_TERMINAL work items, 1 group of templates)
  *
  * Both global memories are expected to be in FFT-order (cf. kernel `fft` and `store_tiles`). This allows us to linearly
  * read FFT_N_PARALLEL values from memory, perform the element-wise complex multiplication, and write the results to the
@@ -322,28 +324,31 @@ __attribute__((reqd_work_group_size(FFT_N_POINTS_PER_TERMINAL, 1, 1)))
 kernel void mux_and_mult(global volatile float2 * restrict tiles,
                          global volatile float2 * restrict templates)
 {
-    uint batch = get_group_id(1) * N_FILTERS_PARALLEL;
+    // Establish indices
+    uint group = get_group_id(1) * FTC_GROUP_SZ;
     uint tile = get_group_id(0);
     uint step = get_local_id(0);
 
+    // Load one bundle from the input tile
     float2 tile_load[FFT_N_PARALLEL];
     #pragma unroll
     for (uint p = 0; p < FFT_N_PARALLEL; ++p)
-        tile_load[p] = tiles[tile * FDF_TILE_SZ + step * FFT_N_PARALLEL + p];
+        tile_load[p] = tiles[tile * FTC_TILE_SZ + step * FFT_N_PARALLEL + p];
 
+    // Load bundles of template coefficients, multiply, and emit to the iFFT engines' input channels
     #pragma unroll
-    for (uint f = 0; f < N_FILTERS_PARALLEL; ++f) {
-        uint tmpl = batch + f;
-        if (tmpl < N_FILTERS) {
+    for (uint i = 0; i < FTC_GROUP_SZ; ++i) {
+        uint tmpl = group + i;
+        if (tmpl < N_TEMPLATES) {
             float2 tmpl_load[FFT_N_PARALLEL];
             #pragma unroll
             for (uint p = 0; p < FFT_N_PARALLEL; ++p)
-                tmpl_load[p] = templates[tmpl * FDF_TILE_SZ + step * FFT_N_PARALLEL + p];
+                tmpl_load[p] = templates[tmpl * FTC_TILE_SZ + step * FFT_N_PARALLEL + p];
 
             #pragma unroll
             for (uint p = 0; p < FFT_N_PARALLEL; ++p) {
                 float2 prod = complex_mult(tile_load[p], tmpl_load[p]);
-                WRITE_CHANNEL(fft_in[f][p], prod);
+                WRITE_CHANNEL(fft_in[i][p], prod);
             }
         }
     }
@@ -351,25 +356,21 @@ kernel void mux_and_mult(global volatile float2 * restrict tiles,
 
 /*
  * `ifft_<n>` -- single-work item kernels
- *
- * Note: Ideally, we would leave one instance configurable to perform both directions of the FT, and save kernel `fft`
- *       altogether. However it seems difficult to use a particular compute unit in different stages of the pipeline
- *       (main problem: each channel is statically connected to a source and a sink kernel).
  */
 FFT_KERNEL(ifft_0, 1, 0)
-#if N_FILTERS_PARALLEL > 1
+#if FTC_GROUP_SZ > 1
 FFT_KERNEL(ifft_1, 1, 1)
-#if N_FILTERS_PARALLEL > 2
+#if FTC_GROUP_SZ > 2
 FFT_KERNEL(ifft_2, 1, 2)
-#if N_FILTERS_PARALLEL > 3
+#if FTC_GROUP_SZ > 3
 FFT_KERNEL(ifft_3, 1, 3)
-#if N_FILTERS_PARALLEL > 4
+#if FTC_GROUP_SZ > 4
 FFT_KERNEL(ifft_4, 1, 4)
-#if N_FILTERS_PARALLEL > 5
+#if FTC_GROUP_SZ > 5
 FFT_KERNEL(ifft_5, 1, 5)
-#if N_FILTERS_PARALLEL > 6
+#if FTC_GROUP_SZ > 6
 FFT_KERNEL(ifft_6, 1, 6)
-#if N_FILTERS_PARALLEL > 7
+#if FTC_GROUP_SZ > 7
 #error "Instantiate more iFFT kernels"
 #endif
 #endif
@@ -382,49 +383,49 @@ FFT_KERNEL(ifft_6, 1, 6)
 /*
  * `square_and_discard` -- NDRange kernel, 2D
  *
- * Demultiplexes the output of the `ifft` instances into the filter-output plane, computing the points' power and
+ * Demultiplexes the output of the `ifft_<n>` instances into the filter-output plane, computing the points' power and
  * discarding invalid elements in the process.
  *
  * This kernel is the counterpart to `mux_and_multiply`, and must use the same NDRange configuration (work group size =
- * (1 tile = FFT_N_POINTS_PER_TERMINAL work items, 1 batch)) in order to correctly associate the incoming data with a
- * tile and filter batch number.
+ * (1 tile = FFT_N_POINTS_PER_TERMINAL work items, 1 group of templates)) in order to correctly associate the incoming
+ * data with a tile and template group number.
  *
- * The FOP is written as a two-dimensional array `fop[N_FILTERS][N_CHANNELS]` in global memory. A single work item
- * exhibits a column-wise access pattern, and we currently rely on the the memory system's ability to coalesce at least
- * some of these accesses behind the scenes.
+ * The FOP is written as a two-dimensional array `fop[N_TEMPLATES][<n_frequency_bins>]` in global memory. A single work
+ * item exhibits a column-wise access pattern, and we currently rely on the the memory system's ability to coalesce at
+ * least some of these accesses behind the scenes.
  */
 __attribute__((reqd_work_group_size(FFT_N_POINTS_PER_TERMINAL, 1, 1)))
 kernel void square_and_discard(global float * restrict fop,
-                               const uint n_channels)
+                               const uint n_frequency_bins)
 {
     // Private buffer to collect the output from one step of the `ifft` instances
-    float buf[N_FILTERS_PARALLEL][FFT_N_PARALLEL];
+    float buf[FTC_GROUP_SZ][FFT_N_PARALLEL];
 
     // Establish indices for the current work item
-    uint batch = get_group_id(1) * N_FILTERS_PARALLEL;
+    uint group = get_group_id(1) * FTC_GROUP_SZ;
     uint tile = get_group_id(0);
     uint step = get_local_id(0);
 
     // Query all incoming channels, and compute the normalised spectral power of each point
     #pragma unroll
-    for (uint f = 0; f < N_FILTERS_PARALLEL; ++f) {
-        uint tmpl = batch + f;
-        if (tmpl < N_FILTERS) {
+    for (uint i = 0; i < FTC_GROUP_SZ; ++i) {
+        uint tmpl = group + i;
+        if (tmpl < N_TEMPLATES) {
             #pragma unroll
             for (uint p = 0; p < FFT_N_PARALLEL; ++p)
-                buf[f][p] = power_norm(READ_CHANNEL(fft_out[f][p]));
+                buf[i][p] = power_norm(READ_CHANNEL(fft_out[i][p]));
         } else {
             #pragma unroll
             for (uint p = 0; p < FFT_N_PARALLEL; ++p)
-                buf[f][p] = 0.0f;
+                buf[i][p] = 0.0f;
         }
     }
 
     // Discard invalid parts of tiles (cf. overlap-save algorithm) while writing to the FOP
     #pragma unroll
-    for (uint f = 0; f < N_FILTERS_PARALLEL; ++f) {
-        uint tmpl = batch + f;
-        if (tmpl < N_FILTERS) {
+    for (uint i = 0; i < FTC_GROUP_SZ; ++i) {
+        uint tmpl = group + i;
+        if (tmpl < N_TEMPLATES) {
             #pragma unroll
             for (uint p = 0; p < FFT_N_PARALLEL; ++p) {
                 // We need to undo the bit-reversal of the chunk indices, as the buffer was populated with FFT-ordered data
@@ -432,9 +433,9 @@ kernel void square_and_discard(global float * restrict fop,
 
                 // `element` is the index of the current item in its destination tile in the FOP, i.e. shifted by the
                 // amount of overlap we need to discard
-                int element = p * FFT_N_POINTS_PER_TERMINAL + step - FDF_TILE_OVERLAP;
-                if (element >= 0 && tile * FDF_TILE_PAYLOAD + element < n_channels)
-                    fop[tmpl * n_channels + tile * FDF_TILE_PAYLOAD + element] = buf[f][q];
+                int element = p * FFT_N_POINTS_PER_TERMINAL + step - FTC_TILE_OVERLAP;
+                if (element >= 0 && tile * FTC_TILE_PAYLOAD + element < n_frequency_bins)
+                    fop[tmpl * n_frequency_bins + tile * FTC_TILE_PAYLOAD + element] = buf[i][q];
             }
         }
     }

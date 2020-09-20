@@ -53,7 +53,7 @@ using std::fixed;
 bool FDAS::initialise_accelerator(std::string bitstream_file_name,
                                   const std::function<bool(const std::string &, const std::string &)> &platform_selector,
                                   const std::function<bool(int, int, const std::string &)> &device_selector,
-                                  const cl_uint n_input_channels) {
+                                  const cl_uint n_input_points) {
     cl_int status;
 
     std::vector<cl::Platform> all_platforms;
@@ -143,24 +143,24 @@ bool FDAS::initialise_accelerator(std::string bitstream_file_name,
     cl_chkref(square_and_discard_kernel.reset(new cl::Kernel(*program, "square_and_discard", &status)));
     cl_chkref(harmonic_summing_kernel.reset(new cl::Kernel(*program, "harmonic_summing", &status)));
 
-    ifft_kernels.resize(N_FILTERS_PARALLEL);
-    for (int e = 0; e < N_FILTERS_PARALLEL; ++e) {
-        auto name = "ifft_" + std::to_string(e);
-        cl_chkref(ifft_kernels[e].reset(new cl::Kernel(*program, name.c_str(), &status)));
+    ifft_kernels.resize(FTC_GROUP_SZ);
+    for (int i = 0; i < FTC_GROUP_SZ; ++i) {
+        auto name = "ifft_" + std::to_string(i);
+        cl_chkref(ifft_kernels[i].reset(new cl::Kernel(*program, name.c_str(), &status)));
     }
 
     // Buffers
-    n_channels = n_input_channels;
-    n_tiles = n_channels / FDF_TILE_PAYLOAD + 1;
-    padding_last_tile = FDF_TILE_PAYLOAD - n_input_channels % FDF_TILE_PAYLOAD;
-    if (padding_last_tile == FDF_TILE_PAYLOAD) {
+    n_frequency_bins = n_input_points;
+    n_tiles = n_frequency_bins / FTC_TILE_PAYLOAD + 1;
+    padding_last_tile = FTC_TILE_PAYLOAD - n_frequency_bins % FTC_TILE_PAYLOAD;
+    if (padding_last_tile == FTC_TILE_PAYLOAD) {
         --n_tiles;
         padding_last_tile = 0;
     }
-    padded_input_sz = FDF_TILE_OVERLAP + n_channels + padding_last_tile; // NB: == (n_tiles - 1) * FDF_TILE_PAYLOAD + FDF_TILE_SZ;
-    tiled_input_sz = n_tiles * FDF_TILE_SZ;
-    templates_sz = N_FILTERS * FDF_TILE_SZ;
-    fop_sz = N_FILTERS * n_input_channels;
+    padded_input_sz = FTC_TILE_OVERLAP + n_frequency_bins + padding_last_tile; // NB: == (n_tiles - 1) * FTC_TILE_PAYLOAD + FTC_TILE_SZ;
+    tiled_input_sz = n_tiles * FTC_TILE_SZ;
+    templates_sz = N_TEMPLATES * FTC_TILE_SZ;
+    fop_sz = N_TEMPLATES * n_frequency_bins;
 
     size_t total_allocated = 0;
 
@@ -187,8 +187,8 @@ bool FDAS::initialise_accelerator(std::string bitstream_file_name,
     cl_chkref(detection_location_buffer.reset(new cl::Buffer(*context, CL_MEM_WRITE_ONLY, sizeof(cl_uint) * N_CANDIDATES, nullptr, &status)));
     total_allocated += detection_location_buffer->getInfo<CL_MEM_SIZE>();
 
-    cl_chkref(detection_amplitude_buffer.reset(new cl::Buffer(*context, CL_MEM_WRITE_ONLY, sizeof(cl_float) * N_CANDIDATES, nullptr, &status)));
-    total_allocated += detection_amplitude_buffer->getInfo<CL_MEM_SIZE>();
+    cl_chkref(detection_power_buffer.reset(new cl::Buffer(*context, CL_MEM_WRITE_ONLY, sizeof(cl_float) * N_CANDIDATES, nullptr, &status)));
+    total_allocated += detection_power_buffer->getInfo<CL_MEM_SIZE>();
 
     log << "[INFO] Allocated "
         << fixed << setprecision(2) << (total_allocated / (1.f * (1 << 20)))
@@ -205,12 +205,12 @@ bool FDAS::check_dimensions(const FDAS::ShapeType &input_shape, const FDAS::Shap
         return false;
     }
 
-    if (input_shape[0] < n_channels) {
+    if (input_shape[0] < n_frequency_bins) {
         log << "[ERROR] Not enough input points" << endl;
         return false;
     }
 
-    if (templates_shape.size() != 2 || templates_shape[0] != N_FILTERS || templates_shape[1] != FDF_TILE_SZ) {
+    if (templates_shape.size() != 2 || templates_shape[0] != N_TEMPLATES || templates_shape[1] != FTC_TILE_SZ) {
         log << "[ERROR] Malformed filter templates" << endl;
         return false;
     }
@@ -233,15 +233,15 @@ bool FDAS::perform_ft_convolution(const FDAS::InputType &input, const FDAS::Shap
     cl::CommandQueue store_tiles_q(*context, default_device);
     cl::CommandQueue mux_and_mult_q(*context, default_device);
     std::vector<cl::CommandQueue> ifft_queues;
-    for (int e = 0; e < N_FILTERS_PARALLEL; ++e)
+    for (int i = 0; i < FTC_GROUP_SZ; ++i)
         ifft_queues.emplace_back(cl::CommandQueue(*context, default_device));
     cl::CommandQueue square_and_discard_q(*context, default_device);
 
-    cl_uint n_batches = N_FILTERS / N_FILTERS_PARALLEL + 1;
-    cl_uint n_tmpl_in_last_batch = N_FILTERS % N_FILTERS_PARALLEL;
-    if (n_tmpl_in_last_batch == 0) {
-        --n_batches;
-        n_tmpl_in_last_batch = N_FILTERS_PARALLEL;
+    cl_uint n_groups = N_TEMPLATES / FTC_GROUP_SZ + 1;
+    cl_uint n_tmpl_in_last_group = N_TEMPLATES % FTC_GROUP_SZ;
+    if (n_tmpl_in_last_group == 0) {
+        --n_groups;
+        n_tmpl_in_last_group = FTC_GROUP_SZ;
     }
 
     // NDRange configuration
@@ -249,7 +249,7 @@ bool FDAS::perform_ft_convolution(const FDAS::InputType &input, const FDAS::Shap
     cl::NDRange prep_global(FFT_N_POINTS_PER_TERMINAL * n_tiles);
 
     cl::NDRange conv_local(FFT_N_POINTS_PER_TERMINAL, 1);
-    cl::NDRange conv_global(FFT_N_POINTS_PER_TERMINAL * n_tiles, n_batches);
+    cl::NDRange conv_global(FFT_N_POINTS_PER_TERMINAL * n_tiles, n_groups);
 
     // Set static kernel arguments
     cl_chk(tile_input_kernel->setArg<cl::Buffer>(0, *input_buffer));
@@ -258,23 +258,23 @@ bool FDAS::perform_ft_convolution(const FDAS::InputType &input, const FDAS::Shap
 
     cl_chk(mux_and_mult_kernel->setArg<cl::Buffer>(0, *tiles_buffer));
     cl_chk(mux_and_mult_kernel->setArg<cl::Buffer>(1, *templates_buffer));
-    for (int e = 0; e < N_FILTERS_PARALLEL; ++e) {
-        cl_uint n_batches_e = e < n_tmpl_in_last_batch ? n_batches : n_batches - 1;
-        cl_chk(ifft_kernels[e]->setArg<cl_uint>(0, n_batches_e * n_tiles));
+    for (int i = 0; i < FTC_GROUP_SZ; ++i) {
+        cl_uint n_groups_i = i < n_tmpl_in_last_group ? n_groups : n_groups - 1;
+        cl_chk(ifft_kernels[i]->setArg<cl_uint>(0, n_groups_i * n_tiles));
     }
     cl_chk(square_and_discard_kernel->setArg<cl::Buffer>(0, *fop_buffer));
-    cl_chk(square_and_discard_kernel->setArg<cl_uint>(1, n_channels));
+    cl_chk(square_and_discard_kernel->setArg<cl_uint>(1, n_frequency_bins));
 
     // Copy input to device
-    cl_float2 zeros[FDF_TILE_SZ];
-    memset(zeros, 0x0, sizeof(cl_float2) * FDF_TILE_SZ);
-    cl_chk(buffer_q.enqueueWriteBuffer(*input_buffer, true, 0, sizeof(cl_float2) * FDF_TILE_OVERLAP, zeros));
-    cl_chk(buffer_q.enqueueWriteBuffer(*input_buffer, true, sizeof(cl_float2) * FDF_TILE_OVERLAP, sizeof(cl_float2) * n_channels, input.data()));
-    cl_chk(buffer_q.enqueueWriteBuffer(*input_buffer, true, sizeof(cl_float2) * (FDF_TILE_OVERLAP + n_channels), sizeof(cl_float2) * padding_last_tile, zeros));
+    cl_float2 zeros[FTC_TILE_SZ];
+    memset(zeros, 0x0, sizeof(cl_float2) * FTC_TILE_SZ);
+    cl_chk(buffer_q.enqueueWriteBuffer(*input_buffer, true, 0, sizeof(cl_float2) * FTC_TILE_OVERLAP, zeros));
+    cl_chk(buffer_q.enqueueWriteBuffer(*input_buffer, true, sizeof(cl_float2) * FTC_TILE_OVERLAP, sizeof(cl_float2) * n_frequency_bins, input.data()));
+    cl_chk(buffer_q.enqueueWriteBuffer(*input_buffer, true, sizeof(cl_float2) * (FTC_TILE_OVERLAP + n_frequency_bins), sizeof(cl_float2) * padding_last_tile, zeros));
     cl_chk(buffer_q.enqueueWriteBuffer(*templates_buffer, true, 0, sizeof(cl_float2) * templates_sz, templates.data()));
     cl_chk(buffer_q.finish());
 
-    cl::Event tile_input_ev, fft_ev, store_tiles_ev, mux_and_mult_ev, ifft_evs[N_FILTERS_PARALLEL], square_and_discard_ev;
+    cl::Event tile_input_ev, fft_ev, store_tiles_ev, mux_and_mult_ev, ifft_evs[FTC_GROUP_SZ], square_and_discard_ev;
     cl_chk(tile_input_q.enqueueNDRangeKernel(*tile_input_kernel, cl::NullRange, prep_global, prep_local, nullptr, &tile_input_ev));
     cl_chk(fft_q.enqueueTask(*fft_kernel, nullptr, &fft_ev));
     cl_chk(store_tiles_q.enqueueNDRangeKernel(*store_tiles_kernel, cl::NullRange, prep_global, prep_local, nullptr, &store_tiles_ev));
@@ -284,12 +284,12 @@ bool FDAS::perform_ft_convolution(const FDAS::InputType &input, const FDAS::Shap
     print_duration("Preparation", tile_input_ev, store_tiles_ev);
 
     cl_chk(mux_and_mult_q.enqueueNDRangeKernel(*mux_and_mult_kernel, cl::NullRange, conv_global, conv_local, nullptr, &mux_and_mult_ev));
-    for (int e = 0; e < N_FILTERS_PARALLEL; ++e)
-        cl_chk(ifft_queues[e].enqueueTask(*ifft_kernels[e], nullptr, &ifft_evs[e]));
+    for (int i = 0; i < FTC_GROUP_SZ; ++i)
+        cl_chk(ifft_queues[i].enqueueTask(*ifft_kernels[i], nullptr, &ifft_evs[i]));
     cl_chk(square_and_discard_q.enqueueNDRangeKernel(*square_and_discard_kernel, cl::NullRange, conv_global, conv_local, nullptr, &square_and_discard_ev));
     cl_chk(mux_and_mult_q.finish());
-    for (int e = 0; e < N_FILTERS_PARALLEL; ++e)
-        cl_chk(ifft_queues[e].finish());
+    for (int i = 0; i < FTC_GROUP_SZ; ++i)
+        cl_chk(ifft_queues[i].finish());
     cl_chk(square_and_discard_q.finish());
 
     print_duration("FT convolution and IFFT", mux_and_mult_ev, square_and_discard_ev);
@@ -307,10 +307,10 @@ bool FDAS::perform_harmonic_summing(const FDAS::ThreshType &thresholds, const FD
     cl::CommandQueue harmonic_summing_q(*context, default_device);
 
     cl_chk(harmonic_summing_kernel->setArg<cl::Buffer>(0, *fop_buffer));
-    cl_chk(harmonic_summing_kernel->setArg<cl_uint>(1, n_channels));
+    cl_chk(harmonic_summing_kernel->setArg<cl_uint>(1, n_frequency_bins));
     cl_chk(harmonic_summing_kernel->setArg<cl::Buffer>(2, *thresholds_buffer));
     cl_chk(harmonic_summing_kernel->setArg<cl::Buffer>(3, *detection_location_buffer));
-    cl_chk(harmonic_summing_kernel->setArg<cl::Buffer>(4, *detection_amplitude_buffer));
+    cl_chk(harmonic_summing_kernel->setArg<cl::Buffer>(4, *detection_power_buffer));
     if (HMS_STORE_PLANES)
         cl_chk(harmonic_summing_kernel->setArg<cl::Buffer>(5, *harmonic_planes_buffer));
 
@@ -332,7 +332,7 @@ bool FDAS::retrieve_tiles(FDAS::TilesType &tiles, FDAS::ShapeType &tiles_shape) 
     cl_chk(buffer_q.enqueueReadBuffer(*tiles_buffer, true, 0, sizeof(cl_float2) * tiled_input_sz, tiles.data()));
     cl_chk(buffer_q.finish());
     tiles_shape.push_back(n_tiles);
-    tiles_shape.push_back(FDF_TILE_SZ);
+    tiles_shape.push_back(FTC_TILE_SZ);
 
     return true;
 }
@@ -342,8 +342,8 @@ bool FDAS::retrieve_FOP(FDAS::FOPType &fop, FDAS::ShapeType &fop_shape) {
     cl::CommandQueue buffer_q(*context, default_device);
     cl_chk(buffer_q.enqueueReadBuffer(*fop_buffer, true, 0, sizeof(cl_float) * fop_sz, fop.data()));
     cl_chk(buffer_q.finish());
-    fop_shape.push_back(N_FILTERS);
-    fop_shape.push_back(n_channels);
+    fop_shape.push_back(N_TEMPLATES);
+    fop_shape.push_back(n_frequency_bins);
 
     return true;
 }
@@ -357,24 +357,24 @@ bool FDAS::retrieve_harmonic_planes(FDAS::HPType &harmonic_planes, FDAS::ShapeTy
     cl_chk(buffer_q.enqueueReadBuffer(*harmonic_planes_buffer, true, 0, sizeof(cl_float) * ((HMS_N_PLANES - 1) * fop_sz), harmonic_planes.data()));
     cl_chk(buffer_q.finish());
     harmonic_planes_shape.push_back(HMS_N_PLANES - 1);
-    harmonic_planes_shape.push_back(N_FILTERS);
-    harmonic_planes_shape.push_back(n_channels);
+    harmonic_planes_shape.push_back(N_TEMPLATES);
+    harmonic_planes_shape.push_back(n_frequency_bins);
 
     return true;
 }
 
 bool FDAS::retrieve_candidates(FDAS::DetLocType &detection_location, FDAS::ShapeType &detection_location_shape,
-                               FDAS::DetAmplType &detection_amplitude, FDAS::ShapeType &detection_amplitude_shape) {
+                               FDAS::DetPwrType &detection_power, FDAS::ShapeType &detection_power_shape) {
     detection_location.resize(N_CANDIDATES);
-    detection_amplitude.resize(N_CANDIDATES);
+    detection_power.resize(N_CANDIDATES);
 
     cl::CommandQueue buffer_q(*context, default_device);
     cl_chk(buffer_q.enqueueReadBuffer(*detection_location_buffer, true, 0, sizeof(cl_uint) * N_CANDIDATES, detection_location.data()));
-    cl_chk(buffer_q.enqueueReadBuffer(*detection_amplitude_buffer, true, 0, sizeof(cl_float) * N_CANDIDATES, detection_amplitude.data()));
+    cl_chk(buffer_q.enqueueReadBuffer(*detection_power_buffer, true, 0, sizeof(cl_float) * N_CANDIDATES, detection_power.data()));
     cl_chk(buffer_q.finish());
 
     detection_location_shape.push_back(N_CANDIDATES);
-    detection_amplitude_shape.push_back(N_CANDIDATES);
+    detection_power_shape.push_back(N_CANDIDATES);
 
     return true;
 }

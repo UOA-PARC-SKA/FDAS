@@ -6,9 +6,6 @@ add_executable(fdas_gtest
         src/host/FDAS.cpp)
 target_link_libraries(fdas_gtest npy alteracl OpenCL elf gtest)
 
-add_executable(print_config
-        src/host/print_config.cpp)
-
 set(AOC_FLAGS -v -report -g -profile -no-interleaving=default)
 
 add_custom_target(fdas_emu

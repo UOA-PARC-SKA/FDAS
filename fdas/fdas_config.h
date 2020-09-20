@@ -27,17 +27,14 @@
 
 // === Inputs ==========================================================================================================
 
-// The filter templates correspond to different accelerations to test for. There are two equally-sized groups of
-// templates which only differ in the sign of the acceleration. Additionally, one filter, located between the groups,
-// just forwards the input signal.
-#define N_FILTERS_PER_ACCEL_SIGN       (42)
-#define N_FILTERS                      (N_FILTERS_PER_ACCEL_SIGN + 1 + N_FILTERS_PER_ACCEL_SIGN)
+// The templates correspond to different accelerations to test for. There are two equally-sized sets of templates which
+// only differ in the sign of the acceleration. Additionally, one template, located between the groups, just forwards
+// the input signal.
+#define N_TMPL_PER_ACCEL_SIGN          (42)
+#define N_TEMPLATES                    (N_TMPL_PER_ACCEL_SIGN + 1 + N_TMPL_PER_ACCEL_SIGN)
 
-// Maximum number of filter taps
-#define N_TAPS                         (421)
-
-// Set how many filters are processed in parallel
-#define N_FILTERS_PARALLEL             (4)
+// Maximum length (= number of coefficients) across all templates
+#define MAX_TEMPLATE_LEN               (421)
 
 // === FFT engine configuration ========================================================================================
 
@@ -55,15 +52,18 @@
 #define FFT_N_POINTS_PER_TERMINAL_LOG  (FFT_N_POINTS_LOG - FFT_N_PARALLEL_LOG)
 #define FFT_N_POINTS_PER_TERMINAL      (1 << FFT_N_POINTS_PER_TERMINAL_LOG)
 
-// === Frequency-domain FIR filter implementation with overlap-save algorithm ==========================================
+// === FT convolution implementation with overlap-save algorithm =======================================================
 
 // The tile size for the overlap-save algorithm must match the FFT size
-#define FDF_TILE_SZ                    (FFT_N_POINTS)
+#define FTC_TILE_SZ                    (FFT_N_POINTS)
 
 // Amount of overlap between neighbouring tiles (also, zero-padding for the first tile). Only the unique parts will be
 // used later on.
-#define FDF_TILE_OVERLAP               (N_TAPS - 1)
-#define FDF_TILE_PAYLOAD               (FDF_TILE_SZ - FDF_TILE_OVERLAP)
+#define FTC_TILE_OVERLAP               (MAX_TEMPLATE_LEN - 1)
+#define FTC_TILE_PAYLOAD               (FTC_TILE_SZ - FTC_TILE_OVERLAP)
+
+// Set how many templates are processed in parallel
+#define FTC_GROUP_SZ                   (4)
 
 // === Harmonic summing ================================================================================================
 
@@ -73,19 +73,17 @@
 // Maximum number of detections, i.e. pulsar candidates, recorded per harmonic plane
 #define HMS_DETECTION_SZ               (64)
 
-// If true, explicitly write harmonic planes to memory, otherwise compare FOP amplitudes to thresholds on-the-fly
+// If true, explicitly write harmonic planes to memory, otherwise compare FOP values to thresholds on-the-fly
 #define HMS_STORE_PLANES               (false)
 
 // Format used to encode a detection location in a 32-bit unsigned integer:
 //   ┌───┬───────┬──────────────────────┐
-//   │ k │filter │       channel        │
+//   │ k │templ. │    frequency bin     │
 //   └───┴───────┴──────────────────────┘
 //  31 29|28   22|21                    0
-#define HMS_ENCODE_LOCATION(k, f, c)   ((((k - 1) & 0x7) << 29) | (((f + N_FILTERS_PER_ACCEL_SIGN) & 0x7f) << 22) | (c & 0x3fffff))
-#define HMS_INVALID_LOCATION           (HMS_ENCODE_LOCATION(1, N_FILTERS_PER_ACCEL_SIGN + 1, 0))
-#define HMS_GET_LOCATION_HARMONIC(loc) (((loc >> 29) & 0x7) + 1)
-#define HMS_GET_LOCATION_FILTER(loc)   (((loc >> 22) & 0x7f) - N_FILTERS_PER_ACCEL_SIGN)
-#define HMS_GET_LOCATION_CHANNEL(loc)  (loc & 0x3fffff)
+#define HMS_ENCODE_LOCATION(harm, tmpl, freq) \
+    ((((harm - 1) & 0x7) << 29) | (((tmpl + N_TMPL_PER_ACCEL_SIGN) & 0x7f) << 22) | (freq & 0x3fffff))
+#define HMS_INVALID_LOCATION           (HMS_ENCODE_LOCATION(1, N_TMPL_PER_ACCEL_SIGN + 1, 0))
 
 // Parallelisation factor in the HMS_UNROLL approach. Always change both macros!
 #define HMS_X                          (4)
