@@ -94,6 +94,9 @@
 // Include a 4-parallel FFT engine
 #include "fft_4p.cl"
 
+// Enable channels
+#pragma OPENCL EXTENSION cl_intel_channels : enable
+
 // Channels from and to the FFT engines. Indices 0..FTC_GROUP_SZ-1 are
 // connected to the iFFT engines; index FTC_GROUP_SZ is used by to the
 // (forward) FFT engine
@@ -177,7 +180,7 @@ kernel void tile_input(global volatile float2 * restrict input)
     // Feed FFT_N_PARALLEL points to the FFT engine [Fig. c)]
     #pragma unroll
     for (uint p = 0; p < FFT_N_PARALLEL; ++p)
-        WRITE_CHANNEL(fft_in[FTC_GROUP_SZ][p], buf[p][step]);
+        write_channel_intel(fft_in[FTC_GROUP_SZ][p], buf[p][step]);
 }
 
 /*
@@ -247,14 +250,14 @@ inline void do_fft(const uint n_tiles,
                 // Valid results in natural order are available after 2 tiles were consumed
                 #pragma unroll
                 for (uint p = 0; p < FFT_N_PARALLEL; ++p)
-                    WRITE_CHANNEL(fft_out[channel_num][p], buf[tile & 1][step][p]);
+                    write_channel_intel(fft_out[channel_num][p], buf[tile & 1][step][p]);
             }
 
             // Read actual input from the channels, respectively inject zeros to flush the pipeline
             if (tile < n_tiles) {
                 #pragma unroll
                 for (uint p = 0; p < FFT_N_PARALLEL; ++p)
-                    data.i[p] = READ_CHANNEL(fft_in[channel_num][p]);
+                    data.i[p] = read_channel_intel(fft_in[channel_num][p]);
             } else {
                 data.i0 = data.i1 = data.i2 = data.i3 = 0;
             }
@@ -305,7 +308,7 @@ kernel void store_tiles(global float2 * restrict tiles)
 
     #pragma unroll
     for (uint p = 0; p < FFT_N_PARALLEL; ++p)
-       tiles[tile * FTC_TILE_SZ + step * FFT_N_PARALLEL + p] = READ_CHANNEL(fft_out[FTC_GROUP_SZ][p]);
+       tiles[tile * FTC_TILE_SZ + step * FFT_N_PARALLEL + p] = read_channel_intel(fft_out[FTC_GROUP_SZ][p]);
 }
 
 /*
@@ -348,7 +351,7 @@ kernel void mux_and_mult(global volatile float2 * restrict tiles,
             #pragma unroll
             for (uint p = 0; p < FFT_N_PARALLEL; ++p) {
                 float2 prod = complex_mult(tile_load[p], tmpl_load[p]);
-                WRITE_CHANNEL(fft_in[i][p], prod);
+                write_channel_intel(fft_in[i][p], prod);
             }
         }
     }
@@ -413,7 +416,7 @@ kernel void square_and_discard(global float * restrict fop,
         if (tmpl < N_TEMPLATES) {
             #pragma unroll
             for (uint p = 0; p < FFT_N_PARALLEL; ++p)
-                buf[i][p] = power_norm(READ_CHANNEL(fft_out[i][p]));
+                buf[i][p] = power_norm(read_channel_intel(fft_out[i][p]));
         } else {
             #pragma unroll
             for (uint p = 0; p < FFT_N_PARALLEL; ++p)
