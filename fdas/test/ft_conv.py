@@ -19,7 +19,6 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 
-import sys
 import argparse
 import struct
 import pathlib
@@ -82,18 +81,18 @@ def main():
     parser.add_argument(dest='input', metavar='tim-file', nargs='+',
                         help="SIGPROC *.tim file(s) containing time-series samples")
     parser.add_argument("-t", "--templates", dest='tmpls', metavar='path', required=True,
-                        help="NumPy *.npy file containing the filter templates")
+                        help="NumPy *.npy file containing the templates")
     parser.add_argument("-B", "--base-directory", dest='base_dir', metavar='path',
                         help="set base directory (default: $PWD)")
     parser.add_argument("-J", "--num-procs", dest='n_proc', metavar='n', type=int, default=1,
                         help="set number of processors to use")
 
     test_args = parser.add_argument_group("test data")
-    test_args.add_argument("-c", "--num-channels", dest='test_data_n_chan', type=int, metavar='n', default=2 ** 22,
-                           help="set number of channels in test data (default: 4194304 = 4M)")
+    test_args.add_argument("-f", "--num-frequency-bins", dest='test_data_n_freq', type=int, metavar='n', default=2 ** 22,
+                           help="set number of frequency bins in test data (default: 4194304 = 4M)")
     test_args.add_argument("--tile-and-transform", dest='test_data_tile_sz', type=int, metavar='n', nargs='?',
-                           const=2 ** 11, help="prepare input for overlap-save FDFIR algorithm with the given tile size"
-                                               " (default: 2048 = 2K)")
+                           const=2 ** 11, help="prepare input for overlap-save FT convolution algorithm with the given"
+                                               " tile size (default: 2048 = 2K)")
     test_args.add_argument("--fft-order", dest='test_data_fft_n_par', type=int, metavar='n', nargs='?', const=4,
                            help="write tiled input data in FFT-order (cf. `ft_conv.cl`). Optionally, specify the FFT"
                                 " engine's number of parallel inputs (default: 4)")
@@ -116,17 +115,17 @@ def compute_test_data(tim_file, args):
     samples, t_samp = read_tim_file(tim_file)
     t_samp = t_samp or args.t_samp  # take sampling time from (in this order): 1) file, 2) command line, 3) default
 
-    # we need twice as many samples as the requested number of channels for the test data, as we will discard the
+    # we need twice as many samples as the requested number of frequency bins for the test data, as we will discard the
     # negative frequencies in the spectrum
     n_samp = samples.size
-    n_chan = args.test_data_n_chan
-    if n_samp < 2 * n_chan:
-        print(f"[ERROR] Input file does not contain enough samples. Got {n_samp}, but need at least {2 * n_chan}")
+    n_freq = args.test_data_n_freq
+    if n_samp < 2 * n_freq:
+        print(f"[ERROR] Input file does not contain enough samples. Got {n_samp}, but need at least {2 * n_freq}")
         return
-    if n_samp > 2 * n_chan:
-        print(f"[INFO] Discarding {n_samp - 2 * n_chan} samples (= {t_samp * (n_samp - 2 * n_chan):.3f} seconds) to "
-              f"match requested number of channels in spectrum")
-        n_samp = 2 * n_chan
+    if n_samp > 2 * n_freq:
+        print(f"[INFO] Discarding {n_samp - 2 * n_freq} samples (= {t_samp * (n_samp - 2 * n_freq):.3f} seconds) to "
+              f"match requested number of frequency bins in spectrum")
+        n_samp = 2 * n_freq
         samples = np.resize(samples, n_samp)
 
     # perform CXFT: get normalised Fourier transform
@@ -137,16 +136,16 @@ def compute_test_data(tim_file, args):
     # % Take only the first half of the series; if the second half is included, the
     # % acceleration with opposite sign to the correct one will be flagged as a candidate
     # additionally, enforce the desired data types
-    freqs = np.array(freqs[:n_chan], dtype=np.float32)
-    ft = np.array(ft[:n_chan], dtype=np.complex64)
+    freqs = np.array(freqs[:n_freq], dtype=np.float32)
+    ft = np.array(ft[:n_freq], dtype=np.complex64)
 
     # save as input for the FDAS module
     np.save(f"{od}/input.npy", ft)
 
-    # save the channel frequencies (to make plotting more convenient)
+    # save the bin frequencies (to make plotting more convenient)
     np.save(f"{od}/freqs.npy", freqs)
 
-    # load filter templates
+    # load templates
     templates = np.load(args.tmpls)
     if templates.ndim != 2 or templates.dtype != np.complex64:
         print(f"[ERROR] Template file does not contain a two-dimensional np.complex64 array")
@@ -158,10 +157,7 @@ def compute_test_data(tim_file, args):
         tile_sz = args.test_data_tile_sz
         tile_olap = int(np.ceil((max_tmpl_len - 1) / 4)) * 4  # overlap FIXME magic number
         tile_pld = tile_sz - tile_olap  # payload
-        n_tile = n_chan // tile_pld
-        if n_tile * tile_pld < n_chan:
-            print(f"[WARN] Input tiling will discard the upper {n_chan - n_tile * tile_pld} channels")
-            n_chan = n_tile * tile_pld
+        n_tile = int(np.ceil(n_freq / tile_pld))
         tiles = np.empty((n_tile, tile_sz), dtype=np.complex64)
         for i in range(n_tile):
             if i == 0:
@@ -171,8 +167,14 @@ def compute_test_data(tim_file, args):
                 # all other tiles overlap with previous one
                 tiles[i][:tile_olap] = tiles[i - 1][-tile_olap:]
 
-            # fill the rest of tile with input data
-            tiles[i][tile_olap:] = ft[i * tile_pld:(i + 1) * tile_pld]
+            if i < n_tile - 1:
+                # fill the rest of tile with input data
+                tiles[i][tile_olap:] = ft[i * tile_pld:(i + 1) * tile_pld]
+            else:
+                # last tile: fill with the remaining input data, and pad with zeros
+                n_chan_last_tile = n_freq - i * tile_pld
+                tiles[i][tile_olap:tile_olap + n_chan_last_tile] = ft[i * tile_pld:]
+                tiles[i][tile_olap + n_chan_last_tile:] = np.zeros(tile_pld - n_chan_last_tile, dtype=np.complex64)
 
         # perform tile-wise Fourier transformation
         tiles = scipy.fft.fft(tiles)
@@ -193,10 +195,10 @@ def compute_test_data(tim_file, args):
 
     # compute and save filter-output plane
     print(f"[INFO] Computing filter-output plane")
-    fop = np.empty((n_tmpl, n_chan), dtype=np.float32)
+    fop = np.empty((n_tmpl, n_freq), dtype=np.float32)
     for i in range(n_tmpl):
         tmpl = templates[i][np.nonzero(templates[i])]
-        conv = scipy.signal.convolve(ft, tmpl)[:n_chan]  # convolve, and trim to input length
+        conv = scipy.signal.convolve(ft, tmpl)[:n_freq]  # convolve, and trim to input length
         fop[i][:] = np.real(conv * np.conj(conv))
 
     np.save(f"{od}/fop_ref.npy", fop)

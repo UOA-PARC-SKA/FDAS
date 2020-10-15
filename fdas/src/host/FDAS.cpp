@@ -56,7 +56,7 @@ using namespace GenInfo;
 bool FDAS::initialise_accelerator(std::string bitstream_file_name,
                                   const std::function<bool(const std::string &, const std::string &)> &platform_selector,
                                   const std::function<bool(int, int, const std::string &)> &device_selector,
-                                  const cl_uint n_input_channels) {
+                                  const cl_uint n_input_points) {
     cl_int status;
 
     std::vector<cl::Platform> all_platforms;
@@ -167,16 +167,21 @@ bool FDAS::initialise_accelerator(std::string bitstream_file_name,
     cl_chkref(store_cands_kernel.reset(new cl::Kernel(*program, "store_cands", &status)));
 
     // Buffers
-    n_tiles = n_input_channels / FDF::tile_payload;
-    input_sz = n_tiles * FDF::tile_payload;
+    n_frequency_bins = n_input_points;
+    n_tiles = n_frequency_bins / FDF::tile_payload + 1;
+    padding_last_tile = FDF::tile_payload - n_frequency_bins % FDF::tile_payload;
+    if (padding_last_tile == FDF::tile_payload) {
+        --n_tiles;
+        padding_last_tile = 0;
+    }
+    padded_input_sz = FDF::tile_overlap + n_frequency_bins + padding_last_tile; // NB: == (n_tiles - 1) * FDF::tile_payload + FDF::tile_sz;
     tiled_input_sz = n_tiles * FDF::tile_sz;
     templates_sz = Input::n_filters * FDF::tile_sz;
-    fop_row_sz = input_sz;
-    fop_sz = Input::n_filters * fop_row_sz;
+    fop_sz = Input::n_filters * n_frequency_bins;
 
     size_t total_allocated = 0;
 
-    cl_chkref(input_buffer.reset(new cl::Buffer(*context, CL_MEM_READ_ONLY, sizeof(cl_float2) * input_sz, nullptr, &status)));
+    cl_chkref(input_buffer.reset(new cl::Buffer(*context, CL_MEM_READ_ONLY, sizeof(cl_float2) * padded_input_sz, nullptr, &status)));
     total_allocated += input_buffer->getInfo<CL_MEM_SIZE>();
 
     cl_chkref(tiles_buffer.reset(new cl::Buffer(*context, CL_MEM_READ_WRITE, sizeof(cl_float2) * tiled_input_sz, nullptr, &status)));
@@ -193,8 +198,8 @@ bool FDAS::initialise_accelerator(std::string bitstream_file_name,
     cl_chkref(detection_location_buffer.reset(new cl::Buffer(*context, CL_MEM_WRITE_ONLY, sizeof(cl_uint) * Output::n_candidates, nullptr, &status)));
     total_allocated += detection_location_buffer->getInfo<CL_MEM_SIZE>();
 
-    cl_chkref(detection_amplitude_buffer.reset(new cl::Buffer(*context, CL_MEM_WRITE_ONLY, sizeof(cl_float) * Output::n_candidates, nullptr, &status)));
-    total_allocated += detection_amplitude_buffer->getInfo<CL_MEM_SIZE>();
+    cl_chkref(detection_power_buffer.reset(new cl::Buffer(*context, CL_MEM_WRITE_ONLY, sizeof(cl_float) * Output::n_candidates, nullptr, &status)));
+    total_allocated += detection_power_buffer->getInfo<CL_MEM_SIZE>();
 
     log << "[INFO] Allocated "
         << fixed << setprecision(2) << (total_allocated / (1.f * (1 << 20)))
@@ -211,7 +216,7 @@ bool FDAS::check_dimensions(const FDAS::ShapeType &input_shape, const FDAS::Shap
         return false;
     }
 
-    if (input_shape[0] < input_sz) {
+    if (input_shape[0] < n_frequency_bins) {
         log << "[ERROR] Not enough input points" << endl;
         return false;
     }
@@ -248,14 +253,14 @@ bool FDAS::perform_ft_convolution(const FDAS::InputType &input, const FDAS::Shap
     }
 
     // Copy input to device
-    cl_chk(buffer_q.enqueueWriteBuffer(*input_buffer, true, 0, sizeof(cl_float2) * input_sz, input.data()));
+    cl_chk(buffer_q.enqueueWriteBuffer(*input_buffer, true, 0, sizeof(cl_float2) * n_frequency_bins, input.data())); // FIXME after merge
     cl_chk(buffer_q.enqueueWriteBuffer(*templates_buffer, true, 0, sizeof(cl_float2) * templates_sz, templates.data()));
     cl_chk(buffer_q.finish());
 
     cl::Event prep_start, prep_end, conv_start, conv_end;
 
     cl_chk(load_input_kernel->setArg<cl::Buffer>(0, *input_buffer));
-    cl_chk(load_input_kernel->setArg<cl_uint>(1, input_sz / FFT::n_parallel));
+    cl_chk(load_input_kernel->setArg<cl_uint>(1, n_frequency_bins / FFT::n_parallel)); // FIXME after merge
 
     cl_chk(tile_kernel->setArg<cl_uint>(0, n_tiles));
 
@@ -301,7 +306,7 @@ bool FDAS::perform_ft_convolution(const FDAS::InputType &input, const FDAS::Shap
         for (int e = 0; e < FFT::n_engines; ++e) {
             cl_chk(mux_and_mult_kernel->setArg<cl_uint>(3 + e, f + e));
 
-            cl_uint fop_offset = (f + e + Input::n_filters_per_accel_sign) * fop_row_sz / FFT::n_parallel;
+            cl_uint fop_offset = (f + e + Input::n_filters_per_accel_sign) * n_frequency_bins / FFT::n_parallel;
             cl_chk(square_and_discard_kernels[e]->setArg<cl_uint>(1, fop_offset));
         }
 
@@ -332,7 +337,7 @@ bool FDAS::perform_harmonic_summing(const FDAS::ThreshType &thresholds, const FD
     const int n_planes = HMS::n_planes;
     const int n_filters = Input::n_filters_per_accel_sign + 1;
     const int n_filter_groups = (int) ceil(1.0 * n_filters / HMS::group_sz);
-    const int n_channels = fop_row_sz / HMS::bundle_sz / HMS::lcm * HMS::bundle_sz * HMS::lcm;
+    const int n_channels = n_frequency_bins / HMS::bundle_sz / HMS::lcm * HMS::bundle_sz * HMS::lcm; // FIXME after merge
     const int n_channel_bundles = n_channels / HMS::bundle_sz;
     const bool negative_filters = false;
 
@@ -370,7 +375,7 @@ bool FDAS::perform_harmonic_summing(const FDAS::ThreshType &thresholds, const FD
             cl_chk(preload_k.setArg<cl_uint>(2, base_row_rem));
             for (int r = 0; r < HMS::n_buffers[h]; ++r) {
                 cl_int filter = negative_filters ? -base_row - r : base_row + r;
-                cl_uint filter_offset = (filter + Input::n_filters_per_accel_sign) * fop_row_sz / HMS::bundle_sz;
+                cl_uint filter_offset = (filter + Input::n_filters_per_accel_sign) * n_frequency_bins / HMS::bundle_sz;
                 cl_chk(preload_k.setArg<cl_uint>(3 + r, filter_offset));
             }
             cl_chk(preload_k.setArg<cl_uint>(3 + HMS::n_buffers[h], n_channel_bundles / k)); // important: n_channel_bundles must be divisible by all k
@@ -394,7 +399,7 @@ bool FDAS::perform_harmonic_summing(const FDAS::ThreshType &thresholds, const FD
 
     cl::CommandQueue store_cands_q(*context, default_device, CL_QUEUE_PROFILING_ENABLE);
     cl_chk(store_cands_kernel->setArg<cl::Buffer>(0, *detection_location_buffer));
-    cl_chk(store_cands_kernel->setArg<cl::Buffer>(1, *detection_amplitude_buffer));
+    cl_chk(store_cands_kernel->setArg<cl::Buffer>(1, *detection_power_buffer));
     cl_chk(store_cands_q.enqueueTask(*store_cands_kernel, nullptr, &hsum_end));
 
     for (auto &q : preload_queues)
@@ -415,9 +420,11 @@ bool FDAS::perform_harmonic_summing(const FDAS::ThreshType &thresholds, const FD
 
 bool FDAS::retrieve_tiles(FDAS::TilesType &tiles, FDAS::ShapeType &tiles_shape) {
     tiles.resize(tiled_input_sz);
+
     cl::CommandQueue buffer_q(*context, default_device, CL_QUEUE_PROFILING_ENABLE);
     cl_chk(buffer_q.enqueueReadBuffer(*tiles_buffer, true, 0, sizeof(cl_float2) * tiled_input_sz, tiles.data()));
     cl_chk(buffer_q.finish());
+
     tiles_shape.push_back(n_tiles);
     tiles_shape.push_back(FDF::tile_sz);
 
@@ -426,27 +433,29 @@ bool FDAS::retrieve_tiles(FDAS::TilesType &tiles, FDAS::ShapeType &tiles_shape) 
 
 bool FDAS::retrieve_FOP(FDAS::FOPType &fop, FDAS::ShapeType &fop_shape) {
     fop.resize(fop_sz);
+
     cl::CommandQueue buffer_q(*context, default_device, CL_QUEUE_PROFILING_ENABLE);
     cl_chk(buffer_q.enqueueReadBuffer(*fop_buffer_A, true, 0, sizeof(cl_float) * fop_sz, fop.data()));
     cl_chk(buffer_q.finish());
+
     fop_shape.push_back(Input::n_filters);
-    fop_shape.push_back(fop_row_sz);
+    fop_shape.push_back(n_frequency_bins);
 
     return true;
 }
 
 bool FDAS::retrieve_candidates(FDAS::DetLocType &detection_location, FDAS::ShapeType &detection_location_shape,
-                               FDAS::DetAmplType &detection_amplitude, FDAS::ShapeType &detection_amplitude_shape) {
+                               FDAS::DetPwrType &detection_power, FDAS::ShapeType &detection_power_shape) {
     detection_location.resize(Output::n_candidates);
-    detection_amplitude.resize(Output::n_candidates);
+    detection_power.resize(Output::n_candidates);
 
     cl::CommandQueue buffer_q(*context, default_device, CL_QUEUE_PROFILING_ENABLE);
     cl_chk(buffer_q.enqueueReadBuffer(*detection_location_buffer, true, 0, sizeof(cl_uint) * Output::n_candidates, detection_location.data()));
-    cl_chk(buffer_q.enqueueReadBuffer(*detection_amplitude_buffer, true, 0, sizeof(cl_float) * Output::n_candidates, detection_amplitude.data()));
+    cl_chk(buffer_q.enqueueReadBuffer(*detection_power_buffer, true, 0, sizeof(cl_float) * Output::n_candidates, detection_power.data()));
     cl_chk(buffer_q.finish());
 
     detection_location_shape.push_back(Output::n_candidates);
-    detection_amplitude_shape.push_back(Output::n_candidates);
+    detection_power_shape.push_back(Output::n_candidates);
 
     return true;
 }

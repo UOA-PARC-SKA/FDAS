@@ -38,6 +38,8 @@ def main():
     test_args = parser.add_argument_group("test data")
     test_args.add_argument("--num-planes", dest='test_data_n_plane', type=int, metavar='n', default=8,
                            help="set number of harmonic planes to compute, i.e. FOP = HP_1, HP_2, ..., HP_n")
+    test_args.add_argument("--num-candidates-per-plane", dest='test_data_n_cand_per_plane', type=int, metavar='n',
+                           default=64, help="set desired number of candidates per plane (default: 64)")
 
     args = parser.parse_args()
 
@@ -74,33 +76,33 @@ def compute_test_data(fop_file, args):
         for _ in it:
             # compute indices to simulate access to the k'th stretch plane
 
-            # 'i' and 'j' are the indices into the NumPy arrays
-            i, j = it.multi_index
+            # 'tmpl' and 'freq' are the indices into the NumPy arrays
+            tmpl, freq = it.multi_index
 
-            # 'i_num' is the filter number (in the range [-n_tmpl//2, n_tmpl//2]). Its sign determines whether we need
-            # to round up or down
-            i_num = i - n_tmpl_per_accel_sign
-            if i_num < 0:
-                i_sp_idx = int(np.ceil(i_num / k)) + n_tmpl_per_accel_sign
-            elif i_num > 0:
-                i_sp_idx = int(np.floor(i_num / k)) + n_tmpl_per_accel_sign
-            else:  # i_num == 0
+            # 'tmpl_num' is the template number (in the range [-n_tmpl//2, n_tmpl//2]). Its sign determines whether we
+            # need to round up or down
+            tmpl_num = tmpl - n_tmpl_per_accel_sign
+            if tmpl_num < 0:
+                tmpl_sp_idx = int(np.ceil(tmpl_num / k)) + n_tmpl_per_accel_sign
+            elif tmpl_num > 0:
+                tmpl_sp_idx = int(np.floor(tmpl_num / k)) + n_tmpl_per_accel_sign
+            else:  # tmpl_num == 0
                 pass
 
-            # j is the channel/frequency bin number -- no special handling required
-            j_sp_idx = j // k
+            # 'freq' is the (always positive) frequency bin number -- no special handling required
+            freq_sp_idx = freq // k
 
             # see: Eq. (2) in Haomiao's VLSI paper
-            hps[h][i][j] = hps[h - 1][i][j] + fop[i_sp_idx][j_sp_idx]
+            hps[h][tmpl][freq] = hps[h - 1][tmpl][freq] + fop[tmpl_sp_idx][freq_sp_idx]
 
     # save the planes
     np.save(f"{od}/hps_ref.npy", hps[1:])
 
-    # produce mock-up (!) thresholds
+    # produce mock-up (!) thresholds, resulting in the requested number of candidates per plane
     thrsh = np.empty(n_plane, dtype=np.float32)
     for h in range(n_plane):
-        rms = np.sqrt(np.mean(np.square(hps)))
-        thrsh[h] = (2.6 + h * 0.2) * rms
+        thrsh[h] = np.quantile(hps[h], q=1 - args.test_data_n_cand_per_plane / fop.size)
+        print(f"[INFO] Threshold for HP_{h + 1} is {thrsh[h]}")
 
     np.save(f"{od}/thresholds.npy", thrsh)
 
@@ -110,19 +112,19 @@ def compute_test_data(fop_file, args):
         indices = np.flatnonzero([hps[h] > thrsh[h]])
         print(f"[INFO] {indices.size} candidates in HP_{h + 1}")
         for i in indices:
-            f, c = np.unravel_index(i, fop.shape)
-            detections += [(h + 1, f - n_tmpl_per_accel_sign, c, hps[h][f][c])]
+            tmpl, freq = np.unravel_index(i, fop.shape)
+            detections += [(h + 1, tmpl - n_tmpl_per_accel_sign, freq, hps[h][tmpl][freq])]
 
     # save candidate lists in the format used by the OpenCL implementation
-    locations = np.empty(len(detections), dtype=np.uint32)
-    amplitudes = np.empty(len(detections), dtype=np.float32)
+    location_list = np.empty(len(detections), dtype=np.uint32)
+    power_list = np.empty(len(detections), dtype=np.float32)
     for i, det in enumerate(detections):
-        k, f, c, a = det
-        locations[i] = (((k - 1) & 0x7) << 29) | (((f + n_tmpl_per_accel_sign) & 0x7f) << 22) | (c & 0x3fffff)
-        amplitudes[i] = a
+        k, tmpl, freq, pwr = det
+        location_list[i] = (((k - 1) & 0x7) << 29) | (((tmpl + n_tmpl_per_accel_sign) & 0x7f) << 22) | (freq & 0x3fffff)
+        power_list[i] = pwr
 
-    np.save(f"{od}/det_loc_ref.npy", locations)
-    np.save(f"{od}/det_amp_ref.npy", amplitudes)
+    np.save(f"{od}/det_loc_ref.npy", location_list)
+    np.save(f"{od}/det_pwr_ref.npy", power_list)
 
 
 if __name__ == '__main__':

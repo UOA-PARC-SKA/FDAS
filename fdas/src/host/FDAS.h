@@ -38,7 +38,7 @@ public:
     using FOPType = std::vector<float>;
     using ThreshType = std::vector<float>;
     using DetLocType = std::vector<uint32_t>;
-    using DetAmplType = std::vector<float>;
+    using DetPwrType = std::vector<float>;
     using HPType = std::vector<float>;
 
     using ShapeType = std::vector<unsigned long>;
@@ -49,7 +49,7 @@ public:
     bool initialise_accelerator(std::string bitstream_file_name,
                                 const std::function<bool(const std::string &, const std::string &)> &platform_selector,
                                 const std::function<bool(int, int, const std::string &)> &device_selector,
-                                const cl_uint n_input_channels);
+                                const cl_uint n_input_points);
 
     bool perform_ft_convolution(const InputType &input, const ShapeType &input_shape,
                                 const TemplatesType &templates, const ShapeType &templates_shape);
@@ -63,20 +63,19 @@ public:
     bool inject_FOP(FOPType &fop, ShapeType &fop_shape);
 
     bool retrieve_candidates(DetLocType &detection_location, ShapeType &detection_location_shape,
-                             DetAmplType &detection_amplitude, ShapeType &detection_amplitude_shape);
+                             DetPwrType &detection_power, ShapeType &detection_power_shape);
 
     static bool choose_first_platform(const std::string &platform_name, const std::string &platform_version) { return true; }
 
     static bool choose_accelerator_devices(int device_num, int device_type, const std::string &device_name) { return device_type == CL_DEVICE_TYPE_ACCELERATOR; }
 
-    static bool acl1_on_x240(int device_num, int device_type, const std::string &device_name) { return device_num == 1 && device_type == CL_DEVICE_TYPE_ACCELERATOR; }
-
 private:
+    cl_uint n_frequency_bins;
     cl_uint n_tiles;
-    cl_uint input_sz;
+    cl_uint padding_last_tile;
+    cl_uint padded_input_sz;
     cl_uint tiled_input_sz;
     cl_uint templates_sz;
-    cl_uint fop_row_sz;
     cl_uint fop_sz;
 
     cl::Platform platform;
@@ -103,7 +102,7 @@ private:
     std::unique_ptr<cl::Buffer> templates_buffer;
     std::unique_ptr<cl::Buffer> fop_buffer_A, fop_buffer_B;
     std::unique_ptr<cl::Buffer> detection_location_buffer;
-    std::unique_ptr<cl::Buffer> detection_amplitude_buffer;
+    std::unique_ptr<cl::Buffer> detection_power_buffer;
 
     std::ostream &log;
 
@@ -114,4 +113,4 @@ private:
 
 };
 
-#endif //FDAS_FDAS_H
+#endif // FDAS_FDAS_H

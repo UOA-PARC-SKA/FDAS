@@ -56,7 +56,7 @@ protected:
 
     std::string det_loc_file(bool ref = false) { return GetParam() + "/det_loc" + (ref ? "_ref" : "") + ".npy"; }
 
-    std::string det_amp_file(bool ref = false) { return GetParam() + "/det_amp" + (ref ? "_ref" : "") + ".npy"; }
+    std::string det_pwr_file(bool ref = false) { return GetParam() + "/det_pwr" + (ref ? "_ref" : "") + ".npy"; }
 
     FDAS::InputType input;
     FDAS::ShapeType input_shape;
@@ -76,8 +76,8 @@ protected:
     FDAS::DetLocType detection_location, detection_location_ref;
     FDAS::ShapeType detection_location_shape, detection_location_ref_shape;
 
-    FDAS::DetAmplType detection_amplitude, detection_amplitude_ref;
-    FDAS::ShapeType detection_amplitude_shape, detection_amplitude_ref_shape;
+    FDAS::DetPwrType detection_power, detection_power_ref;
+    FDAS::ShapeType detection_power_shape, detection_power_ref_shape;
 
     void SetUp() override {
         bool fortran_order = false; // library wants this as a reference
@@ -87,7 +87,7 @@ protected:
         npy::LoadArrayFromNumpy(fop_file(true), fop_ref_shape, fortran_order, fop_ref);
         npy::LoadArrayFromNumpy(thrsh_file(), thresholds_shape, fortran_order, thresholds);
         npy::LoadArrayFromNumpy(det_loc_file(true), detection_location_ref_shape, fortran_order, detection_location_ref);
-        npy::LoadArrayFromNumpy(det_amp_file(true), detection_amplitude_ref_shape, fortran_order, detection_amplitude_ref);
+        npy::LoadArrayFromNumpy(det_pwr_file(true), detection_power_ref_shape, fortran_order, detection_power_ref);
     }
 };
 
@@ -125,18 +125,18 @@ TEST_P(FDASTest, Harmonic_Summing) {
 
     ASSERT_TRUE(pipeline.perform_harmonic_summing(thresholds, thresholds_shape));
 
-    ASSERT_TRUE(pipeline.retrieve_candidates(detection_location, detection_location_shape, detection_amplitude, detection_amplitude_shape));
+    ASSERT_TRUE(pipeline.retrieve_candidates(detection_location, detection_location_shape, detection_power, detection_power_shape));
     // store data as downloaded from the device (i.e. before filtering invalid slots)
     npy::SaveArrayAsNumpy(det_loc_file(), false, detection_location_shape.size(), detection_location_shape.data(), detection_location);
-    npy::SaveArrayAsNumpy(det_amp_file(), false, detection_amplitude_shape.size(), detection_amplitude_shape.data(), detection_amplitude);
+    npy::SaveArrayAsNumpy(det_pwr_file(), false, detection_power_shape.size(), detection_power_shape.data(), detection_power);
 
     auto loc_it = detection_location.begin();
-    auto amp_it = detection_amplitude.begin();
-    while (loc_it != detection_location.end() && amp_it != detection_amplitude.end()) {
+    auto amp_it = detection_power.begin();
+    while (loc_it != detection_location.end() && amp_it != detection_power.end()) {
         auto loc = *loc_it;
         if (loc == HMS::invalid_location) {
             loc_it = detection_location.erase(loc_it);
-            amp_it = detection_amplitude.erase(amp_it);
+            amp_it = detection_power.erase(amp_it);
         } else {
             ++loc_it, ++amp_it;
         }
@@ -145,8 +145,8 @@ TEST_P(FDASTest, Harmonic_Summing) {
     EXPECT_GE(detection_location.size(), 1);
 
     int n_non_cands = 0;
-    for (loc_it = detection_location.begin(), amp_it = detection_amplitude.begin();
-         loc_it != detection_location.end() && amp_it != detection_amplitude.end();
+    for (loc_it = detection_location.begin(), amp_it = detection_power.begin();
+         loc_it != detection_location.end() && amp_it != detection_power.end();
          ++loc_it, ++amp_it) {
         auto loc = *loc_it;
         auto amp = *amp_it;
@@ -157,7 +157,7 @@ TEST_P(FDASTest, Harmonic_Summing) {
             continue;
         }
         auto dist = std::distance(detection_location_ref.begin(), it);
-        auto amp_ref = detection_amplitude_ref[dist];
+        auto amp_ref = detection_power_ref[dist];
         EXPECT_TRUE(fabs(amp - amp_ref) < tolerance);
     }
     EXPECT_EQ(n_non_cands, 0);
@@ -171,31 +171,31 @@ TEST_P(FDASTest, FDAS) {
 
     ASSERT_TRUE(pipeline.perform_harmonic_summing(thresholds, thresholds_shape));
 
-    ASSERT_TRUE(pipeline.retrieve_candidates(detection_location, detection_location_shape, detection_amplitude, detection_amplitude_shape));
+    ASSERT_TRUE(pipeline.retrieve_candidates(detection_location, detection_location_shape, detection_power, detection_power_shape));
     // store data as downloaded from the device (i.e. before filtering invalid slots)
     npy::SaveArrayAsNumpy(det_loc_file(), false, detection_location_shape.size(), detection_location_shape.data(), detection_location);
-    npy::SaveArrayAsNumpy(det_amp_file(), false, detection_amplitude_shape.size(), detection_amplitude_shape.data(), detection_amplitude);
+    npy::SaveArrayAsNumpy(det_pwr_file(), false, detection_power_shape.size(), detection_power_shape.data(), detection_power);
 
     auto loc_it = detection_location.begin();
-    auto amp_it = detection_amplitude.begin();
-    while (loc_it != detection_location.end() && amp_it != detection_amplitude.end()) {
+    auto pwr_it = detection_power.begin();
+    while (loc_it != detection_location.end() && pwr_it != detection_power.end()) {
         auto loc = *loc_it;
         if (loc == HMS::invalid_location) {
             loc_it = detection_location.erase(loc_it);
-            amp_it = detection_amplitude.erase(amp_it);
+            pwr_it = detection_power.erase(pwr_it);
         } else {
-            ++loc_it, ++amp_it;
+            ++loc_it, ++pwr_it;
         }
     }
     EXPECT_LE(detection_location.size(), detection_location_ref.size());
     EXPECT_GE(detection_location.size(), 1);
 
     int n_non_cands = 0;
-    for (loc_it = detection_location.begin(), amp_it = detection_amplitude.begin();
-         loc_it != detection_location.end() && amp_it != detection_amplitude.end();
-         ++loc_it, ++amp_it) {
+    for (loc_it = detection_location.begin(), pwr_it = detection_power.begin();
+         loc_it != detection_location.end() && pwr_it != detection_power.end();
+         ++loc_it, ++pwr_it) {
         auto loc = *loc_it;
-        auto amp = *amp_it;
+        auto pwr = *pwr_it;
 
         auto it = std::find(detection_location_ref.begin(), detection_location_ref.end(), loc);
         if (it == detection_location_ref.end()) {
@@ -203,8 +203,8 @@ TEST_P(FDASTest, FDAS) {
             continue;
         }
         auto dist = std::distance(detection_location_ref.begin(), it);
-        auto amp_ref = detection_amplitude_ref[dist];
-        EXPECT_TRUE(fabs(amp - amp_ref) < tolerance);
+        auto pwr_ref = detection_power_ref[dist];
+        EXPECT_TRUE(fabs(pwr - pwr_ref) < tolerance);
     }
     EXPECT_EQ(n_non_cands, 0);
 }
@@ -225,13 +225,8 @@ int main(int argc, char **argv) {
 
     ::testing::InitGoogleTest(&argc, argv);
 
-    if (Input::n_filters == 85) {
-        FDASTest::bitstream_file = "bin/fdas.aocx";
-        FDASTest::templates_file = "../../fdas/tmpl/fdas_templates_85_350_ft_p4.npy";
-    } else {
-        FDASTest::bitstream_file = "bin/fdas_emu.aocx";
-        FDASTest::templates_file = "../../fdas/tmpl/fdas_templates_21_87.5_ft_p4.npy";
-    }
+    FDASTest::bitstream_file = "bin/fdas.aocx";
+    FDASTest::templates_file = "../../fdas/tmpl/fdas_templates_85_350_ft_p4.npy";
 
     return RUN_ALL_TESTS();
 }

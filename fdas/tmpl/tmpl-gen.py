@@ -152,8 +152,8 @@ def main():
                     tile[j::p] = out[i][chunk_begin:chunk_end]
                 out[i][:] = tile
     else:
-        max_size = max(t.size for t in templates)
-        out = np.zeros((n_tmpl, max_size), dtype=out_dtype)
+        max_tmpl_len = max(t.size for t in templates)
+        out = np.zeros((n_tmpl, max_tmpl_len), dtype=out_dtype)
         for i in range(n_tmpl):
             tmpl = templates[i]
             out[i][:tmpl.size] = tmpl
