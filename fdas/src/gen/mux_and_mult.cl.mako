@@ -46,7 +46,7 @@ kernel void mux_and_mult(global float2x4 * restrict tiles,
         #pragma unroll
         for (uint e = 0; e < ${fft_n_engines}; ++e) {
             if (e < n_filters)
-                WRITE_CHANNEL(ifft_in[e], prods[e]);
+                write_channel_intel(ifft_in[e], prods[e]);
         }
     }
 }

@@ -68,7 +68,7 @@ kernel void preload_${k}(global ${hms_bundle_ty} * restrict fop,
 
         #pragma unroll
         for (uint p = 0; p < ${hms_group_sz}; ++p)
-            WRITE_CHANNEL(preload_to_delay[${k - 1}][p], out[p]);
+            write_channel_intel(preload_to_delay[${k - 1}][p], out[p]);
     }
 }
 
@@ -88,7 +88,7 @@ kernel void delay_${k}(const uint n_channel_bundles)
         if (m == 0) {
             #pragma unroll
             for (uint p = 0; p < ${hms_group_sz}; ++p)
-                in[p] = READ_CHANNEL(preload_to_delay[${k - 1}][p]);
+                in[p] = read_channel_intel(preload_to_delay[${k - 1}][p]);
         }
 
         switch (m) {
@@ -111,6 +111,6 @@ kernel void delay_${k}(const uint n_channel_bundles)
 
         #pragma unroll
         for (uint p = 0; p < ${hms_group_sz}; ++p)
-            WRITE_CHANNEL(delay_to_detect[${k - 1}][p], out[p]);
+            write_channel_intel(delay_to_detect[${k - 1}][p], out[p]);
     }
 }

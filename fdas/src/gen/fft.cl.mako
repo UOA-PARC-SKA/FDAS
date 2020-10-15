@@ -21,22 +21,22 @@ kernel void fft_${engine}(const uint n_tiles)
             if (tile >= 2) {
             % if both_directions:
                 if (! is_inverse)
-                    WRITE_CHANNEL(fft_out, buf[tile & 1][step]);
+                    write_channel_intel(fft_out, buf[tile & 1][step]);
                 else
-                    WRITE_CHANNEL(ifft_out[${engine}], buf[tile & 1][step]);
+                    write_channel_intel(ifft_out[${engine}], buf[tile & 1][step]);
             % else:
-                WRITE_CHANNEL(ifft_out[${engine}], buf[tile & 1][step]);
+                write_channel_intel(ifft_out[${engine}], buf[tile & 1][step]);
             % endif
             }
 
             if (tile < n_tiles) {
             % if both_directions:
                 if (! is_inverse)
-                    data = READ_CHANNEL(fft_in);
+                    data = read_channel_intel(fft_in);
                 else
-                    data = READ_CHANNEL(ifft_in[${engine}]);
+                    data = read_channel_intel(ifft_in[${engine}]);
             % else:
-                data = READ_CHANNEL(ifft_in[${engine}]);
+                data = read_channel_intel(ifft_in[${engine}]);
             % endif
             } else {
                 data = zeros;

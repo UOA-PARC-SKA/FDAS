@@ -53,7 +53,7 @@ kernel void square_and_discard_${engine}(global float4 * restrict fop_A,
             }
 
             if (tile < n_tiles) {
-                float2x4 read = READ_CHANNEL(ifft_out[${engine}]);
+                float2x4 read = read_channel_intel(ifft_out[${engine}]);
                 float4 norm = power_norm4(read);
             % for p in range(fft_n_parallel):
                 chunk_buf_${p}[tile & 1][step] = norm.s${bit_rev(p, fft_n_parallel_log)};

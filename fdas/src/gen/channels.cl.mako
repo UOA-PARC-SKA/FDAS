@@ -1,13 +1,5 @@
 
-#if defined(INTELFPGA_CL)
 #pragma OPENCL EXTENSION cl_intel_channels : enable
-#define READ_CHANNEL(ch) read_channel_intel(ch)
-#define WRITE_CHANNEL(ch, x) write_channel_intel(ch, x)
-#else
-#pragma OPENCL EXTENSION cl_altera_channels : enable
-#define READ_CHANNEL(ch) read_channel_altera(ch)
-#define WRITE_CHANNEL(ch, x) write_channel_altera(ch, x)
-#endif
 
 <% depth_attr = "__attribute__((depth(0)))" %>\
 channel float2x4 load_to_tile ${depth_attr};

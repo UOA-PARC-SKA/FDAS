@@ -60,14 +60,14 @@ kernel void detect_${k}(float threshold,
         % if k == 1:
             #pragma unroll
             for (uint p = 0; p < ${hms_group_sz}; ++p) {
-                ${hms_bundle_ty} from_fop = READ_CHANNEL(delay_to_detect[${k - 1}][p]);
+                ${hms_bundle_ty} from_fop = read_channel_intel(delay_to_detect[${k - 1}][p]);
                 hsum[p] = from_fop;
             }
         %else:
             #pragma unroll
             for (uint p = 0; p < ${hms_group_sz}; ++p) {
-                ${hms_bundle_ty} from_prev_hp = READ_CHANNEL(detect_to_detect[${k - 2}][p]);
-                ${hms_bundle_ty} from_sp = READ_CHANNEL(delay_to_detect[${k - 1}][p]);
+                ${hms_bundle_ty} from_prev_hp = read_channel_intel(detect_to_detect[${k - 2}][p]);
+                ${hms_bundle_ty} from_sp = read_channel_intel(delay_to_detect[${k - 1}][p]);
                 hsum[p] = from_prev_hp + from_sp;
             }
         % endif
@@ -75,7 +75,7 @@ kernel void detect_${k}(float threshold,
         %if k < hms_n_planes:
             #pragma unroll
             for (uint p = 0; p < ${hms_group_sz}; ++p)
-                WRITE_CHANNEL(detect_to_detect[${k - 1}][p], hsum[p]);
+                write_channel_intel(detect_to_detect[${k - 1}][p], hsum[p]);
         %endif
 
             bool cand[${hms_group_sz * hms_bundle_sz}];
@@ -129,15 +129,15 @@ kernel void detect_${k}(float threshold,
                 uint location = invalid_location;
                 float amplitude = invalid_amplitude;
                 if (h < ${k - 1}) {
-                    location = READ_CHANNEL(detect_location_out[${k - 1 - 1}][x]);
-                    amplitude = READ_CHANNEL(detect_amplitude_out[${k - 1 - 1}][x]);
+                    location = read_channel_intel(detect_location_out[${k - 1 - 1}][x]);
+                    amplitude = read_channel_intel(detect_amplitude_out[${k - 1 - 1}][x]);
                 } else if (is_valid) {
                     location = location_buffer[d][x];
                     amplitude = amplitude_buffer[d][x];
                 }
             % endif
-                WRITE_CHANNEL(detect_location_out[${k - 1}][x], location);
-                WRITE_CHANNEL(detect_amplitude_out[${k - 1}][x], amplitude);
+                write_channel_intel(detect_location_out[${k - 1}][x], location);
+                write_channel_intel(detect_amplitude_out[${k - 1}][x], amplitude);
             }
         }
     }

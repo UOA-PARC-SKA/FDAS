@@ -19,15 +19,7 @@
  */
 #include "fft_4p.cl"
 
-#if defined(INTELFPGA_CL)
 #pragma OPENCL EXTENSION cl_intel_channels : enable
-#define READ_CHANNEL(ch) read_channel_intel(ch)
-#define WRITE_CHANNEL(ch, x) write_channel_intel(ch, x)
-#else
-#pragma OPENCL EXTENSION cl_altera_channels : enable
-#define READ_CHANNEL(ch) read_channel_altera(ch)
-#define WRITE_CHANNEL(ch, x) write_channel_altera(ch, x)
-#endif
 
 channel float2x4 load_to_tile __attribute__((depth(0)));
 
@@ -101,16 +93,16 @@ kernel void fft_0(const uint n_tiles, const uint is_inverse)
             }
             if (tile >= 2) {
                 if (! is_inverse)
-                    WRITE_CHANNEL(fft_out, buf[tile & 1][step]);
+                    write_channel_intel(fft_out, buf[tile & 1][step]);
                 else
-                    WRITE_CHANNEL(ifft_out[0], buf[tile & 1][step]);
+                    write_channel_intel(ifft_out[0], buf[tile & 1][step]);
             }
 
             if (tile < n_tiles) {
                 if (! is_inverse)
-                    data = READ_CHANNEL(fft_in);
+                    data = read_channel_intel(fft_in);
                 else
-                    data = READ_CHANNEL(ifft_in[0]);
+                    data = read_channel_intel(ifft_in[0]);
             } else {
                 data = zeros;
             }
@@ -136,11 +128,11 @@ kernel void fft_1(const uint n_tiles)
                 buf[1 - (tile & 1)][bit_reversed(step, 9)] = data;
             }
             if (tile >= 2) {
-                WRITE_CHANNEL(ifft_out[1], buf[tile & 1][step]);
+                write_channel_intel(ifft_out[1], buf[tile & 1][step]);
             }
 
             if (tile < n_tiles) {
-                data = READ_CHANNEL(ifft_in[1]);
+                data = read_channel_intel(ifft_in[1]);
             } else {
                 data = zeros;
             }
@@ -166,11 +158,11 @@ kernel void fft_2(const uint n_tiles)
                 buf[1 - (tile & 1)][bit_reversed(step, 9)] = data;
             }
             if (tile >= 2) {
-                WRITE_CHANNEL(ifft_out[2], buf[tile & 1][step]);
+                write_channel_intel(ifft_out[2], buf[tile & 1][step]);
             }
 
             if (tile < n_tiles) {
-                data = READ_CHANNEL(ifft_in[2]);
+                data = read_channel_intel(ifft_in[2]);
             } else {
                 data = zeros;
             }
@@ -196,11 +188,11 @@ kernel void fft_3(const uint n_tiles)
                 buf[1 - (tile & 1)][bit_reversed(step, 9)] = data;
             }
             if (tile >= 2) {
-                WRITE_CHANNEL(ifft_out[3], buf[tile & 1][step]);
+                write_channel_intel(ifft_out[3], buf[tile & 1][step]);
             }
 
             if (tile < n_tiles) {
-                data = READ_CHANNEL(ifft_in[3]);
+                data = read_channel_intel(ifft_in[3]);
             } else {
                 data = zeros;
             }
@@ -217,7 +209,7 @@ kernel void load_input(global float2x4 * restrict input,
 {
     for (uint pack = 0; pack < n_packs; ++pack) {
         float2x4 load = input[pack];
-        WRITE_CHANNEL(load_to_tile, load);
+        write_channel_intel(load_to_tile, load);
     }
 }
 
@@ -241,7 +233,7 @@ kernel void tile(const uint n_tiles)
                 output.i[2] = chunk_buf_1[1 - (tile & 1)][step];
                 output.i[1] = chunk_buf_2[1 - (tile & 1)][step];
                 output.i[3] = chunk_buf_3[1 - (tile & 1)][step];
-                WRITE_CHANNEL(fft_in, output);
+                write_channel_intel(fft_in, output);
             }
 
             float2x4 input = zeros;
@@ -251,7 +243,7 @@ kernel void tile(const uint n_tiles)
                         input = overlap_sr[0];
                 }
                 else {
-                    input = READ_CHANNEL(load_to_tile);
+                    input = read_channel_intel(load_to_tile);
                 }
 
                 uint chunk = step / 128;
@@ -299,7 +291,7 @@ kernel void store_tiles(global float2x4 * restrict tiles,
 {
     for (uint tile = 0; tile < n_tiles; ++tile) {
         for (uint step = 0; step < 512; ++step) {
-            float2x4 read = READ_CHANNEL(fft_out);
+            float2x4 read = read_channel_intel(fft_out);
             tiles[tile * 512 + step] = read;
         }
     }
@@ -351,7 +343,7 @@ kernel void mux_and_mult(global float2x4 * restrict tiles,
         #pragma unroll
         for (uint e = 0; e < 4; ++e) {
             if (e < n_filters)
-                WRITE_CHANNEL(ifft_in[e], prods[e]);
+                write_channel_intel(ifft_in[e], prods[e]);
         }
     }
 }
@@ -411,7 +403,7 @@ kernel void square_and_discard_0(global float4 * restrict fop_A,
             }
 
             if (tile < n_tiles) {
-                float2x4 read = READ_CHANNEL(ifft_out[0]);
+                float2x4 read = read_channel_intel(ifft_out[0]);
                 float4 norm = power_norm4(read);
                 chunk_buf_0[tile & 1][step] = norm.s0;
                 chunk_buf_1[tile & 1][step] = norm.s2;
@@ -477,7 +469,7 @@ kernel void square_and_discard_1(global float4 * restrict fop_A,
             }
 
             if (tile < n_tiles) {
-                float2x4 read = READ_CHANNEL(ifft_out[1]);
+                float2x4 read = read_channel_intel(ifft_out[1]);
                 float4 norm = power_norm4(read);
                 chunk_buf_0[tile & 1][step] = norm.s0;
                 chunk_buf_1[tile & 1][step] = norm.s2;
@@ -543,7 +535,7 @@ kernel void square_and_discard_2(global float4 * restrict fop_A,
             }
 
             if (tile < n_tiles) {
-                float2x4 read = READ_CHANNEL(ifft_out[2]);
+                float2x4 read = read_channel_intel(ifft_out[2]);
                 float4 norm = power_norm4(read);
                 chunk_buf_0[tile & 1][step] = norm.s0;
                 chunk_buf_1[tile & 1][step] = norm.s2;
@@ -609,7 +601,7 @@ kernel void square_and_discard_3(global float4 * restrict fop_A,
             }
 
             if (tile < n_tiles) {
-                float2x4 read = READ_CHANNEL(ifft_out[3]);
+                float2x4 read = read_channel_intel(ifft_out[3]);
                 float4 norm = power_norm4(read);
                 chunk_buf_0[tile & 1][step] = norm.s0;
                 chunk_buf_1[tile & 1][step] = norm.s2;
@@ -660,7 +652,7 @@ kernel void preload_1(global float2 * restrict fop,
 
         #pragma unroll
         for (uint p = 0; p < 8; ++p)
-            WRITE_CHANNEL(preload_to_delay[0][p], out[p]);
+            write_channel_intel(preload_to_delay[0][p], out[p]);
     }
 }
 
@@ -680,7 +672,7 @@ kernel void delay_1(const uint n_channel_bundles)
         if (m == 0) {
             #pragma unroll
             for (uint p = 0; p < 8; ++p)
-                in[p] = READ_CHANNEL(preload_to_delay[0][p]);
+                in[p] = read_channel_intel(preload_to_delay[0][p]);
         }
 
         switch (m) {
@@ -700,7 +692,7 @@ kernel void delay_1(const uint n_channel_bundles)
 
         #pragma unroll
         for (uint p = 0; p < 8; ++p)
-            WRITE_CHANNEL(delay_to_detect[0][p], out[p]);
+            write_channel_intel(delay_to_detect[0][p], out[p]);
     }
 }
 
@@ -736,7 +728,7 @@ kernel void preload_2(global float2 * restrict fop,
 
         #pragma unroll
         for (uint p = 0; p < 8; ++p)
-            WRITE_CHANNEL(preload_to_delay[1][p], out[p]);
+            write_channel_intel(preload_to_delay[1][p], out[p]);
     }
 }
 
@@ -756,7 +748,7 @@ kernel void delay_2(const uint n_channel_bundles)
         if (m == 0) {
             #pragma unroll
             for (uint p = 0; p < 8; ++p)
-                in[p] = READ_CHANNEL(preload_to_delay[1][p]);
+                in[p] = read_channel_intel(preload_to_delay[1][p]);
         }
 
         switch (m) {
@@ -783,7 +775,7 @@ kernel void delay_2(const uint n_channel_bundles)
 
         #pragma unroll
         for (uint p = 0; p < 8; ++p)
-            WRITE_CHANNEL(delay_to_detect[1][p], out[p]);
+            write_channel_intel(delay_to_detect[1][p], out[p]);
     }
 }
 
@@ -819,7 +811,7 @@ kernel void preload_3(global float2 * restrict fop,
 
         #pragma unroll
         for (uint p = 0; p < 8; ++p)
-            WRITE_CHANNEL(preload_to_delay[2][p], out[p]);
+            write_channel_intel(preload_to_delay[2][p], out[p]);
     }
 }
 
@@ -839,7 +831,7 @@ kernel void delay_3(const uint n_channel_bundles)
         if (m == 0) {
             #pragma unroll
             for (uint p = 0; p < 8; ++p)
-                in[p] = READ_CHANNEL(preload_to_delay[2][p]);
+                in[p] = read_channel_intel(preload_to_delay[2][p]);
         }
 
         switch (m) {
@@ -873,7 +865,7 @@ kernel void delay_3(const uint n_channel_bundles)
 
         #pragma unroll
         for (uint p = 0; p < 8; ++p)
-            WRITE_CHANNEL(delay_to_detect[2][p], out[p]);
+            write_channel_intel(delay_to_detect[2][p], out[p]);
     }
 }
 
@@ -905,7 +897,7 @@ kernel void preload_4(global float2 * restrict fop,
 
         #pragma unroll
         for (uint p = 0; p < 8; ++p)
-            WRITE_CHANNEL(preload_to_delay[3][p], out[p]);
+            write_channel_intel(preload_to_delay[3][p], out[p]);
     }
 }
 
@@ -925,7 +917,7 @@ kernel void delay_4(const uint n_channel_bundles)
         if (m == 0) {
             #pragma unroll
             for (uint p = 0; p < 8; ++p)
-                in[p] = READ_CHANNEL(preload_to_delay[3][p]);
+                in[p] = read_channel_intel(preload_to_delay[3][p]);
         }
 
         switch (m) {
@@ -966,7 +958,7 @@ kernel void delay_4(const uint n_channel_bundles)
 
         #pragma unroll
         for (uint p = 0; p < 8; ++p)
-            WRITE_CHANNEL(delay_to_detect[3][p], out[p]);
+            write_channel_intel(delay_to_detect[3][p], out[p]);
     }
 }
 
@@ -1000,7 +992,7 @@ kernel void preload_5(global float2 * restrict fop,
 
         #pragma unroll
         for (uint p = 0; p < 8; ++p)
-            WRITE_CHANNEL(preload_to_delay[4][p], out[p]);
+            write_channel_intel(preload_to_delay[4][p], out[p]);
     }
 }
 
@@ -1020,7 +1012,7 @@ kernel void delay_5(const uint n_channel_bundles)
         if (m == 0) {
             #pragma unroll
             for (uint p = 0; p < 8; ++p)
-                in[p] = READ_CHANNEL(preload_to_delay[4][p]);
+                in[p] = read_channel_intel(preload_to_delay[4][p]);
         }
 
         switch (m) {
@@ -1068,7 +1060,7 @@ kernel void delay_5(const uint n_channel_bundles)
 
         #pragma unroll
         for (uint p = 0; p < 8; ++p)
-            WRITE_CHANNEL(delay_to_detect[4][p], out[p]);
+            write_channel_intel(delay_to_detect[4][p], out[p]);
     }
 }
 
@@ -1100,7 +1092,7 @@ kernel void preload_6(global float2 * restrict fop,
 
         #pragma unroll
         for (uint p = 0; p < 8; ++p)
-            WRITE_CHANNEL(preload_to_delay[5][p], out[p]);
+            write_channel_intel(preload_to_delay[5][p], out[p]);
     }
 }
 
@@ -1120,7 +1112,7 @@ kernel void delay_6(const uint n_channel_bundles)
         if (m == 0) {
             #pragma unroll
             for (uint p = 0; p < 8; ++p)
-                in[p] = READ_CHANNEL(preload_to_delay[5][p]);
+                in[p] = read_channel_intel(preload_to_delay[5][p]);
         }
 
         switch (m) {
@@ -1175,7 +1167,7 @@ kernel void delay_6(const uint n_channel_bundles)
 
         #pragma unroll
         for (uint p = 0; p < 8; ++p)
-            WRITE_CHANNEL(delay_to_detect[5][p], out[p]);
+            write_channel_intel(delay_to_detect[5][p], out[p]);
     }
 }
 
@@ -1207,7 +1199,7 @@ kernel void preload_7(global float2 * restrict fop,
 
         #pragma unroll
         for (uint p = 0; p < 8; ++p)
-            WRITE_CHANNEL(preload_to_delay[6][p], out[p]);
+            write_channel_intel(preload_to_delay[6][p], out[p]);
     }
 }
 
@@ -1227,7 +1219,7 @@ kernel void delay_7(const uint n_channel_bundles)
         if (m == 0) {
             #pragma unroll
             for (uint p = 0; p < 8; ++p)
-                in[p] = READ_CHANNEL(preload_to_delay[6][p]);
+                in[p] = read_channel_intel(preload_to_delay[6][p]);
         }
 
         switch (m) {
@@ -1289,7 +1281,7 @@ kernel void delay_7(const uint n_channel_bundles)
 
         #pragma unroll
         for (uint p = 0; p < 8; ++p)
-            WRITE_CHANNEL(delay_to_detect[6][p], out[p]);
+            write_channel_intel(delay_to_detect[6][p], out[p]);
     }
 }
 
@@ -1319,7 +1311,7 @@ kernel void preload_8(global float2 * restrict fop,
 
         #pragma unroll
         for (uint p = 0; p < 8; ++p)
-            WRITE_CHANNEL(preload_to_delay[7][p], out[p]);
+            write_channel_intel(preload_to_delay[7][p], out[p]);
     }
 }
 
@@ -1339,7 +1331,7 @@ kernel void delay_8(const uint n_channel_bundles)
         if (m == 0) {
             #pragma unroll
             for (uint p = 0; p < 8; ++p)
-                in[p] = READ_CHANNEL(preload_to_delay[7][p]);
+                in[p] = read_channel_intel(preload_to_delay[7][p]);
         }
 
         switch (m) {
@@ -1408,7 +1400,7 @@ kernel void delay_8(const uint n_channel_bundles)
 
         #pragma unroll
         for (uint p = 0; p < 8; ++p)
-            WRITE_CHANNEL(delay_to_detect[7][p], out[p]);
+            write_channel_intel(delay_to_detect[7][p], out[p]);
     }
 }
 
@@ -1450,13 +1442,13 @@ kernel void detect_1(float threshold,
 
             #pragma unroll
             for (uint p = 0; p < 8; ++p) {
-                float2 from_fop = READ_CHANNEL(delay_to_detect[0][p]);
+                float2 from_fop = read_channel_intel(delay_to_detect[0][p]);
                 hsum[p] = from_fop;
             }
 
             #pragma unroll
             for (uint p = 0; p < 8; ++p)
-                WRITE_CHANNEL(detect_to_detect[0][p], hsum[p]);
+                write_channel_intel(detect_to_detect[0][p], hsum[p]);
 
             bool cand[16];
 
@@ -1536,8 +1528,8 @@ kernel void detect_1(float threshold,
             for (uint x = 0; x < 16; ++x) {
                 uint location = is_valid ? location_buffer[d][x] : invalid_location;
                 float amplitude = is_valid ? amplitude_buffer[d][x] : invalid_amplitude;
-                WRITE_CHANNEL(detect_location_out[0][x], location);
-                WRITE_CHANNEL(detect_amplitude_out[0][x], amplitude);
+                write_channel_intel(detect_location_out[0][x], location);
+                write_channel_intel(detect_amplitude_out[0][x], amplitude);
             }
         }
     }
@@ -1581,14 +1573,14 @@ kernel void detect_2(float threshold,
 
             #pragma unroll
             for (uint p = 0; p < 8; ++p) {
-                float2 from_prev_hp = READ_CHANNEL(detect_to_detect[0][p]);
-                float2 from_sp = READ_CHANNEL(delay_to_detect[1][p]);
+                float2 from_prev_hp = read_channel_intel(detect_to_detect[0][p]);
+                float2 from_sp = read_channel_intel(delay_to_detect[1][p]);
                 hsum[p] = from_prev_hp + from_sp;
             }
 
             #pragma unroll
             for (uint p = 0; p < 8; ++p)
-                WRITE_CHANNEL(detect_to_detect[1][p], hsum[p]);
+                write_channel_intel(detect_to_detect[1][p], hsum[p]);
 
             bool cand[16];
 
@@ -1669,14 +1661,14 @@ kernel void detect_2(float threshold,
                 uint location = invalid_location;
                 float amplitude = invalid_amplitude;
                 if (h < 1) {
-                    location = READ_CHANNEL(detect_location_out[0][x]);
-                    amplitude = READ_CHANNEL(detect_amplitude_out[0][x]);
+                    location = read_channel_intel(detect_location_out[0][x]);
+                    amplitude = read_channel_intel(detect_amplitude_out[0][x]);
                 } else if (is_valid) {
                     location = location_buffer[d][x];
                     amplitude = amplitude_buffer[d][x];
                 }
-                WRITE_CHANNEL(detect_location_out[1][x], location);
-                WRITE_CHANNEL(detect_amplitude_out[1][x], amplitude);
+                write_channel_intel(detect_location_out[1][x], location);
+                write_channel_intel(detect_amplitude_out[1][x], amplitude);
             }
         }
     }
@@ -1720,14 +1712,14 @@ kernel void detect_3(float threshold,
 
             #pragma unroll
             for (uint p = 0; p < 8; ++p) {
-                float2 from_prev_hp = READ_CHANNEL(detect_to_detect[1][p]);
-                float2 from_sp = READ_CHANNEL(delay_to_detect[2][p]);
+                float2 from_prev_hp = read_channel_intel(detect_to_detect[1][p]);
+                float2 from_sp = read_channel_intel(delay_to_detect[2][p]);
                 hsum[p] = from_prev_hp + from_sp;
             }
 
             #pragma unroll
             for (uint p = 0; p < 8; ++p)
-                WRITE_CHANNEL(detect_to_detect[2][p], hsum[p]);
+                write_channel_intel(detect_to_detect[2][p], hsum[p]);
 
             bool cand[16];
 
@@ -1808,14 +1800,14 @@ kernel void detect_3(float threshold,
                 uint location = invalid_location;
                 float amplitude = invalid_amplitude;
                 if (h < 2) {
-                    location = READ_CHANNEL(detect_location_out[1][x]);
-                    amplitude = READ_CHANNEL(detect_amplitude_out[1][x]);
+                    location = read_channel_intel(detect_location_out[1][x]);
+                    amplitude = read_channel_intel(detect_amplitude_out[1][x]);
                 } else if (is_valid) {
                     location = location_buffer[d][x];
                     amplitude = amplitude_buffer[d][x];
                 }
-                WRITE_CHANNEL(detect_location_out[2][x], location);
-                WRITE_CHANNEL(detect_amplitude_out[2][x], amplitude);
+                write_channel_intel(detect_location_out[2][x], location);
+                write_channel_intel(detect_amplitude_out[2][x], amplitude);
             }
         }
     }
@@ -1859,14 +1851,14 @@ kernel void detect_4(float threshold,
 
             #pragma unroll
             for (uint p = 0; p < 8; ++p) {
-                float2 from_prev_hp = READ_CHANNEL(detect_to_detect[2][p]);
-                float2 from_sp = READ_CHANNEL(delay_to_detect[3][p]);
+                float2 from_prev_hp = read_channel_intel(detect_to_detect[2][p]);
+                float2 from_sp = read_channel_intel(delay_to_detect[3][p]);
                 hsum[p] = from_prev_hp + from_sp;
             }
 
             #pragma unroll
             for (uint p = 0; p < 8; ++p)
-                WRITE_CHANNEL(detect_to_detect[3][p], hsum[p]);
+                write_channel_intel(detect_to_detect[3][p], hsum[p]);
 
             bool cand[16];
 
@@ -1947,14 +1939,14 @@ kernel void detect_4(float threshold,
                 uint location = invalid_location;
                 float amplitude = invalid_amplitude;
                 if (h < 3) {
-                    location = READ_CHANNEL(detect_location_out[2][x]);
-                    amplitude = READ_CHANNEL(detect_amplitude_out[2][x]);
+                    location = read_channel_intel(detect_location_out[2][x]);
+                    amplitude = read_channel_intel(detect_amplitude_out[2][x]);
                 } else if (is_valid) {
                     location = location_buffer[d][x];
                     amplitude = amplitude_buffer[d][x];
                 }
-                WRITE_CHANNEL(detect_location_out[3][x], location);
-                WRITE_CHANNEL(detect_amplitude_out[3][x], amplitude);
+                write_channel_intel(detect_location_out[3][x], location);
+                write_channel_intel(detect_amplitude_out[3][x], amplitude);
             }
         }
     }
@@ -1998,14 +1990,14 @@ kernel void detect_5(float threshold,
 
             #pragma unroll
             for (uint p = 0; p < 8; ++p) {
-                float2 from_prev_hp = READ_CHANNEL(detect_to_detect[3][p]);
-                float2 from_sp = READ_CHANNEL(delay_to_detect[4][p]);
+                float2 from_prev_hp = read_channel_intel(detect_to_detect[3][p]);
+                float2 from_sp = read_channel_intel(delay_to_detect[4][p]);
                 hsum[p] = from_prev_hp + from_sp;
             }
 
             #pragma unroll
             for (uint p = 0; p < 8; ++p)
-                WRITE_CHANNEL(detect_to_detect[4][p], hsum[p]);
+                write_channel_intel(detect_to_detect[4][p], hsum[p]);
 
             bool cand[16];
 
@@ -2086,14 +2078,14 @@ kernel void detect_5(float threshold,
                 uint location = invalid_location;
                 float amplitude = invalid_amplitude;
                 if (h < 4) {
-                    location = READ_CHANNEL(detect_location_out[3][x]);
-                    amplitude = READ_CHANNEL(detect_amplitude_out[3][x]);
+                    location = read_channel_intel(detect_location_out[3][x]);
+                    amplitude = read_channel_intel(detect_amplitude_out[3][x]);
                 } else if (is_valid) {
                     location = location_buffer[d][x];
                     amplitude = amplitude_buffer[d][x];
                 }
-                WRITE_CHANNEL(detect_location_out[4][x], location);
-                WRITE_CHANNEL(detect_amplitude_out[4][x], amplitude);
+                write_channel_intel(detect_location_out[4][x], location);
+                write_channel_intel(detect_amplitude_out[4][x], amplitude);
             }
         }
     }
@@ -2137,14 +2129,14 @@ kernel void detect_6(float threshold,
 
             #pragma unroll
             for (uint p = 0; p < 8; ++p) {
-                float2 from_prev_hp = READ_CHANNEL(detect_to_detect[4][p]);
-                float2 from_sp = READ_CHANNEL(delay_to_detect[5][p]);
+                float2 from_prev_hp = read_channel_intel(detect_to_detect[4][p]);
+                float2 from_sp = read_channel_intel(delay_to_detect[5][p]);
                 hsum[p] = from_prev_hp + from_sp;
             }
 
             #pragma unroll
             for (uint p = 0; p < 8; ++p)
-                WRITE_CHANNEL(detect_to_detect[5][p], hsum[p]);
+                write_channel_intel(detect_to_detect[5][p], hsum[p]);
 
             bool cand[16];
 
@@ -2225,14 +2217,14 @@ kernel void detect_6(float threshold,
                 uint location = invalid_location;
                 float amplitude = invalid_amplitude;
                 if (h < 5) {
-                    location = READ_CHANNEL(detect_location_out[4][x]);
-                    amplitude = READ_CHANNEL(detect_amplitude_out[4][x]);
+                    location = read_channel_intel(detect_location_out[4][x]);
+                    amplitude = read_channel_intel(detect_amplitude_out[4][x]);
                 } else if (is_valid) {
                     location = location_buffer[d][x];
                     amplitude = amplitude_buffer[d][x];
                 }
-                WRITE_CHANNEL(detect_location_out[5][x], location);
-                WRITE_CHANNEL(detect_amplitude_out[5][x], amplitude);
+                write_channel_intel(detect_location_out[5][x], location);
+                write_channel_intel(detect_amplitude_out[5][x], amplitude);
             }
         }
     }
@@ -2276,14 +2268,14 @@ kernel void detect_7(float threshold,
 
             #pragma unroll
             for (uint p = 0; p < 8; ++p) {
-                float2 from_prev_hp = READ_CHANNEL(detect_to_detect[5][p]);
-                float2 from_sp = READ_CHANNEL(delay_to_detect[6][p]);
+                float2 from_prev_hp = read_channel_intel(detect_to_detect[5][p]);
+                float2 from_sp = read_channel_intel(delay_to_detect[6][p]);
                 hsum[p] = from_prev_hp + from_sp;
             }
 
             #pragma unroll
             for (uint p = 0; p < 8; ++p)
-                WRITE_CHANNEL(detect_to_detect[6][p], hsum[p]);
+                write_channel_intel(detect_to_detect[6][p], hsum[p]);
 
             bool cand[16];
 
@@ -2364,14 +2356,14 @@ kernel void detect_7(float threshold,
                 uint location = invalid_location;
                 float amplitude = invalid_amplitude;
                 if (h < 6) {
-                    location = READ_CHANNEL(detect_location_out[5][x]);
-                    amplitude = READ_CHANNEL(detect_amplitude_out[5][x]);
+                    location = read_channel_intel(detect_location_out[5][x]);
+                    amplitude = read_channel_intel(detect_amplitude_out[5][x]);
                 } else if (is_valid) {
                     location = location_buffer[d][x];
                     amplitude = amplitude_buffer[d][x];
                 }
-                WRITE_CHANNEL(detect_location_out[6][x], location);
-                WRITE_CHANNEL(detect_amplitude_out[6][x], amplitude);
+                write_channel_intel(detect_location_out[6][x], location);
+                write_channel_intel(detect_amplitude_out[6][x], amplitude);
             }
         }
     }
@@ -2415,8 +2407,8 @@ kernel void detect_8(float threshold,
 
             #pragma unroll
             for (uint p = 0; p < 8; ++p) {
-                float2 from_prev_hp = READ_CHANNEL(detect_to_detect[6][p]);
-                float2 from_sp = READ_CHANNEL(delay_to_detect[7][p]);
+                float2 from_prev_hp = read_channel_intel(detect_to_detect[6][p]);
+                float2 from_sp = read_channel_intel(delay_to_detect[7][p]);
                 hsum[p] = from_prev_hp + from_sp;
             }
 
@@ -2500,14 +2492,14 @@ kernel void detect_8(float threshold,
                 uint location = invalid_location;
                 float amplitude = invalid_amplitude;
                 if (h < 7) {
-                    location = READ_CHANNEL(detect_location_out[6][x]);
-                    amplitude = READ_CHANNEL(detect_amplitude_out[6][x]);
+                    location = read_channel_intel(detect_location_out[6][x]);
+                    amplitude = read_channel_intel(detect_amplitude_out[6][x]);
                 } else if (is_valid) {
                     location = location_buffer[d][x];
                     amplitude = amplitude_buffer[d][x];
                 }
-                WRITE_CHANNEL(detect_location_out[7][x], location);
-                WRITE_CHANNEL(detect_amplitude_out[7][x], amplitude);
+                write_channel_intel(detect_location_out[7][x], location);
+                write_channel_intel(detect_amplitude_out[7][x], amplitude);
             }
         }
     }
@@ -2520,8 +2512,8 @@ kernel void store_cands(global uint * restrict detection_location,
     for (uint d = 0; d < 512; ++d) {
         #pragma unroll
         for (uint x = 0; x < 16; ++x) {
-            uint location = READ_CHANNEL(detect_location_out[7][x]);
-            float amplitude = READ_CHANNEL(detect_amplitude_out[7][x]);
+            uint location = read_channel_intel(detect_location_out[7][x]);
+            float amplitude = read_channel_intel(detect_amplitude_out[7][x]);
             detection_location[d * 16 + x] = location;
             detection_amplitude[d * 16 + x] = amplitude;
         }

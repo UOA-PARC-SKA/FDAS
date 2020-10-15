@@ -13,7 +13,7 @@ kernel void load_input(global float2x4 * restrict input,
 {
     for (uint pack = 0; pack < n_packs; ++pack) {
         float2x4 load = input[pack];
-        WRITE_CHANNEL(load_to_tile, load);
+        write_channel_intel(load_to_tile, load);
     }
 }
 
@@ -35,7 +35,7 @@ kernel void tile(const uint n_tiles)
             % for p in range(fft_n_parallel):
                 output.i[${bit_rev(p, fft_n_parallel_log)}] = chunk_buf_${p}[1 - (tile & 1)][step];
             % endfor
-                WRITE_CHANNEL(fft_in, output);
+                write_channel_intel(fft_in, output);
             }
 
             float2x4 input = zeros;
@@ -45,7 +45,7 @@ kernel void tile(const uint n_tiles)
                         input = overlap_sr[0];
                 }
                 else {
-                    input = READ_CHANNEL(load_to_tile);
+                    input = read_channel_intel(load_to_tile);
                 }
 
                 uint chunk = step / ${n_steps_per_chunk};
@@ -80,7 +80,7 @@ kernel void store_tiles(global float2x4 * restrict tiles,
 {
     for (uint tile = 0; tile < n_tiles; ++tile) {
         for (uint step = 0; step < ${n_steps}; ++step) {
-            float2x4 read = READ_CHANNEL(fft_out);
+            float2x4 read = read_channel_intel(fft_out);
             tiles[tile * ${fdf_tile_sz // fft_n_parallel} + step] = read;
         }
     }
