@@ -4,7 +4,7 @@
 
     n_steps = fft_n_points_per_terminal
     n_steps_per_chunk = fft_n_points_per_terminal // fft_n_parallel
-    n_steps_for_overlap = fdf_tile_overlap // fft_n_parallel
+    n_steps_for_overlap = ftc_tile_overlap // fft_n_parallel
 %>\
 __attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
@@ -81,7 +81,7 @@ kernel void store_tiles(global float2x4 * restrict tiles,
     for (uint tile = 0; tile < n_tiles; ++tile) {
         for (uint step = 0; step < ${n_steps}; ++step) {
             float2x4 read = read_channel_intel(fft_out);
-            tiles[tile * ${fdf_tile_sz // fft_n_parallel} + step] = read;
+            tiles[tile * ${ftc_tile_sz // fft_n_parallel} + step] = read;
         }
     }
 }

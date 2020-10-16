@@ -4,7 +4,7 @@
 
     n_steps = fft_n_points_per_terminal
     n_steps_per_chunk = fft_n_points_per_terminal // fft_n_parallel
-    n_steps_for_overlap = fdf_tile_overlap // fft_n_parallel
+    n_steps_for_overlap = ftc_tile_overlap // fft_n_parallel
 %>\
 __attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))

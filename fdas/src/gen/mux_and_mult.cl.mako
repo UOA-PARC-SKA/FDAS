@@ -2,7 +2,7 @@
 <%
     n_steps = fft_n_points_per_terminal
     n_steps_per_chunk = fft_n_points_per_terminal // fft_n_parallel
-    n_steps_for_overlap = fdf_tile_overlap // fft_n_parallel
+    n_steps_for_overlap = ftc_tile_overlap // fft_n_parallel
 
     n_packs_per_tile = fft_n_points_per_terminal
 %>\
@@ -12,9 +12,9 @@ kernel void mux_and_mult(global float2x4 * restrict tiles,
                          global float2x4 * restrict templates,
                          const uint n_tiles,
                      % for e in range(fft_n_engines):
-                         const int filter_${e},
+                         const int template_${e},
                      % endfor
-                         const uint n_filters)
+                         const uint n_templates)
 {
     const float2x4 zeros = {${", ".join(["0"] * fft_n_parallel)}};
 
@@ -24,7 +24,7 @@ kernel void mux_and_mult(global float2x4 * restrict tiles,
 
     for (uint pack = 0; pack < ${n_packs_per_tile}; ++pack) {
     % for e in range(fft_n_engines):
-        float2x4 tmpl_${e} = ${e} < n_filters ? templates[(${n_filters_per_accel_sign} + filter_${e}) * ${n_packs_per_tile} + pack] : zeros;
+        float2x4 tmpl_${e} = ${e} < n_templates ? templates[(${n_tmpl_per_accel_sign} + template_${e}) * ${n_packs_per_tile} + pack] : zeros;
     % endfor
     % for e in range(fft_n_engines):
         template_buf_${e}[pack] = tmpl_${e};
@@ -45,7 +45,7 @@ kernel void mux_and_mult(global float2x4 * restrict tiles,
 
         #pragma unroll
         for (uint e = 0; e < ${fft_n_engines}; ++e) {
-            if (e < n_filters)
+            if (e < n_templates)
                 write_channel_intel(ifft_in[e], prods[e]);
         }
     }

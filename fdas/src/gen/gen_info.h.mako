@@ -26,9 +26,9 @@
 
 namespace GenInfo {
 namespace Input {
-    static const cl_uint  n_filters                 = ${n_filters};
-    static const cl_uint  n_taps                    = ${n_taps};
-    static const cl_int   n_filters_per_accel_sign  = ${n_filters_per_accel_sign}; // intentionally signed
+    static const cl_uint  n_templates               = ${n_templates};
+    static const cl_uint  max_template_len          = ${max_template_len};
+    static const cl_int   n_tmpl_per_accel_sign     = ${n_tmpl_per_accel_sign}; // intentionally signed
 }
 namespace FFT {
     static const cl_uint  n_points                  = ${fft_n_points};
@@ -39,10 +39,10 @@ namespace FFT {
     static const cl_uint  n_points_per_terminal_log = ${fft_n_points_per_terminal_log};
     static const cl_uint  n_engines                 = ${fft_n_engines};
 }
-namespace FDF {
-    static const cl_uint  tile_sz                   = ${fdf_tile_sz};
-    static const cl_uint  tile_overlap              = ${fdf_tile_overlap};
-    static const cl_uint  tile_payload              = ${fdf_tile_payload};
+namespace FTC {
+    static const cl_uint  tile_sz                   = ${ftc_tile_sz};
+    static const cl_uint  tile_overlap              = ${ftc_tile_overlap};
+    static const cl_uint  tile_payload              = ${ftc_tile_payload};
 }
 namespace HMS {
     static const cl_uint  n_planes                  = ${hms_n_planes};
@@ -55,32 +55,31 @@ namespace HMS {
     static const     cl_uint lcm = ${lcm(list(range(1, hms_n_planes + 1)))};
 <%
     n_buffers_list = []
-    first_offset_to_use_last_buffer_list = []
+    first_cc_to_use_last_buffer_list = []
 
     for k in range(1, hms_n_planes + 1):
         out_map = get_output_mapping(hms_group_sz, k)
         n_buffers = max(out_map[-1].keys()) + 1
 
-        need_base_row_offset = 1 < max(map(lambda x: len(x), out_map))
-        first_offset_to_use_last_buffer = k
+        first_cc_to_use_last_buffer = k
         for p in range(hms_group_sz):
             if (n_buffers - 1) in out_map[p]:
-                first_offset_to_use_last_buffer = min(first_offset_to_use_last_buffer, min(out_map[p][n_buffers - 1]))
+                first_cc_to_use_last_buffer = min(first_cc_to_use_last_buffer, min(out_map[p][n_buffers - 1]))
 
         n_buffers_list += [str(n_buffers)]
-        first_offset_to_use_last_buffer_list += [str(first_offset_to_use_last_buffer)]
+        first_cc_to_use_last_buffer_list += [str(first_cc_to_use_last_buffer)]
 %>\
     static constexpr cl_uint n_buffers[${hms_n_planes}] = {${', '.join(n_buffers_list)}};
-    static constexpr cl_uint first_offset_to_use_last_buffer[${hms_n_planes}] = {${', '.join(first_offset_to_use_last_buffer_list)}};
+    static constexpr cl_uint first_cc_to_use_last_buffer[${hms_n_planes}] = {${', '.join(first_cc_to_use_last_buffer_list)}};
 
-    constexpr cl_uint encode_location(cl_uint k, cl_int f, cl_uint c) {
-        return (((k - 1) & 0x7) << 29) | (((f + ${n_filters_per_accel_sign}) & 0x7f) << 22) | (c & 0x3fffff);
+    constexpr cl_uint encode_location(cl_uint harm, cl_int tmpl, cl_uint freq) {
+        return (((harm - 1) & 0x7) << 29) | (((tmpl + ${n_tmpl_per_accel_sign}) & 0x7f) << 22) | (freq & 0x3fffff);
     }
-    constexpr cl_uint get_harmonic(cl_uint location) { return ((location >> 29) & 0x7) + 1; }
-    constexpr cl_uint get_filter(cl_uint location)   { return ((location >> 22) & 0x7f) - ${n_filters_per_accel_sign}; }
-    constexpr cl_uint get_channel(cl_uint location)  { return location & 0x3fffff; }
+    constexpr cl_uint get_harmonic(cl_uint location)      { return ((location >> 29) & 0x7) + 1; }
+    constexpr cl_uint get_template_num(cl_uint location)  { return ((location >> 22) & 0x7f) - ${n_tmpl_per_accel_sign}; }
+    constexpr cl_uint get_frequency_bin(cl_uint location) { return location & 0x3fffff; }
 
-    static constexpr cl_uint invalid_location = encode_location(1, ${n_filters_per_accel_sign} + 1, 0);
+    static constexpr cl_uint invalid_location = encode_location(1, ${n_tmpl_per_accel_sign} + 1, 0);
 }
 namespace Output {
     static const cl_uint  n_candidates              = ${n_candidates};

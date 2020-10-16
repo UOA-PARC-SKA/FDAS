@@ -23,12 +23,6 @@
     out_map = get_output_mapping(hms_group_sz, k)
     n_buffers = max(out_map[-1].keys()) + 1
 
-    need_base_row_offset = 1 < max(map(lambda x: len(x), out_map))
-    first_offset_to_use_last_buffer = k
-    for p in range(hms_group_sz):
-        if (n_buffers - 1) in out_map[p]:
-            first_offset_to_use_last_buffer = min(first_offset_to_use_last_buffer, min(out_map[p][n_buffers - 1]))
-
     buffers_for_output = []
     for p in range(hms_group_sz):
         idxs = sorted(list(out_map[p].keys()))
@@ -42,27 +36,27 @@
 __attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
 kernel void preload_${k}(global ${hms_bundle_ty} * restrict fop,
-                      const uint n_rows,
-                      const uint base_row_rem,
+                      const uint n_templates,
+                      const uint cc_of_first_tmpl_num_in_group,
                   % for r in range(n_buffers):
-                      const uint filter_offset_${r},
+                      const uint template_offset_${r},
                   % endfor
-                      const uint n_channel_bundles)
+                      const uint n_bundles)
 {
     const ${hms_bundle_ty} zeros = {${", ".join(["0"] * hms_bundle_sz)}};
     ${hms_bundle_ty} load[${n_buffers}];
     ${hms_bundle_ty} out[${hms_group_sz}];
 
-    for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
+    for (uint bundle = 0; bundle < n_bundles; ++bundle) {
     % for r in range(n_buffers):
-        load[${r}] = ${r} < n_rows ? fop[filter_offset_${r} + bundle] : zeros;
+        load[${r}] = ${r} < n_templates ? fop[template_offset_${r} + bundle] : zeros;
     % endfor
 
     % for p in range(hms_group_sz):
     % if len(buffers_for_output[p]) == 1:
         out[${p}] = load[${buffers_for_output[p][0]}];
     % else:
-        out[${p}] = base_row_rem < ${buffers_for_output[p][2]} ? load[${buffers_for_output[p][0]}] : load[${buffers_for_output[p][1]}];
+        out[${p}] = cc_of_first_tmpl_num_in_group < ${buffers_for_output[p][2]} ? load[${buffers_for_output[p][0]}] : load[${buffers_for_output[p][1]}];
     % endif
     % endfor
 
@@ -74,14 +68,14 @@ kernel void preload_${k}(global ${hms_bundle_ty} * restrict fop,
 
 __attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
-kernel void delay_${k}(const uint n_channel_bundles)
+kernel void delay_${k}(const uint n_bundles)
 {
     const ${hms_bundle_ty} zeros = {${", ".join(["0"] * hms_bundle_sz)}};
     ${hms_bundle_ty} in[${hms_group_sz}];
     ${hms_bundle_ty} out[${hms_group_sz}];
 
     uint M = 0;
-    for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
+    for (uint bundle = 0; bundle < n_bundles; ++bundle) {
         uint m = M;
         M = M < ${k - 1} ? M + 1 : 0;
 

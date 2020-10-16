@@ -64,21 +64,14 @@ def main():
     parser.add_argument('--n-engines', dest='fft_n_engines', type=int, default=4)
     parser.add_argument('--group-sz', dest='hms_group_sz', type=int, default=8)
     parser.add_argument('--bundle-sz', dest='hms_bundle_sz', type=int, default=2)
-    parser.add_argument('--mode', dest='mode', choices=["fpga", "emu"], default="fpga")
 
     args = parser.parse_args()
 
     # Input parameters
-    if args.mode == 'fpga':
-        n_filters_per_accel_sign = 42
-        n_taps = 421
-    elif args.mode == 'emu':
-        n_filters_per_accel_sign = 10
-        n_taps = 106
-    else:
-        raise RuntimeError(f"unknown mode: {args.mode}")
+    n_tmpl_per_accel_sign = 42
+    max_template_len = 421
 
-    n_filters = n_filters_per_accel_sign + 1 + n_filters_per_accel_sign
+    n_templates = n_tmpl_per_accel_sign + 1 + n_tmpl_per_accel_sign
 
     # FFT engine configuration
     fft_n_points_log = 11
@@ -92,10 +85,10 @@ def main():
 
     fft_n_engines = args.fft_n_engines
 
-    # Frequency-domain FIR filter implementation with overlap-save algorithm
-    fdf_tile_sz = fft_n_points
-    fdf_tile_overlap = int(ceil((n_taps - 1) / fft_n_parallel)) * fft_n_parallel  # ease input tiling
-    fdf_tile_payload = fdf_tile_sz - fdf_tile_overlap
+    # FT convolution with overlap-save algorithm
+    ftc_tile_sz = fft_n_points
+    ftc_tile_overlap = int(ceil((max_template_len - 1) / fft_n_parallel)) * fft_n_parallel  # ease input tiling
+    ftc_tile_payload = ftc_tile_sz - ftc_tile_overlap
 
     # Harmonic summing
     hms_n_planes = 8

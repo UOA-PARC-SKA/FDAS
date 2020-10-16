@@ -39,7 +39,6 @@ public:
     using ThreshType = std::vector<float>;
     using DetLocType = std::vector<uint32_t>;
     using DetPwrType = std::vector<float>;
-    using HPType = std::vector<float>;
 
     using ShapeType = std::vector<unsigned long>;
 

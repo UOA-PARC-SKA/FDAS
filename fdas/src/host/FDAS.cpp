@@ -168,16 +168,16 @@ bool FDAS::initialise_accelerator(std::string bitstream_file_name,
 
     // Buffers
     n_frequency_bins = n_input_points;
-    n_tiles = n_frequency_bins / FDF::tile_payload + 1;
-    padding_last_tile = FDF::tile_payload - n_frequency_bins % FDF::tile_payload;
-    if (padding_last_tile == FDF::tile_payload) {
+    n_tiles = n_frequency_bins / FTC::tile_payload + 1;
+    padding_last_tile = FTC::tile_payload - n_frequency_bins % FTC::tile_payload;
+    if (padding_last_tile == FTC::tile_payload) {
         --n_tiles;
         padding_last_tile = 0;
     }
-    padded_input_sz = FDF::tile_overlap + n_frequency_bins + padding_last_tile; // NB: == (n_tiles - 1) * FDF::tile_payload + FDF::tile_sz;
-    tiled_input_sz = n_tiles * FDF::tile_sz;
-    templates_sz = Input::n_filters * FDF::tile_sz;
-    fop_sz = Input::n_filters * n_frequency_bins;
+    padded_input_sz = FTC::tile_overlap + n_frequency_bins + padding_last_tile; // NB: == (n_tiles - 1) * FDF::tile_payload + FDF::tile_sz;
+    tiled_input_sz = n_tiles * FTC::tile_sz;
+    templates_sz = Input::n_templates * FTC::tile_sz;
+    fop_sz = Input::n_templates * n_frequency_bins;
 
     size_t total_allocated = 0;
 
@@ -221,7 +221,7 @@ bool FDAS::check_dimensions(const FDAS::ShapeType &input_shape, const FDAS::Shap
         return false;
     }
 
-    if (templates_shape.size() != 2 || templates_shape[0] != Input::n_filters || templates_shape[1] != FDF::tile_sz) {
+    if (templates_shape.size() != 2 || templates_shape[0] != Input::n_templates || templates_shape[1] != FTC::tile_sz) {
         log << "[ERROR] Malformed filter templates" << endl;
         return false;
     }
@@ -299,14 +299,14 @@ bool FDAS::perform_ft_convolution(const FDAS::InputType &input, const FDAS::Shap
     }
 
     const int first_filter = 0; // use -Input::n_filters_per_accel_sign for full FOP
-    const int last_filter = Input::n_filters_per_accel_sign;
+    const int last_filter = Input::n_tmpl_per_accel_sign;
     for (int f = first_filter; f <= last_filter; f += FFT::n_engines) {
         int n_filters = std::min(last_filter - f + 1, (int) FFT::n_engines);
         cl_chk(mux_and_mult_kernel->setArg<cl_uint>(3 + FFT::n_engines, n_filters));
         for (int e = 0; e < FFT::n_engines; ++e) {
             cl_chk(mux_and_mult_kernel->setArg<cl_uint>(3 + e, f + e));
 
-            cl_uint fop_offset = (f + e + Input::n_filters_per_accel_sign) * n_frequency_bins / FFT::n_parallel;
+            cl_uint fop_offset = (f + e + Input::n_tmpl_per_accel_sign) * n_frequency_bins / FFT::n_parallel;
             cl_chk(square_and_discard_kernels[e]->setArg<cl_uint>(1, fop_offset));
         }
 
@@ -335,7 +335,7 @@ bool FDAS::perform_harmonic_summing(const FDAS::ThreshType &thresholds, const FD
     }
 
     const int n_planes = HMS::n_planes;
-    const int n_filters = Input::n_filters_per_accel_sign + 1;
+    const int n_filters = Input::n_tmpl_per_accel_sign + 1;
     const int n_filter_groups = (int) ceil(1.0 * n_filters / HMS::group_sz);
     const int n_channels = n_frequency_bins / HMS::bundle_sz / HMS::lcm * HMS::bundle_sz * HMS::lcm; // FIXME after merge
     const int n_channel_bundles = n_channels / HMS::bundle_sz;
@@ -361,8 +361,8 @@ bool FDAS::perform_harmonic_summing(const FDAS::ThreshType &thresholds, const FD
         for (int g = 0; g < n_filter_groups; ++g) {
             int base_row = g * HMS::group_sz / k;
             int base_row_rem = g * HMS::group_sz % k;
-            int n_rows = HMS::first_offset_to_use_last_buffer[h] > 0 ?
-                    HMS::n_buffers[h] - (base_row_rem < HMS::first_offset_to_use_last_buffer[h]) :
+            int n_rows = HMS::first_cc_to_use_last_buffer[h] > 0 ?
+                    HMS::n_buffers[h] - (base_row_rem < HMS::first_cc_to_use_last_buffer[h]) :
                     n_rows = HMS::n_buffers[h];
             if (base_row + n_rows >= n_filters)
                 n_rows = n_filters - base_row;
@@ -375,7 +375,7 @@ bool FDAS::perform_harmonic_summing(const FDAS::ThreshType &thresholds, const FD
             cl_chk(preload_k.setArg<cl_uint>(2, base_row_rem));
             for (int r = 0; r < HMS::n_buffers[h]; ++r) {
                 cl_int filter = negative_filters ? -base_row - r : base_row + r;
-                cl_uint filter_offset = (filter + Input::n_filters_per_accel_sign) * n_frequency_bins / HMS::bundle_sz;
+                cl_uint filter_offset = (filter + Input::n_tmpl_per_accel_sign) * n_frequency_bins / HMS::bundle_sz;
                 cl_chk(preload_k.setArg<cl_uint>(3 + r, filter_offset));
             }
             cl_chk(preload_k.setArg<cl_uint>(3 + HMS::n_buffers[h], n_channel_bundles / k)); // important: n_channel_bundles must be divisible by all k
@@ -426,7 +426,7 @@ bool FDAS::retrieve_tiles(FDAS::TilesType &tiles, FDAS::ShapeType &tiles_shape) 
     cl_chk(buffer_q.finish());
 
     tiles_shape.push_back(n_tiles);
-    tiles_shape.push_back(FDF::tile_sz);
+    tiles_shape.push_back(FTC::tile_sz);
 
     return true;
 }
@@ -438,7 +438,7 @@ bool FDAS::retrieve_FOP(FDAS::FOPType &fop, FDAS::ShapeType &fop_shape) {
     cl_chk(buffer_q.enqueueReadBuffer(*fop_buffer_A, true, 0, sizeof(cl_float) * fop_sz, fop.data()));
     cl_chk(buffer_q.finish());
 
-    fop_shape.push_back(Input::n_filters);
+    fop_shape.push_back(Input::n_templates);
     fop_shape.push_back(n_frequency_bins);
 
     return true;

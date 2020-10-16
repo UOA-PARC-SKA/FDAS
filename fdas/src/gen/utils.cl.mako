@@ -30,6 +30,6 @@ inline float4 power_norm4(float2x4 a)
     return res;
 }
 
-inline uint encode_location(uint k, int f, uint c) {
-    return (((k - 1) & 0x7) << 29) | (((f + ${n_filters_per_accel_sign}) & 0x7f) << 22) | (c & 0x3fffff);
+inline uint encode_location(uint harm, int tmpl, uint freq) {
+    return (((harm - 1) & 0x7) << 29) | (((tmpl + ${n_tmpl_per_accel_sign}) & 0x7f) << 22) | (freq & 0x3fffff);
 }

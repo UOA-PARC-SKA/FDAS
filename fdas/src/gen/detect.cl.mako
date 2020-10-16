@@ -19,10 +19,10 @@
 __attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
 kernel void detect_${k}(float threshold,
-                     uint n_filters,
-                     uint negative_filters,
-                     uint n_filter_groups,
-                     uint n_channel_bundles)
+                     uint n_templates,
+                     uint negative_tmpl_nums,
+                     uint n_groups,
+                     uint n_bundles)
 {
 <%
     from math import ceil, log2
@@ -30,30 +30,30 @@ kernel void detect_${k}(float threshold,
     assert hms_detection_sz <= 64 and bin(hms_detection_sz).count('1') == 1  # power of 2
 %>\
     uint location_buffer[${hms_detection_sz}][${hms_slot_sz}];
-    float amplitude_buffer[${hms_detection_sz}][${hms_slot_sz}];
+    float power_buffer[${hms_detection_sz}][${hms_slot_sz}];
 
     ulong valid = 0l;
     uint next = 0;
 
-    const uint invalid_location = encode_location(1, ${n_filters_per_accel_sign + 1}, 0);
-    const float invalid_amplitude = -1.0f;
+    const uint invalid_location = encode_location(1, ${n_tmpl_per_accel_sign + 1}, 0);
+    const float invalid_power = -1.0f;
 
-    for (uint group = 0; group < n_filter_groups; ++group) {
+    for (uint group = 0; group < n_groups; ++group) {
         uint group_base = group * ${hms_group_sz};
-        int filter_num[${hms_group_sz}];
-        bool filter_mask[${hms_group_sz}];
+        int tmpl_num[${hms_group_sz}];
+        bool tmpl_mask[${hms_group_sz}];
         #pragma unroll
         for (uint p = 0; p < ${hms_group_sz}; ++p) {
-            filter_num[p] = negative_filters ? - group_base - p : group_base + p;
-            filter_mask[p] = group_base + p < n_filters;
+            tmpl_num[p] = negative_tmpl_nums ? - group_base - p : group_base + p;
+            tmpl_mask[p] = group_base + p < n_templates;
         }
 
-        for (uint bundle = 0; bundle < n_channel_bundles; ++bundle) {
+        for (uint bundle = 0; bundle < n_bundles; ++bundle) {
             uint bundle_base = bundle * ${hms_bundle_sz};
-            uint channel_num[${hms_bundle_sz}];
+            uint freq_num[${hms_bundle_sz}];
             #pragma unroll
             for (uint q = 0; q < ${hms_bundle_sz}; ++q)
-                channel_num[q] = bundle_base + q;
+                freq_num[q] = bundle_base + q;
 
             ${hms_bundle_ty} hsum[${hms_group_sz}];
 
@@ -82,25 +82,25 @@ kernel void detect_${k}(float threshold,
 
         %for p in range(hms_group_sz):
         %for q in range(hms_bundle_sz):
-            cand[${p * hms_bundle_sz + q}] = (hsum[${p}]${bundle_idx(q)} > threshold) & filter_mask[${p}];
+            cand[${p * hms_bundle_sz + q}] = (hsum[${p}]${bundle_idx(q)} > threshold) & tmpl_mask[${p}];
         %endfor
         %endfor
 
             bool any_cand = ${' | '.join(f"cand[{x}]" for x in range(hms_group_sz * hms_bundle_sz))};
             if (any_cand) {
                 uint loc[${hms_slot_sz}];
-                float amp[${hms_slot_sz}];
+                float pwr[${hms_slot_sz}];
 
             % for p in range(hms_group_sz):
             % for q in range(hms_bundle_sz):
 <% x = p * hms_bundle_sz + q %>\
-                loc[${x}] = cand[${x}] ? encode_location(${k}, filter_num[${p}], channel_num[${q}]) : invalid_location;
-                amp[${x}] = cand[${x}] ? hsum[${p}]${bundle_idx(q)} : invalid_amplitude;
+                loc[${x}] = cand[${x}] ? encode_location(${k}, tmpl_num[${p}], freq_num[${q}]) : invalid_location;
+                pwr[${x}] = cand[${x}] ? hsum[${p}]${bundle_idx(q)} : invalid_power;
             % endfor
             % endfor
             % for x in range(hms_group_sz * hms_bundle_sz, hms_slot_sz):
                 loc[${x}] = invalid_location;
-                amp[${x}] = invalid_amplitude;
+                pwr[${x}] = invalid_power;
             % endfor
 
                 uint slot = next;
@@ -109,7 +109,7 @@ kernel void detect_${k}(float threshold,
                 #pragma unroll
                 for (uint x = 0; x < ${hms_slot_sz}; ++x) {
                     location_buffer[slot][x] = loc[x];
-                    amplitude_buffer[slot][x] = amp[x];
+                    power_buffer[slot][x] = pwr[x];
                 }
 
                 valid |= 1l << slot;
@@ -124,20 +124,20 @@ kernel void detect_${k}(float threshold,
             for (uint x = 0; x < ${hms_slot_sz}; ++x) {
             % if k == 1:
                 uint location = is_valid ? location_buffer[d][x] : invalid_location;
-                float amplitude = is_valid ? amplitude_buffer[d][x] : invalid_amplitude;
+                float power = is_valid ? power_buffer[d][x] : invalid_power;
             % else:
                 uint location = invalid_location;
-                float amplitude = invalid_amplitude;
+                float power = invalid_power;
                 if (h < ${k - 1}) {
                     location = read_channel_intel(detect_location_out[${k - 1 - 1}][x]);
-                    amplitude = read_channel_intel(detect_amplitude_out[${k - 1 - 1}][x]);
+                    power = read_channel_intel(detect_power_out[${k - 1 - 1}][x]);
                 } else if (is_valid) {
                     location = location_buffer[d][x];
-                    amplitude = amplitude_buffer[d][x];
+                    power = power_buffer[d][x];
                 }
             % endif
                 write_channel_intel(detect_location_out[${k - 1}][x], location);
-                write_channel_intel(detect_amplitude_out[${k - 1}][x], amplitude);
+                write_channel_intel(detect_power_out[${k - 1}][x], power);
             }
         }
     }

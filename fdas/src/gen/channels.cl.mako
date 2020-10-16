@@ -15,4 +15,4 @@ channel ${hms_bundle_ty} delay_to_detect[${hms_n_planes}][${hms_group_sz}] ${dep
 
 channel ${hms_bundle_ty} detect_to_detect[${hms_n_planes - 1}][${hms_group_sz}] ${depth_attr};
 channel uint  detect_location_out[${hms_n_planes}][${hms_slot_sz}] ${depth_attr};
-channel float detect_amplitude_out[${hms_n_planes}][${hms_slot_sz}] ${depth_attr};
+channel float detect_power_out[${hms_n_planes}][${hms_slot_sz}] ${depth_attr};
