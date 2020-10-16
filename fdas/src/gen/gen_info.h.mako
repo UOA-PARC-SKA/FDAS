@@ -43,6 +43,7 @@ namespace FTC {
     static const cl_uint  tile_sz                   = ${ftc_tile_sz};
     static const cl_uint  tile_overlap              = ${ftc_tile_overlap};
     static const cl_uint  tile_payload              = ${ftc_tile_payload};
+    static const cl_uint  pack_sz                   = ${ftc_pack_sz};
 }
 namespace HMS {
     static const cl_uint  n_planes                  = ${hms_n_planes};
@@ -50,7 +51,6 @@ namespace HMS {
     static const cl_uint  group_sz                  = ${hms_group_sz};
     static const cl_uint  bundle_sz                 = ${hms_bundle_sz};
     static const cl_uint  slot_sz                   = ${hms_slot_sz};
-    static const cl_uint  dual_channnel             = ${int(hms_dual_channel)};
 
     static const     cl_uint lcm = ${lcm(list(range(1, hms_n_planes + 1)))};
 <%

@@ -8,11 +8,14 @@
 %>\
 __attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
-kernel void load_input(global float2x4 * restrict input,
-                       const uint n_packs)
+kernel void load_input(global ${ftc_complex_pack_ty} * restrict input,
+                       const uint n_packs,
+                       const uint n_packs_padding)
 {
-    for (uint pack = 0; pack < n_packs; ++pack) {
-        float2x4 load = input[pack];
+    const ${ftc_complex_pack_ty} zeros = {${", ".join(["0"] * fft_n_parallel)}};
+
+    for (uint pack = 0; pack < n_packs + n_packs_padding; ++pack) {
+        ${ftc_complex_pack_ty} load = pack < n_packs ? input[pack] : zeros;
         write_channel_intel(load_to_tile, load);
     }
 }
@@ -21,9 +24,9 @@ __attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
 kernel void tile(const uint n_tiles)
 {
-    const float2x4 zeros = {${", ".join(["0"] * fft_n_parallel)}};
+    const ${ftc_complex_pack_ty} zeros = {${", ".join(["0"] * fft_n_parallel)}};
 
-    float2x4 overlap_sr[${n_steps_for_overlap + 1}];
+    ${ftc_complex_pack_ty} overlap_sr[${n_steps_for_overlap + 1}];
 % for p in range(fft_n_parallel):
     float2 __attribute__((bank_bits(${fft_n_points_per_terminal_log}))) chunk_buf_${p}[2][${fft_n_points_per_terminal}];
 % endfor
@@ -31,14 +34,14 @@ kernel void tile(const uint n_tiles)
     for (uint tile = 0; tile < n_tiles + 1; ++tile) {
         for (uint step = 0; step < ${n_steps}; ++step) {
             if (tile >= 1) {
-                float2x4 output;
+                ${ftc_complex_pack_ty} output;
             % for p in range(fft_n_parallel):
                 output.i[${bit_rev(p, fft_n_parallel_log)}] = chunk_buf_${p}[1 - (tile & 1)][step];
             % endfor
                 write_channel_intel(fft_in, output);
             }
 
-            float2x4 input = zeros;
+            ${ftc_complex_pack_ty} input = zeros;
             if (tile < n_tiles) {
                 if (step < ${n_steps_for_overlap}) {
                     if (tile >= 1)
@@ -75,12 +78,12 @@ kernel void tile(const uint n_tiles)
 
 __attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
-kernel void store_tiles(global float2x4 * restrict tiles,
+kernel void store_tiles(global ${ftc_complex_pack_ty} * restrict tiles,
                         const uint n_tiles)
 {
     for (uint tile = 0; tile < n_tiles; ++tile) {
         for (uint step = 0; step < ${n_steps}; ++step) {
-            float2x4 read = read_channel_intel(fft_out);
+            ${ftc_complex_pack_ty} read = read_channel_intel(fft_out);
             tiles[tile * ${ftc_tile_sz // fft_n_parallel} + step] = read;
         }
     }

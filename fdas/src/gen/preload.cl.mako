@@ -36,12 +36,14 @@
 __attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
 kernel void preload_${k}(global ${hms_bundle_ty} * restrict fop,
-                      const uint n_templates,
-                      const uint cc_of_first_tmpl_num_in_group,
-                  % for r in range(n_buffers):
-                      const uint template_offset_${r},
+                      const uint n_bundles,
+                      const uint n_buffers_to_use,
+                      const uint cc_of_group_base,
+                  % for r in range(n_buffers - 1):
+                      const uint fop_offset_${r},
                   % endfor
-                      const uint n_bundles)
+                      const uint fop_offset_${n_buffers - 1}
+                      )
 {
     const ${hms_bundle_ty} zeros = {${", ".join(["0"] * hms_bundle_sz)}};
     ${hms_bundle_ty} load[${n_buffers}];
@@ -49,14 +51,14 @@ kernel void preload_${k}(global ${hms_bundle_ty} * restrict fop,
 
     for (uint bundle = 0; bundle < n_bundles; ++bundle) {
     % for r in range(n_buffers):
-        load[${r}] = ${r} < n_templates ? fop[template_offset_${r} + bundle] : zeros;
+        load[${r}] = ${r} < n_buffers_to_use ? fop[fop_offset_${r} + bundle] : zeros;
     % endfor
 
     % for p in range(hms_group_sz):
     % if len(buffers_for_output[p]) == 1:
         out[${p}] = load[${buffers_for_output[p][0]}];
     % else:
-        out[${p}] = cc_of_first_tmpl_num_in_group < ${buffers_for_output[p][2]} ? load[${buffers_for_output[p][0]}] : load[${buffers_for_output[p][1]}];
+        out[${p}] = cc_of_group_base < ${buffers_for_output[p][2]} ? load[${buffers_for_output[p][0]}] : load[${buffers_for_output[p][1]}];
     % endif
     % endfor
 

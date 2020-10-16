@@ -42,6 +42,7 @@ namespace FTC {
     static const cl_uint  tile_sz                   = 2048;
     static const cl_uint  tile_overlap              = 420;
     static const cl_uint  tile_payload              = 1628;
+    static const cl_uint  pack_sz                   = 4;
 }
 namespace HMS {
     static const cl_uint  n_planes                  = 8;
@@ -49,7 +50,6 @@ namespace HMS {
     static const cl_uint  group_sz                  = 8;
     static const cl_uint  bundle_sz                 = 2;
     static const cl_uint  slot_sz                   = 16;
-    static const cl_uint  dual_channnel             = 0;
 
     static const     cl_uint lcm = 840;
     static constexpr cl_uint n_buffers[8] = {8, 4, 4, 2, 3, 2, 2, 1};

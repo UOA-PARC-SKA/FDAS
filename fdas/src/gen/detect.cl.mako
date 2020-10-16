@@ -20,7 +20,7 @@ __attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
 kernel void detect_${k}(float threshold,
                      uint n_templates,
-                     uint negative_tmpl_nums,
+                     uint negative_tmpls,
                      uint n_groups,
                      uint n_bundles)
 {
@@ -40,20 +40,20 @@ kernel void detect_${k}(float threshold,
 
     for (uint group = 0; group < n_groups; ++group) {
         uint group_base = group * ${hms_group_sz};
-        int tmpl_num[${hms_group_sz}];
+        int tmpl[${hms_group_sz}];
         bool tmpl_mask[${hms_group_sz}];
         #pragma unroll
         for (uint p = 0; p < ${hms_group_sz}; ++p) {
-            tmpl_num[p] = negative_tmpl_nums ? - group_base - p : group_base + p;
+            tmpl[p] = negative_tmpls ? - group_base - p : group_base + p;
             tmpl_mask[p] = group_base + p < n_templates;
         }
 
         for (uint bundle = 0; bundle < n_bundles; ++bundle) {
             uint bundle_base = bundle * ${hms_bundle_sz};
-            uint freq_num[${hms_bundle_sz}];
+            uint freq[${hms_bundle_sz}];
             #pragma unroll
             for (uint q = 0; q < ${hms_bundle_sz}; ++q)
-                freq_num[q] = bundle_base + q;
+                freq[q] = bundle_base + q;
 
             ${hms_bundle_ty} hsum[${hms_group_sz}];
 
@@ -94,7 +94,7 @@ kernel void detect_${k}(float threshold,
             % for p in range(hms_group_sz):
             % for q in range(hms_bundle_sz):
 <% x = p * hms_bundle_sz + q %>\
-                loc[${x}] = cand[${x}] ? encode_location(${k}, tmpl_num[${p}], freq_num[${q}]) : invalid_location;
+                loc[${x}] = cand[${x}] ? encode_location(${k}, tmpl[${p}], freq[${q}]) : invalid_location;
                 pwr[${x}] = cand[${x}] ? hsum[${p}]${bundle_idx(q)} : invalid_power;
             % endfor
             % endfor

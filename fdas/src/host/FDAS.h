@@ -42,18 +42,22 @@ public:
 
     using ShapeType = std::vector<unsigned long>;
 
+    enum FOPPart {NegativeAccelerations, PositiveAccelerations, AllAccelerations};
+
 public:
     FDAS(std::ostream &log) : log(log) {}
 
     bool initialise_accelerator(std::string bitstream_file_name,
                                 const std::function<bool(const std::string &, const std::string &)> &platform_selector,
                                 const std::function<bool(int, int, const std::string &)> &device_selector,
+                                const TemplatesType &templates, const ShapeType &templates_shape,
                                 const cl_uint n_input_points);
 
-    bool perform_ft_convolution(const InputType &input, const ShapeType &input_shape,
-                                const TemplatesType &templates, const ShapeType &templates_shape);
+    bool perform_input_tiling(const InputType &input, const ShapeType &input_shape);
 
-    bool perform_harmonic_summing(const ThreshType &thresholds, const ShapeType &thresholds_shape);
+    bool perform_ft_convolution(const FOPPart which);
+
+    bool perform_harmonic_summing(const ThreshType &thresholds, const ShapeType &thresholds_shape, const FOPPart which);
 
     bool retrieve_tiles(TilesType &tiles, ShapeType &tiles_shape);
 
@@ -66,13 +70,12 @@ public:
 
     static bool choose_first_platform(const std::string &platform_name, const std::string &platform_version) { return true; }
 
-    static bool choose_accelerator_devices(int device_num, int device_type, const std::string &device_name) { return device_type == CL_DEVICE_TYPE_ACCELERATOR; }
+    static bool choose_accelerator_devices(cl_uint device_num, cl_uint device_type, const std::string &device_name) { return device_type == CL_DEVICE_TYPE_ACCELERATOR; }
 
 private:
     cl_uint n_frequency_bins;
     cl_uint n_tiles;
     cl_uint padding_last_tile;
-    cl_uint padded_input_sz;
     cl_uint tiled_input_sz;
     cl_uint templates_sz;
     cl_uint fop_sz;
@@ -106,8 +109,6 @@ private:
     std::ostream &log;
 
 private:
-    bool check_dimensions(const ShapeType &input_shape, const ShapeType &templates_shape);
-
     void print_duration(const std::string &phase, const cl::Event &from, const cl::Event &to);
 
 };

@@ -90,6 +90,10 @@ def main():
     ftc_tile_overlap = int(ceil((max_template_len - 1) / fft_n_parallel)) * fft_n_parallel  # ease input tiling
     ftc_tile_payload = ftc_tile_sz - ftc_tile_overlap
 
+    ftc_pack_sz = fft_n_parallel  # not parametrisable yet
+    ftc_complex_pack_ty = "float2x4"
+    ftc_real_pack_ty = "float4"
+
     # Harmonic summing
     hms_n_planes = 8
     hms_detection_sz = 64
@@ -98,7 +102,6 @@ def main():
     hms_bundle_sz = args.hms_bundle_sz
     hms_slot_sz = 2 ** int(ceil(log2(hms_group_sz * hms_bundle_sz)))
     hms_bundle_ty = "float" if hms_bundle_sz == 1 else f"float{hms_bundle_sz}"
-    hms_dual_channel = False
 
     # Output
     n_candidates = hms_n_planes * hms_detection_sz * hms_slot_sz

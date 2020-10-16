@@ -11,20 +11,20 @@ inline uint bit_reversed(uint x, uint bits)
     return y;
 }
 
-inline float2x4 complex_mult4(float2x4 a, float2x4 b)
+inline ${ftc_complex_pack_ty} complex_mult(${ftc_complex_pack_ty} a, ${ftc_complex_pack_ty} b)
 {
-    float2x4 res;
-%for z in range(4):
+    ${ftc_complex_pack_ty} res;
+%for z in range(ftc_pack_sz):
     res.i${z}.x = a.i${z}.x * b.i${z}.x - a.i${z}.y * b.i${z}.y;
     res.i${z}.y = a.i${z}.y * b.i${z}.x + a.i${z}.x * b.i${z}.y;
 %endfor
     return res;
 }
 
-inline float4 power_norm4(float2x4 a)
+inline ${ftc_real_pack_ty} power_norm(${ftc_complex_pack_ty} a)
 {
-    float4 res;
-%for z in range(4):
+    ${ftc_real_pack_ty} res;
+%for z in range(ftc_pack_sz):
     res.s${z} = (a.i${z}.x * a.i${z}.x + a.i${z}.y * a.i${z}.y) / ${fft_n_points ** 2};
 %endfor
     return res;
