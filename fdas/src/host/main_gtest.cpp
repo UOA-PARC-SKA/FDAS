@@ -100,8 +100,7 @@ TEST_P(FDASTest, FT_Convolution) {
 
     ASSERT_TRUE(pipeline.perform_input_tiling(input, input_shape));
 
-    ASSERT_TRUE(pipeline.perform_ft_convolution(FDAS::NegativeAccelerations));
-    ASSERT_TRUE(pipeline.perform_ft_convolution(FDAS::PositiveAccelerations));
+    ASSERT_TRUE(pipeline.perform_ft_convolution(FDAS::AllAccelerations));
 
     ASSERT_TRUE(pipeline.retrieve_tiles(tiles, tiles_shape));
     EXPECT_EQ(tiles.size(), tiles_ref.size());
@@ -140,25 +139,25 @@ TEST_P(FDASTest, Harmonic_Summing) {
     npy::SaveArrayAsNumpy(det_pwr_file(), false, detection_power_shape.size(), detection_power_shape.data(), detection_power);
 
     auto loc_it = detection_location.begin();
-    auto amp_it = detection_power.begin();
-    while (loc_it != detection_location.end() && amp_it != detection_power.end()) {
+    auto pwr_it = detection_power.begin();
+    while (loc_it != detection_location.end() && pwr_it != detection_power.end()) {
         auto loc = *loc_it;
         if (loc == HMS::invalid_location) {
             loc_it = detection_location.erase(loc_it);
-            amp_it = detection_power.erase(amp_it);
+            pwr_it = detection_power.erase(pwr_it);
         } else {
-            ++loc_it, ++amp_it;
+            ++loc_it, ++pwr_it;
         }
     }
     EXPECT_LE(detection_location.size(), detection_location_ref.size());
     EXPECT_GE(detection_location.size(), 1);
 
     auto n_non_cands = 0;
-    for (loc_it = detection_location.begin(), amp_it = detection_power.begin();
-         loc_it != detection_location.end() && amp_it != detection_power.end();
-         ++loc_it, ++amp_it) {
+    for (loc_it = detection_location.begin(), pwr_it = detection_power.begin();
+         loc_it != detection_location.end() && pwr_it != detection_power.end();
+         ++loc_it, ++pwr_it) {
         auto loc = *loc_it;
-        auto amp = *amp_it;
+        auto pwr = *pwr_it;
 
         auto it = std::find(detection_location_ref.begin(), detection_location_ref.end(), loc);
         if (it == detection_location_ref.end()) {
@@ -167,7 +166,58 @@ TEST_P(FDASTest, Harmonic_Summing) {
         }
         auto dist = std::distance(detection_location_ref.begin(), it);
         auto amp_ref = detection_power_ref[dist];
-        EXPECT_TRUE(fabs(amp - amp_ref) < tolerance);
+        EXPECT_TRUE(fabs(pwr - amp_ref) < tolerance);
+    }
+    EXPECT_EQ(n_non_cands, 0);
+}
+
+TEST_P(FDASTest, FDAS) {
+    FDAS pipeline(std::cerr);
+    ASSERT_TRUE(pipeline.initialise_accelerator(bitstream_file,
+                                                FDAS::choose_first_platform, FDAS::choose_accelerator_devices,
+                                                templates, templates_shape,
+                                                input.size()));
+
+    ASSERT_TRUE(pipeline.perform_input_tiling(input, input_shape));
+
+    ASSERT_TRUE(pipeline.perform_ft_convolution(FDAS::PositiveAccelerations));
+
+    ASSERT_TRUE(pipeline.perform_harmonic_summing(thresholds, thresholds_shape, FDAS::PositiveAccelerations));
+
+    ASSERT_TRUE(pipeline.retrieve_candidates(detection_location, detection_location_shape, detection_power, detection_power_shape));
+    // store data as downloaded from the device (i.e. before filtering invalid slots)
+    npy::SaveArrayAsNumpy(det_loc_file(), false, detection_location_shape.size(), detection_location_shape.data(), detection_location);
+    npy::SaveArrayAsNumpy(det_pwr_file(), false, detection_power_shape.size(), detection_power_shape.data(), detection_power);
+
+    auto loc_it = detection_location.begin();
+    auto pwr_it = detection_power.begin();
+    while (loc_it != detection_location.end() && pwr_it != detection_power.end()) {
+        auto loc = *loc_it;
+        if (loc == HMS::invalid_location) {
+            loc_it = detection_location.erase(loc_it);
+            pwr_it = detection_power.erase(pwr_it);
+        } else {
+            ++loc_it, ++pwr_it;
+        }
+    }
+    EXPECT_LE(detection_location.size(), detection_location_ref.size());
+    EXPECT_GE(detection_location.size(), 1);
+
+    auto n_non_cands = 0;
+    for (loc_it = detection_location.begin(), pwr_it = detection_power.begin();
+         loc_it != detection_location.end() && pwr_it != detection_power.end();
+         ++loc_it, ++pwr_it) {
+        auto loc = *loc_it;
+        auto pwr = *pwr_it;
+
+        auto it = std::find(detection_location_ref.begin(), detection_location_ref.end(), loc);
+        if (it == detection_location_ref.end()) {
+            ++n_non_cands;
+            continue;
+        }
+        auto dist = std::distance(detection_location_ref.begin(), it);
+        auto amp_ref = detection_power_ref[dist];
+        EXPECT_TRUE(fabs(pwr - amp_ref) < tolerance);
     }
     EXPECT_EQ(n_non_cands, 0);
 }
