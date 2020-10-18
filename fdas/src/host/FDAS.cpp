@@ -207,13 +207,35 @@ bool FDAS::initialise_accelerator(std::string bitstream_file_name,
         << setprecision(2) << (100.f * total_allocated / default_device.getInfo<CL_DEVICE_GLOBAL_MEM_SIZE>())
         << " %)" << endl;
 
+    // Host buffers
+    const size_t dma_alignment = 64;
+    input_host.reset(new cl_float2[n_frequency_bins + dma_alignment]);
+    tiles_host.reset(new cl_float2[tiled_input_sz + dma_alignment]);
+    templates_host.reset(new cl_float2[templates_sz + dma_alignment]);
+    fop_host.reset(new cl_float[fop_sz + dma_alignment]);
+    detection_location_host.reset(new cl_uint[Output::n_candidates + dma_alignment]);
+    detection_power_host.reset(new cl_float[Output::n_candidates + dma_alignment]);
+
+    // XXX: std::align is missing in the ancient gcc version I am using...
+    input_aligned = align(input_host.get(), dma_alignment);
+    tiles_aligned = align(tiles_host.get(), dma_alignment);
+    templates_aligned = align(templates_host.get(), dma_alignment);
+    fop_aligned = align(fop_host.get(), dma_alignment);
+    detection_location_aligned = align(detection_location_host.get(), dma_alignment);
+    detection_power_aligned = align(detection_power_host.get(), dma_alignment);
+
     if (templates.size() != templates_sz || templates_shape.size() != 2 || templates_shape[0] != Input::n_templates || templates_shape[1] != FTC::tile_sz) {
         log << "[ERROR] Malformed template coefficients" << endl;
         return false;
     }
 
+    for (auto i = 0; i < templates_sz; ++i) {
+        templates_aligned[i].s[0] = templates[i].real();
+        templates_aligned[i].s[1] = templates[i].imag();
+    }
+
     cl::CommandQueue buffer_q(*context, default_device, CL_QUEUE_PROFILING_ENABLE);
-    cl_chk(buffer_q.enqueueWriteBuffer(*templates_buffer, true, 0, sizeof(cl_float2) * templates_sz, templates.data()));
+    cl_chk(buffer_q.enqueueWriteBuffer(*templates_buffer, true, 0, sizeof(cl_float2) * templates_sz, templates_aligned));
     cl_chk(buffer_q.finish());
 
     log << "[INFO] Uploaded template coefficients" << endl;
@@ -244,7 +266,12 @@ bool FDAS::perform_input_tiling(const InputType &input, const ShapeType &input_s
     cl::CommandQueue store_tiles_q(*context, default_device, CL_QUEUE_PROFILING_ENABLE);
 
     // Copy input to device
-    cl_chk(buffer_q.enqueueWriteBuffer(*input_buffer, true, 0, sizeof(cl_float2) * n_frequency_bins, input.data()));
+    for (auto i = 0; i < n_frequency_bins; ++i) {
+        input_aligned[i].s[0] = input[i].real();
+        input_aligned[i].s[1] = input[i].imag();
+    }
+
+    cl_chk(buffer_q.enqueueWriteBuffer(*input_buffer, true, 0, sizeof(cl_float2) * n_frequency_bins, input_aligned));
     cl_chk(buffer_q.finish());
 
     // Launch pipeline
@@ -451,12 +478,15 @@ bool FDAS::perform_harmonic_summing(const FDAS::ThreshType &thresholds, const FD
 }
 
 bool FDAS::retrieve_tiles(FDAS::TilesType &tiles, FDAS::ShapeType &tiles_shape) {
-    tiles.resize(tiled_input_sz);
-
     cl::CommandQueue buffer_q(*context, default_device, CL_QUEUE_PROFILING_ENABLE);
-    cl_chk(buffer_q.enqueueReadBuffer(*tiles_buffer, true, 0, sizeof(cl_float2) * tiled_input_sz, tiles.data()));
+    cl_chk(buffer_q.enqueueReadBuffer(*tiles_buffer, true, 0, sizeof(cl_float2) * tiled_input_sz, tiles_aligned));
     cl_chk(buffer_q.finish());
 
+    tiles.resize(tiled_input_sz);
+    for (auto i = 0; i < tiled_input_sz; ++i) {
+        tiles[i].real(tiles_aligned[i].s[0]);
+        tiles[i].imag(tiles_aligned[i].s[1]);
+    }
     tiles_shape.push_back(n_tiles);
     tiles_shape.push_back(FTC::tile_sz);
 
@@ -464,12 +494,13 @@ bool FDAS::retrieve_tiles(FDAS::TilesType &tiles, FDAS::ShapeType &tiles_shape) 
 }
 
 bool FDAS::retrieve_FOP(FDAS::FOPType &fop, FDAS::ShapeType &fop_shape) {
-    fop.resize(fop_sz);
-
     cl::CommandQueue buffer_q(*context, default_device, CL_QUEUE_PROFILING_ENABLE);
-    cl_chk(buffer_q.enqueueReadBuffer(*fop_buffer_A, true, 0, sizeof(cl_float) * fop_sz, fop.data()));
+    cl_chk(buffer_q.enqueueReadBuffer(*fop_buffer_A, true, 0, sizeof(cl_float) * fop_sz, fop_aligned));
     cl_chk(buffer_q.finish());
 
+    fop.resize(fop_sz);
+    for (auto i = 0; i < fop_sz; ++i)
+        fop[i] = fop_aligned[i];
     fop_shape.push_back(Input::n_templates);
     fop_shape.push_back(n_frequency_bins);
 
@@ -478,14 +509,17 @@ bool FDAS::retrieve_FOP(FDAS::FOPType &fop, FDAS::ShapeType &fop_shape) {
 
 bool FDAS::retrieve_candidates(FDAS::DetLocType &detection_location, FDAS::ShapeType &detection_location_shape,
                                FDAS::DetPwrType &detection_power, FDAS::ShapeType &detection_power_shape) {
-    detection_location.resize(Output::n_candidates);
-    detection_power.resize(Output::n_candidates);
-
     cl::CommandQueue buffer_q(*context, default_device, CL_QUEUE_PROFILING_ENABLE);
-    cl_chk(buffer_q.enqueueReadBuffer(*detection_location_buffer, true, 0, sizeof(cl_uint) * Output::n_candidates, detection_location.data()));
-    cl_chk(buffer_q.enqueueReadBuffer(*detection_power_buffer, true, 0, sizeof(cl_float) * Output::n_candidates, detection_power.data()));
+    cl_chk(buffer_q.enqueueReadBuffer(*detection_location_buffer, true, 0, sizeof(cl_uint) * Output::n_candidates, detection_location_aligned));
+    cl_chk(buffer_q.enqueueReadBuffer(*detection_power_buffer, true, 0, sizeof(cl_float) * Output::n_candidates, detection_power_aligned));
     cl_chk(buffer_q.finish());
 
+    detection_location.resize(Output::n_candidates);
+    detection_power.resize(Output::n_candidates);
+    for (auto i = 0; i < Output::n_candidates; ++i) {
+        detection_location[i] = detection_location_aligned[i];
+        detection_power[i] = detection_power_aligned[i];
+    }
     detection_location_shape.push_back(Output::n_candidates);
     detection_power_shape.push_back(Output::n_candidates);
 
@@ -493,8 +527,11 @@ bool FDAS::retrieve_candidates(FDAS::DetLocType &detection_location, FDAS::Shape
 }
 
 bool FDAS::inject_FOP(FDAS::FOPType &fop, FDAS::ShapeType &fop_shape) {
+    for (auto i = 0; i < fop_sz; ++i)
+        fop_aligned[i] = fop[i];
+
     cl::CommandQueue buffer_q(*context, default_device, CL_QUEUE_PROFILING_ENABLE);
-    cl_chk(buffer_q.enqueueWriteBuffer(*fop_buffer_A, true, 0, sizeof(cl_float) * fop_sz, fop.data()));
+    cl_chk(buffer_q.enqueueWriteBuffer(*fop_buffer_A, true, 0, sizeof(cl_float) * fop_sz, fop_aligned));
     cl_chk(buffer_q.finish());
 
     return true;

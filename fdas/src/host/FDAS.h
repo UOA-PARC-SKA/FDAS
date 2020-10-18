@@ -106,9 +106,33 @@ private:
     std::unique_ptr<cl::Buffer> detection_location_buffer;
     std::unique_ptr<cl::Buffer> detection_power_buffer;
 
+    std::unique_ptr<cl_float2[]> input_host;
+    std::unique_ptr<cl_float2[]> tiles_host;
+    std::unique_ptr<cl_float2[]> templates_host;
+    std::unique_ptr<cl_float[]> fop_host;
+    std::unique_ptr<cl_uint[]> detection_location_host;
+    std::unique_ptr<cl_float[]> detection_power_host;
+
+    cl_float2 *input_aligned;
+    cl_float2 *tiles_aligned;
+    cl_float2 *templates_aligned;
+    cl_float *fop_aligned;
+    cl_uint *detection_location_aligned;
+    cl_float *detection_power_aligned;
+
     std::ostream &log;
 
 private:
+    // XXX: std::align is missing in the ancient gcc version I am using...
+    template<typename T> T* align(T* ptr, size_t to_bytes) {
+        auto uint_ptr = reinterpret_cast<std::uintptr_t>(ptr);
+        auto offset = uint_ptr & (to_bytes - 1);
+        if (offset == 0)
+            return ptr;
+        auto aligned = uint_ptr - offset + to_bytes;
+        return reinterpret_cast<T*>(aligned);
+    }
+
     void print_duration(const std::string &phase, const cl::Event &from, const cl::Event &to);
 
 };
