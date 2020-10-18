@@ -59,7 +59,7 @@ namespace HMS {
         return (((harm - 1) & 0x7) << 29) | (((tmpl + 42) & 0x7f) << 22) | (freq & 0x3fffff);
     }
     constexpr cl_uint get_harmonic(cl_uint location)      { return ((location >> 29) & 0x7) + 1; }
-    constexpr cl_uint get_template_num(cl_uint location)  { return ((location >> 22) & 0x7f) - 42; }
+    constexpr cl_int  get_template_num(cl_uint location)  { return ((location >> 22) & 0x7f) - 42; }
     constexpr cl_uint get_frequency_bin(cl_uint location) { return location & 0x3fffff; }
 
     static constexpr cl_uint invalid_location = encode_location(1, 42 + 1, 0);
