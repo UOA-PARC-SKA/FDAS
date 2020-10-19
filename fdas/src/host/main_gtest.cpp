@@ -23,6 +23,7 @@
 #include <complex>
 #include <functional>
 #include <iostream>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -75,34 +76,54 @@ protected:
         return reinterpret_cast<T*>(aligned);
     }
 
+    static cl_float2 complex_to_float2(std::complex<float> c) {
+        return {c.real(), c.imag()};
+    }
+
+    static std::complex<float> float2_to_complex(cl_float2 c) {
+        return std::complex<float>(c.s[0], c.s[1]);
+    }
+
     InputType input;
     ShapeType input_shape;
-
-    TemplatesType templates;
-    ShapeType templates_shape;
+    std::unique_ptr<cl_float2[]> input_host;
+    cl_float2 *input_aligned;
 
     TilesType tiles, tiles_ref;
     ShapeType tiles_ref_shape;
+    std::unique_ptr<cl_float2[]> tiles_host;
+    cl_float2 *tiles_aligned;
 
-    FOPType fop, fop_ref;
-    ShapeType fop_ref_shape;
+    TemplatesType templates;
+    ShapeType templates_shape;
+    std::unique_ptr<cl_float2[]> templates_host;
+    cl_float2 *templates_aligned;
 
     ThreshType thresholds;
     ShapeType thresholds_shape;
 
+    FOPType fop, fop_ref;
+    ShapeType fop_ref_shape;
+    std::unique_ptr<cl_float[]> fop_host;
+    cl_float *fop_aligned;
+
     DetLocType detection_location, detection_location_ref;
     ShapeType detection_location_ref_shape;
+    std::unique_ptr<cl_uint[]> detection_location_host;
+    cl_uint *detection_location_aligned;
 
     DetPwrType detection_power, detection_power_ref;
     ShapeType detection_power_ref_shape;
+    std::unique_ptr<cl_float[]> detection_power_host;
+    cl_float *detection_power_aligned;
 
     void SetUp() override {
         bool fortran_order = false; // library wants this as a reference
         npy::LoadArrayFromNumpy(input_file(), input_shape, fortran_order, input);
-        npy::LoadArrayFromNumpy(templates_file, templates_shape, fortran_order, templates);
         npy::LoadArrayFromNumpy(tiles_file(true), tiles_ref_shape, fortran_order, tiles_ref);
-        npy::LoadArrayFromNumpy(fop_file(true), fop_ref_shape, fortran_order, fop_ref);
+        npy::LoadArrayFromNumpy(templates_file, templates_shape, fortran_order, templates);
         npy::LoadArrayFromNumpy(thrsh_file(), thresholds_shape, fortran_order, thresholds);
+        npy::LoadArrayFromNumpy(fop_file(true), fop_ref_shape, fortran_order, fop_ref);
         npy::LoadArrayFromNumpy(det_loc_file(true), detection_location_ref_shape, fortran_order, detection_location_ref);
         npy::LoadArrayFromNumpy(det_pwr_file(true), detection_power_ref_shape, fortran_order, detection_power_ref);
     }
@@ -115,6 +136,24 @@ protected:
         ASSERT_EQ(templates_shape[1], FTC::tile_sz);
         ASSERT_EQ(thresholds.size(), pipeline.get_thresholds_sz());
         ASSERT_EQ(fop_ref.size(), pipeline.get_fop_sz()); // we inject the reference FOP for HSum-only testing
+    }
+
+    void allocateAlignedBuffers(const FDAS &pipeline) {
+        const size_t dma_alignment = 64;
+
+        input_host.reset(new cl_float2[pipeline.get_input_sz() + dma_alignment]);
+        tiles_host.reset(new cl_float2[pipeline.get_tiles_sz() + dma_alignment]);
+        templates_host.reset(new cl_float2[pipeline.get_templates_sz() + dma_alignment]);
+        fop_host.reset(new cl_float[pipeline.get_fop_sz() + dma_alignment]);
+        detection_location_host.reset(new cl_uint[pipeline.get_candidate_list_sz() + dma_alignment]);
+        detection_power_host.reset(new cl_float[pipeline.get_candidate_list_sz() + dma_alignment]);
+
+        input_aligned = align(input_host.get(), dma_alignment);
+        tiles_aligned = align(tiles_host.get(), dma_alignment);
+        templates_aligned = align(templates_host.get(), dma_alignment);
+        fop_aligned = align(fop_host.get(), dma_alignment);
+        detection_location_aligned = align(detection_location_host.get(), dma_alignment);
+        detection_power_aligned = align(detection_power_host.get(), dma_alignment);
     }
 
     void validateInputTiling() {
@@ -181,36 +220,42 @@ TEST_P(FDASTest, FT_Convolution) {
                                                 FDAS::choose_first_platform, FDAS::choose_accelerator_devices,
                                                 input.size()));
     validateInputDimensions(pipeline);
+    allocateAlignedBuffers(pipeline);
 
-    ASSERT_TRUE(pipeline.upload_templates(reinterpret_cast<cl_float2*>(templates.data())));
-    ASSERT_TRUE(pipeline.perform_input_tiling(reinterpret_cast<cl_float2 *>(input.data())));
+    std::transform(templates.begin(), templates.end(), templates_aligned, complex_to_float2);
+    ASSERT_TRUE(pipeline.upload_templates(templates_aligned));
+    std::transform(input.begin(), input.end(), input_aligned, complex_to_float2);
+    ASSERT_TRUE(pipeline.perform_input_tiling(input_aligned));
     ASSERT_TRUE(pipeline.perform_ft_convolution(FDAS::AllAccelerations));
 
+    ASSERT_TRUE(pipeline.retrieve_tiles(tiles_aligned));
     tiles.resize(pipeline.get_tiles_sz());
-    ASSERT_TRUE(pipeline.retrieve_tiles(reinterpret_cast<cl_float2*>(tiles.data())));
+    std::transform(tiles_aligned, tiles_aligned + pipeline.get_tiles_sz(), tiles.begin(), float2_to_complex);
     validateInputTiling();
 
+    ASSERT_TRUE(pipeline.retrieve_FOP(fop_aligned));
     fop.resize(pipeline.get_fop_sz());
-    ASSERT_TRUE(pipeline.retrieve_FOP(reinterpret_cast<cl_float*>(fop.data())));
+    std::copy(fop_aligned, fop_aligned + pipeline.get_fop_sz(), fop.begin());
     validateFTConvolution();
 }
 
 TEST_P(FDASTest, Harmonic_Summing) {
     FDAS pipeline(std::cerr);
-
     ASSERT_TRUE(pipeline.initialise_accelerator(bitstream_file,
                                                 FDAS::choose_first_platform, FDAS::choose_accelerator_devices,
                                                 input.size()));
     validateInputDimensions(pipeline);
+    allocateAlignedBuffers(pipeline);
 
-    fop.resize(pipeline.get_fop_sz());
-    ASSERT_TRUE(pipeline.inject_FOP(reinterpret_cast<cl_float*>(fop_ref.data())));
-    ASSERT_TRUE(pipeline.perform_harmonic_summing(reinterpret_cast<cl_float*>(thresholds.data()), FDAS::NegativeAccelerations));
+    std::copy(fop_ref.begin(), fop_ref.end(), fop_aligned);
+    ASSERT_TRUE(pipeline.inject_FOP(fop_aligned));
+    ASSERT_TRUE(pipeline.perform_harmonic_summing(thresholds.data(), FDAS::NegativeAccelerations));
 
+    ASSERT_TRUE(pipeline.retrieve_candidates(detection_location_aligned, detection_power_aligned));
     detection_location.resize(pipeline.get_candidate_list_sz());
     detection_power.resize(pipeline.get_candidate_list_sz());
-    ASSERT_TRUE(pipeline.retrieve_candidates(reinterpret_cast<cl_uint*>(detection_location.data()),
-                                             reinterpret_cast<cl_float*>(detection_power.data())));
+    std::copy(detection_location_aligned, detection_location_aligned + pipeline.get_candidate_list_sz(), detection_location.begin());
+    std::copy(detection_power_aligned, detection_power_aligned + pipeline.get_candidate_list_sz(), detection_power.begin());
     validateHarmonicSumming();
 }
 
@@ -220,16 +265,20 @@ TEST_P(FDASTest, FDAS) {
                                                 FDAS::choose_first_platform, FDAS::choose_accelerator_devices,
                                                 input.size()));
     validateInputDimensions(pipeline);
+    allocateAlignedBuffers(pipeline);
 
+    std::transform(templates.begin(), templates.end(), templates_aligned, complex_to_float2);
     ASSERT_TRUE(pipeline.upload_templates(reinterpret_cast<cl_float2*>(templates.data())));
+    std::transform(input.begin(), input.end(), input_aligned, complex_to_float2);
     ASSERT_TRUE(pipeline.perform_input_tiling(reinterpret_cast<cl_float2 *>(input.data())));
     ASSERT_TRUE(pipeline.perform_ft_convolution(FDAS::PositiveAccelerations));
-    ASSERT_TRUE(pipeline.perform_harmonic_summing(reinterpret_cast<cl_float*>(thresholds.data()), FDAS::PositiveAccelerations));
+    ASSERT_TRUE(pipeline.perform_harmonic_summing(thresholds.data(), FDAS::PositiveAccelerations));
 
+    ASSERT_TRUE(pipeline.retrieve_candidates(detection_location_aligned, detection_power_aligned));
     detection_location.resize(pipeline.get_candidate_list_sz());
     detection_power.resize(pipeline.get_candidate_list_sz());
-    ASSERT_TRUE(pipeline.retrieve_candidates(reinterpret_cast<cl_uint*>(detection_location.data()),
-                                             reinterpret_cast<cl_float*>(detection_power.data())));
+    std::copy(detection_location_aligned, detection_location_aligned + pipeline.get_candidate_list_sz(), detection_location.begin());
+    std::copy(detection_power_aligned, detection_power_aligned + pipeline.get_candidate_list_sz(), detection_power.begin());
     validateHarmonicSumming();
 }
 
