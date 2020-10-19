@@ -268,9 +268,9 @@ TEST_P(FDASTest, FDAS) {
     allocateAlignedBuffers(pipeline);
 
     std::transform(templates.begin(), templates.end(), templates_aligned, complex_to_float2);
-    ASSERT_TRUE(pipeline.upload_templates(reinterpret_cast<cl_float2*>(templates.data())));
+    ASSERT_TRUE(pipeline.upload_templates(templates_aligned));
     std::transform(input.begin(), input.end(), input_aligned, complex_to_float2);
-    ASSERT_TRUE(pipeline.perform_input_tiling(reinterpret_cast<cl_float2 *>(input.data())));
+    ASSERT_TRUE(pipeline.perform_input_tiling(input_aligned));
     ASSERT_TRUE(pipeline.perform_ft_convolution(FDAS::PositiveAccelerations));
     ASSERT_TRUE(pipeline.perform_harmonic_summing(thresholds.data(), FDAS::PositiveAccelerations));
 
