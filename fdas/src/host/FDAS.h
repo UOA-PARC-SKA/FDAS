@@ -21,52 +21,52 @@
 #ifndef FDAS_FDAS_H
 #define FDAS_FDAS_H
 
-#include <complex>
+#include <cmath>
 #include <functional>
 #include <iostream>
 #include <memory>
 #include <string>
-#include <vector>
 
 #include <CL/cl.hpp>
 
 class FDAS {
 public:
-    using InputType = std::vector<std::complex<float>>;
-    using TilesType = std::vector<std::complex<float>>;
-    using TemplatesType = std::vector<std::complex<float>>;
-    using FOPType = std::vector<float>;
-    using ThreshType = std::vector<float>;
-    using DetLocType = std::vector<uint32_t>;
-    using DetPwrType = std::vector<float>;
-
-    using ShapeType = std::vector<unsigned long>;
-
     enum FOPPart {NegativeAccelerations, PositiveAccelerations, AllAccelerations};
 
-public:
     FDAS(std::ostream &log) : log(log) {}
 
     bool initialise_accelerator(std::string bitstream_file_name,
                                 const std::function<bool(const std::string &, const std::string &)> &platform_selector,
-                                const std::function<bool(int, int, const std::string &)> &device_selector,
-                                const TemplatesType &templates, const ShapeType &templates_shape,
-                                const cl_uint n_input_points);
+                                const std::function<bool(cl_uint, cl_uint, const std::string &)> &device_selector,
+                                cl_uint input_sz);
 
-    bool perform_input_tiling(const InputType &input, const ShapeType &input_shape);
+    bool upload_templates(const cl_float2 *templates);
 
-    bool perform_ft_convolution(const FOPPart which);
+    bool perform_input_tiling(const cl_float2 *input);
 
-    bool perform_harmonic_summing(const ThreshType &thresholds, const ShapeType &thresholds_shape, const FOPPart which);
+    bool perform_ft_convolution(FOPPart which);
 
-    bool retrieve_tiles(TilesType &tiles, ShapeType &tiles_shape);
+    bool perform_harmonic_summing(const cl_float *thresholds, FOPPart which);
 
-    bool retrieve_FOP(FOPType &fop, ShapeType &fop_shape);
+    bool retrieve_tiles(cl_float2 *tiles);
 
-    bool inject_FOP(FOPType &fop, ShapeType &fop_shape);
+    bool retrieve_FOP(cl_float *fop);
 
-    bool retrieve_candidates(DetLocType &detection_location, ShapeType &detection_location_shape,
-                             DetPwrType &detection_power, ShapeType &detection_power_shape);
+    bool inject_FOP(const cl_float *fop);
+
+    bool retrieve_candidates(cl_uint *detection_location, cl_float *detection_power);
+
+    cl_uint get_input_sz() const;
+
+    cl_uint get_tiles_sz() const;
+
+    cl_uint get_templates_sz() const;
+
+    cl_uint get_thresholds_sz() const;
+
+    cl_uint get_fop_sz() const;
+
+    cl_uint get_candidate_list_sz() const;
 
     static bool choose_first_platform(const std::string &platform_name, const std::string &platform_version) { return true; }
 
@@ -76,7 +76,7 @@ private:
     cl_uint n_frequency_bins;
     cl_uint n_tiles;
     cl_uint padding_last_tile;
-    cl_uint tiled_input_sz;
+    cl_uint tiles_sz;
     cl_uint templates_sz;
     cl_uint fop_sz;
 
@@ -106,32 +106,7 @@ private:
     std::unique_ptr<cl::Buffer> detection_location_buffer;
     std::unique_ptr<cl::Buffer> detection_power_buffer;
 
-    std::unique_ptr<cl_float2[]> input_host;
-    std::unique_ptr<cl_float2[]> tiles_host;
-    std::unique_ptr<cl_float2[]> templates_host;
-    std::unique_ptr<cl_float[]> fop_host;
-    std::unique_ptr<cl_uint[]> detection_location_host;
-    std::unique_ptr<cl_float[]> detection_power_host;
-
-    cl_float2 *input_aligned;
-    cl_float2 *tiles_aligned;
-    cl_float2 *templates_aligned;
-    cl_float *fop_aligned;
-    cl_uint *detection_location_aligned;
-    cl_float *detection_power_aligned;
-
     std::ostream &log;
-
-private:
-    // XXX: std::align is missing in the ancient gcc version I am using...
-    template<typename T> T* align(T* ptr, size_t to_bytes) {
-        auto uint_ptr = reinterpret_cast<std::uintptr_t>(ptr);
-        auto offset = uint_ptr & (to_bytes - 1);
-        if (offset == 0)
-            return ptr;
-        auto aligned = uint_ptr - offset + to_bytes;
-        return reinterpret_cast<T*>(aligned);
-    }
 
     void print_duration(const std::string &phase, const cl::Event &from, const cl::Event &to);
 

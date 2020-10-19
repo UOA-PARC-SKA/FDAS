@@ -55,9 +55,8 @@ using namespace GenInfo;
 
 bool FDAS::initialise_accelerator(std::string bitstream_file_name,
                                   const std::function<bool(const std::string &, const std::string &)> &platform_selector,
-                                  const std::function<bool(int, int, const std::string &)> &device_selector,
-                                  const TemplatesType &templates, const ShapeType &templates_shape,
-                                  const cl_uint n_input_points) {
+                                  const std::function<bool(cl_uint, cl_uint, const std::string &)> &device_selector,
+                                  cl_uint input_sz) {
     cl_int status;
 
     std::vector<cl::Platform> all_platforms;
@@ -168,14 +167,14 @@ bool FDAS::initialise_accelerator(std::string bitstream_file_name,
     cl_chkref(store_cands_kernel.reset(new cl::Kernel(*program, "store_cands", &status)));
 
     // Buffers
-    n_frequency_bins = n_input_points;
+    n_frequency_bins = input_sz;
     n_tiles = n_frequency_bins / FTC::tile_payload + 1;
     padding_last_tile = FTC::tile_payload - n_frequency_bins % FTC::tile_payload;
     if (padding_last_tile == FTC::tile_payload) {
         --n_tiles;
         padding_last_tile = 0;
     }
-    tiled_input_sz = n_tiles * FTC::tile_sz;
+    tiles_sz = n_tiles * FTC::tile_sz;
     templates_sz = Input::n_templates * FTC::tile_sz;
     fop_sz = Input::n_templates * n_frequency_bins;
 
@@ -184,7 +183,7 @@ bool FDAS::initialise_accelerator(std::string bitstream_file_name,
     cl_chkref(input_buffer.reset(new cl::Buffer(*context, CL_MEM_READ_ONLY, sizeof(cl_float2) * n_frequency_bins, nullptr, &status)));
     total_allocated += input_buffer->getInfo<CL_MEM_SIZE>();
 
-    cl_chkref(tiles_buffer.reset(new cl::Buffer(*context, CL_MEM_READ_WRITE, sizeof(cl_float2) * tiled_input_sz, nullptr, &status)));
+    cl_chkref(tiles_buffer.reset(new cl::Buffer(*context, CL_MEM_READ_WRITE, sizeof(cl_float2) * tiles_sz, nullptr, &status)));
     total_allocated += tiles_buffer->getInfo<CL_MEM_SIZE>();
 
     cl_chkref(templates_buffer.reset(new cl::Buffer(*context, CL_MEM_READ_ONLY, sizeof(cl_float2) * templates_sz, nullptr, &status)));
@@ -207,35 +206,12 @@ bool FDAS::initialise_accelerator(std::string bitstream_file_name,
         << setprecision(2) << (100.f * total_allocated / default_device.getInfo<CL_DEVICE_GLOBAL_MEM_SIZE>())
         << " %)" << endl;
 
-    // Host buffers
-    const size_t dma_alignment = 64;
-    input_host.reset(new cl_float2[n_frequency_bins + dma_alignment]);
-    tiles_host.reset(new cl_float2[tiled_input_sz + dma_alignment]);
-    templates_host.reset(new cl_float2[templates_sz + dma_alignment]);
-    fop_host.reset(new cl_float[fop_sz + dma_alignment]);
-    detection_location_host.reset(new cl_uint[Output::n_candidates + dma_alignment]);
-    detection_power_host.reset(new cl_float[Output::n_candidates + dma_alignment]);
+    return true;
+}
 
-    // XXX: std::align is missing in the ancient gcc version I am using...
-    input_aligned = align(input_host.get(), dma_alignment);
-    tiles_aligned = align(tiles_host.get(), dma_alignment);
-    templates_aligned = align(templates_host.get(), dma_alignment);
-    fop_aligned = align(fop_host.get(), dma_alignment);
-    detection_location_aligned = align(detection_location_host.get(), dma_alignment);
-    detection_power_aligned = align(detection_power_host.get(), dma_alignment);
-
-    if (templates.size() != templates_sz || templates_shape.size() != 2 || templates_shape[0] != Input::n_templates || templates_shape[1] != FTC::tile_sz) {
-        log << "[ERROR] Malformed template coefficients" << endl;
-        return false;
-    }
-
-    for (auto i = 0; i < templates_sz; ++i) {
-        templates_aligned[i].s[0] = templates[i].real();
-        templates_aligned[i].s[1] = templates[i].imag();
-    }
-
+bool FDAS::upload_templates(const cl_float2 *templates) {
     cl::CommandQueue buffer_q(*context, default_device, CL_QUEUE_PROFILING_ENABLE);
-    cl_chk(buffer_q.enqueueWriteBuffer(*templates_buffer, true, 0, sizeof(cl_float2) * templates_sz, templates_aligned));
+    cl_chk(buffer_q.enqueueWriteBuffer(*templates_buffer, true, 0, sizeof(cl_float2) * templates_sz, templates));
     cl_chk(buffer_q.finish());
 
     log << "[INFO] Uploaded template coefficients" << endl;
@@ -243,17 +219,7 @@ bool FDAS::initialise_accelerator(std::string bitstream_file_name,
     return true;
 }
 
-bool FDAS::perform_input_tiling(const InputType &input, const ShapeType &input_shape) {
-    if (input_shape.size() != 1) {
-        log << "[ERROR] Malformed input" << endl;
-        return false;
-    }
-
-    if (input_shape[0] < n_frequency_bins) {
-        log << "[ERROR] Not enough input points" << endl;
-        return false;
-    }
-
+bool FDAS::perform_input_tiling(const cl_float2 *input) {
     // Events to track exeuction time
     cl::Event prep_start, prep_end;
 
@@ -266,12 +232,7 @@ bool FDAS::perform_input_tiling(const InputType &input, const ShapeType &input_s
     cl::CommandQueue store_tiles_q(*context, default_device, CL_QUEUE_PROFILING_ENABLE);
 
     // Copy input to device
-    for (auto i = 0; i < n_frequency_bins; ++i) {
-        input_aligned[i].s[0] = input[i].real();
-        input_aligned[i].s[1] = input[i].imag();
-    }
-
-    cl_chk(buffer_q.enqueueWriteBuffer(*input_buffer, true, 0, sizeof(cl_float2) * n_frequency_bins, input_aligned));
+    cl_chk(buffer_q.enqueueWriteBuffer(*input_buffer, true, 0, sizeof(cl_float2) * n_frequency_bins, input));
     cl_chk(buffer_q.finish());
 
     // Launch pipeline
@@ -380,12 +341,7 @@ bool FDAS::perform_ft_convolution(FOPPart which) {
     return true;
 }
 
-bool FDAS::perform_harmonic_summing(const FDAS::ThreshType &thresholds, const FDAS::ShapeType &thresholds_shape, FOPPart which) {
-    if (thresholds_shape.size() != 1 && thresholds_shape[0] < HMS::n_planes) {
-        log << "[ERROR] Not enough threshold values given" << endl;
-        return false;
-    }
-
+bool FDAS::perform_harmonic_summing(const cl_float *thresholds, FOPPart which) {
     if (which == AllAccelerations) {
         log << "[ERROR] Candidate detection on the entire FOP is not supported" << endl;
         return false;
@@ -477,61 +433,34 @@ bool FDAS::perform_harmonic_summing(const FDAS::ThreshType &thresholds, const FD
     return true;
 }
 
-bool FDAS::retrieve_tiles(FDAS::TilesType &tiles, FDAS::ShapeType &tiles_shape) {
+bool FDAS::retrieve_tiles(cl_float2 *tiles) {
     cl::CommandQueue buffer_q(*context, default_device, CL_QUEUE_PROFILING_ENABLE);
-    cl_chk(buffer_q.enqueueReadBuffer(*tiles_buffer, true, 0, sizeof(cl_float2) * tiled_input_sz, tiles_aligned));
+    cl_chk(buffer_q.enqueueReadBuffer(*tiles_buffer, true, 0, sizeof(cl_float2) * tiles_sz, tiles));
     cl_chk(buffer_q.finish());
-
-    tiles.resize(tiled_input_sz);
-    for (auto i = 0; i < tiled_input_sz; ++i) {
-        tiles[i].real(tiles_aligned[i].s[0]);
-        tiles[i].imag(tiles_aligned[i].s[1]);
-    }
-    tiles_shape.push_back(n_tiles);
-    tiles_shape.push_back(FTC::tile_sz);
 
     return true;
 }
 
-bool FDAS::retrieve_FOP(FDAS::FOPType &fop, FDAS::ShapeType &fop_shape) {
+bool FDAS::retrieve_FOP(cl_float *fop) {
     cl::CommandQueue buffer_q(*context, default_device, CL_QUEUE_PROFILING_ENABLE);
-    cl_chk(buffer_q.enqueueReadBuffer(*fop_buffer_A, true, 0, sizeof(cl_float) * fop_sz, fop_aligned));
+    cl_chk(buffer_q.enqueueReadBuffer(*fop_buffer_A, true, 0, sizeof(cl_float) * fop_sz, fop));
     cl_chk(buffer_q.finish());
-
-    fop.resize(fop_sz);
-    for (auto i = 0; i < fop_sz; ++i)
-        fop[i] = fop_aligned[i];
-    fop_shape.push_back(Input::n_templates);
-    fop_shape.push_back(n_frequency_bins);
 
     return true;
 }
 
-bool FDAS::retrieve_candidates(FDAS::DetLocType &detection_location, FDAS::ShapeType &detection_location_shape,
-                               FDAS::DetPwrType &detection_power, FDAS::ShapeType &detection_power_shape) {
+bool FDAS::retrieve_candidates(cl_uint *detection_location, cl_float *detection_power) {
     cl::CommandQueue buffer_q(*context, default_device, CL_QUEUE_PROFILING_ENABLE);
-    cl_chk(buffer_q.enqueueReadBuffer(*detection_location_buffer, true, 0, sizeof(cl_uint) * Output::n_candidates, detection_location_aligned));
-    cl_chk(buffer_q.enqueueReadBuffer(*detection_power_buffer, true, 0, sizeof(cl_float) * Output::n_candidates, detection_power_aligned));
+    cl_chk(buffer_q.enqueueReadBuffer(*detection_location_buffer, true, 0, sizeof(cl_uint) * Output::n_candidates, detection_location));
+    cl_chk(buffer_q.enqueueReadBuffer(*detection_power_buffer, true, 0, sizeof(cl_float) * Output::n_candidates, detection_power));
     cl_chk(buffer_q.finish());
-
-    detection_location.resize(Output::n_candidates);
-    detection_power.resize(Output::n_candidates);
-    for (auto i = 0; i < Output::n_candidates; ++i) {
-        detection_location[i] = detection_location_aligned[i];
-        detection_power[i] = detection_power_aligned[i];
-    }
-    detection_location_shape.push_back(Output::n_candidates);
-    detection_power_shape.push_back(Output::n_candidates);
 
     return true;
 }
 
-bool FDAS::inject_FOP(FDAS::FOPType &fop, FDAS::ShapeType &fop_shape) {
-    for (auto i = 0; i < fop_sz; ++i)
-        fop_aligned[i] = fop[i];
-
+bool FDAS::inject_FOP(const cl_float *fop) {
     cl::CommandQueue buffer_q(*context, default_device, CL_QUEUE_PROFILING_ENABLE);
-    cl_chk(buffer_q.enqueueWriteBuffer(*fop_buffer_A, true, 0, sizeof(cl_float) * fop_sz, fop_aligned));
+    cl_chk(buffer_q.enqueueWriteBuffer(*fop_buffer_A, true, 0, sizeof(cl_float) * fop_sz, fop));
     cl_chk(buffer_q.finish());
 
     return true;
@@ -541,6 +470,30 @@ void FDAS::print_duration(const std::string &phase, const cl::Event &from, const
     unsigned long duration = (to.getProfilingInfo<CL_PROFILING_COMMAND_END>()
                               - from.getProfilingInfo<CL_PROFILING_COMMAND_START>()) / 1000 / 1000;
     log << "[INFO] " << phase << " duration: " << duration << " ms" << endl;
+}
+
+cl_uint FDAS::get_input_sz() const {
+    return n_frequency_bins;
+}
+
+cl_uint FDAS::get_tiles_sz() const {
+    return tiles_sz;
+}
+
+cl_uint FDAS::get_templates_sz() const {
+    return templates_sz;
+}
+
+cl_uint FDAS::get_thresholds_sz() const {
+    return HMS::n_planes;
+}
+
+cl_uint FDAS::get_fop_sz() const {
+    return fop_sz;
+}
+
+cl_uint FDAS::get_candidate_list_sz() const {
+    return Output::n_candidates;
 }
 
 #undef cl_chk

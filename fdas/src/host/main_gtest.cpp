@@ -36,6 +36,15 @@ using namespace GenInfo;
 
 class FDASTest : public ::testing::TestWithParam<std::string> {
 public:
+    using InputType = std::vector<std::complex<float>>;
+    using TilesType = std::vector<std::complex<float>>;
+    using TemplatesType = std::vector<std::complex<float>>;
+    using FOPType = std::vector<float>;
+    using ThreshType = std::vector<float>;
+    using DetLocType = std::vector<uint32_t>;
+    using DetPwrType = std::vector<float>;
+    using ShapeType = std::vector<unsigned long>;
+
     constexpr static float tolerance = 1e-5f;
 
     static std::vector<std::string> test_vectors;
@@ -52,32 +61,40 @@ protected:
 
     std::string thrsh_file() { return GetParam() + "/thresholds.npy"; }
 
-    std::string hps_file(bool ref = false) { return GetParam() + "/hps" + (ref ? "_ref" : "") + ".npy"; }
-
     std::string det_loc_file(bool ref = false) { return GetParam() + "/det_loc" + (ref ? "_ref" : "") + ".npy"; }
 
     std::string det_pwr_file(bool ref = false) { return GetParam() + "/det_pwr" + (ref ? "_ref" : "") + ".npy"; }
 
-    FDAS::InputType input;
-    FDAS::ShapeType input_shape;
+    // XXX: std::align is missing in the ancient gcc version I am using...
+    template<typename T> T* align(T* ptr, size_t to_bytes) {
+        auto uint_ptr = reinterpret_cast<std::uintptr_t>(ptr);
+        auto offset = uint_ptr & (to_bytes - 1);
+        if (offset == 0)
+            return ptr;
+        auto aligned = uint_ptr - offset + to_bytes;
+        return reinterpret_cast<T*>(aligned);
+    }
 
-    FDAS::TemplatesType templates;
-    FDAS::ShapeType templates_shape;
+    InputType input;
+    ShapeType input_shape;
 
-    FDAS::TilesType tiles, tiles_ref;
-    FDAS::ShapeType tiles_shape, tiles_ref_shape;
+    TemplatesType templates;
+    ShapeType templates_shape;
 
-    FDAS::FOPType fop, fop_ref;
-    FDAS::ShapeType fop_shape, fop_ref_shape;
+    TilesType tiles, tiles_ref;
+    ShapeType tiles_ref_shape;
 
-    FDAS::ThreshType thresholds;
-    FDAS::ShapeType thresholds_shape;
+    FOPType fop, fop_ref;
+    ShapeType fop_ref_shape;
 
-    FDAS::DetLocType detection_location, detection_location_ref;
-    FDAS::ShapeType detection_location_shape, detection_location_ref_shape;
+    ThreshType thresholds;
+    ShapeType thresholds_shape;
 
-    FDAS::DetPwrType detection_power, detection_power_ref;
-    FDAS::ShapeType detection_power_shape, detection_power_ref_shape;
+    DetLocType detection_location, detection_location_ref;
+    ShapeType detection_location_ref_shape;
+
+    DetPwrType detection_power, detection_power_ref;
+    ShapeType detection_power_ref_shape;
 
     void SetUp() override {
         bool fortran_order = false; // library wants this as a reference
@@ -89,137 +106,131 @@ protected:
         npy::LoadArrayFromNumpy(det_loc_file(true), detection_location_ref_shape, fortran_order, detection_location_ref);
         npy::LoadArrayFromNumpy(det_pwr_file(true), detection_power_ref_shape, fortran_order, detection_power_ref);
     }
+
+    void validateInputDimensions(const FDAS &pipeline) {
+        ASSERT_EQ(input.size(), pipeline.get_input_sz());
+        ASSERT_EQ(templates.size(), pipeline.get_templates_sz());
+        ASSERT_EQ(templates_shape.size(), 2);
+        ASSERT_EQ(templates_shape[0], Input::n_templates);
+        ASSERT_EQ(templates_shape[1], FTC::tile_sz);
+        ASSERT_EQ(thresholds.size(), pipeline.get_thresholds_sz());
+        ASSERT_EQ(fop_ref.size(), pipeline.get_fop_sz()); // we inject the reference FOP for HSum-only testing
+    }
+
+    void validateInputTiling() {
+        ASSERT_EQ(tiles.size(), tiles_ref.size());
+        ASSERT_TRUE(std::equal(tiles.begin(), tiles.end(), tiles_ref.begin(),
+                               [](const std::complex<float> a, const std::complex<float> b) {
+                                   return (fabs(a.real() - b.real()) < tolerance) &&
+                                          (fabs(a.imag() - b.imag()) < tolerance);
+                               }
+        ));
+    }
+
+    void validateFTConvolution() {
+        ASSERT_EQ(fop.size(), fop_ref.size());
+        ASSERT_TRUE(std::equal(fop.begin(), fop.end(), fop_ref.begin(),
+                               [](const float a, const float b) {
+                                   return fabs(a - b) < tolerance;
+                               }
+        ));
+    }
+
+    void validateHarmonicSumming() {
+        auto loc_it = detection_location.begin();
+        auto pwr_it = detection_power.begin();
+        while (loc_it != detection_location.end() && pwr_it != detection_power.end()) {
+            auto loc = *loc_it;
+            if (loc == HMS::invalid_location) {
+                loc_it = detection_location.erase(loc_it);
+                pwr_it = detection_power.erase(pwr_it);
+            } else {
+                ++loc_it, ++pwr_it;
+            }
+        }
+        ASSERT_LE(detection_location.size(), detection_location_ref.size());
+        ASSERT_GE(detection_location.size(), 1);
+
+        auto n_non_cands = 0;
+        for (loc_it = detection_location.begin(), pwr_it = detection_power.begin();
+             loc_it != detection_location.end() && pwr_it != detection_power.end();
+             ++loc_it, ++pwr_it) {
+            auto loc = *loc_it;
+            auto pwr = *pwr_it;
+
+            auto it = std::find(detection_location_ref.begin(), detection_location_ref.end(), loc);
+            if (it == detection_location_ref.end()) {
+                std::cerr << "INVALID[" << n_non_cands << "]:"
+                          << " harmonic=" << HMS::get_harmonic(loc)
+                          << " template=" << HMS::get_template_num(loc)
+                          << " freq.bin=" << HMS::get_harmonic(loc)
+                          << " power=" << pwr << std::endl;
+                ++n_non_cands;
+                continue;
+            }
+            auto pwr_ref = detection_power_ref[std::distance(detection_location_ref.begin(), it)];
+            EXPECT_TRUE(fabs(pwr - pwr_ref) < tolerance);
+        }
+        ASSERT_EQ(n_non_cands, 0);
+    }
 };
 
 TEST_P(FDASTest, FT_Convolution) {
     FDAS pipeline(std::cerr);
     ASSERT_TRUE(pipeline.initialise_accelerator(bitstream_file,
                                                 FDAS::choose_first_platform, FDAS::choose_accelerator_devices,
-                                                templates, templates_shape,
                                                 input.size()));
+    validateInputDimensions(pipeline);
 
-    ASSERT_TRUE(pipeline.perform_input_tiling(input, input_shape));
-
+    ASSERT_TRUE(pipeline.upload_templates(reinterpret_cast<cl_float2*>(templates.data())));
+    ASSERT_TRUE(pipeline.perform_input_tiling(reinterpret_cast<cl_float2 *>(input.data())));
     ASSERT_TRUE(pipeline.perform_ft_convolution(FDAS::AllAccelerations));
 
-    ASSERT_TRUE(pipeline.retrieve_tiles(tiles, tiles_shape));
-    EXPECT_EQ(tiles.size(), tiles_ref.size());
-    EXPECT_TRUE(std::equal(tiles.begin(), tiles.end(), tiles_ref.begin(),
-                           [](const std::complex<float> a, const std::complex<float> b) {
-                               return (fabs(a.real() - b.real()) < tolerance) &&
-                                      (fabs(a.imag() - b.imag()) < tolerance);
-                           }
-    ));
-    npy::SaveArrayAsNumpy(tiles_file(), false, tiles_shape.size(), tiles_shape.data(), tiles);
+    tiles.resize(pipeline.get_tiles_sz());
+    ASSERT_TRUE(pipeline.retrieve_tiles(reinterpret_cast<cl_float2*>(tiles.data())));
+    validateInputTiling();
 
-    ASSERT_TRUE(pipeline.retrieve_FOP(fop, fop_shape));
-    EXPECT_EQ(fop.size(), fop_ref.size());
-    EXPECT_TRUE(std::equal(fop.begin(), fop.end(), fop_ref.begin(),
-                           [](const float a, const float b) {
-                               return fabs(a - b) < tolerance;
-                           }
-    ));
-    npy::SaveArrayAsNumpy(fop_file(), false, fop_shape.size(), fop_shape.data(), fop);
+    fop.resize(pipeline.get_fop_sz());
+    ASSERT_TRUE(pipeline.retrieve_FOP(reinterpret_cast<cl_float*>(fop.data())));
+    validateFTConvolution();
 }
 
 TEST_P(FDASTest, Harmonic_Summing) {
     FDAS pipeline(std::cerr);
+
     ASSERT_TRUE(pipeline.initialise_accelerator(bitstream_file,
                                                 FDAS::choose_first_platform, FDAS::choose_accelerator_devices,
-                                                templates, templates_shape,
                                                 input.size()));
+    validateInputDimensions(pipeline);
 
-    ASSERT_TRUE(pipeline.inject_FOP(fop_ref, fop_ref_shape));
+    fop.resize(pipeline.get_fop_sz());
+    ASSERT_TRUE(pipeline.inject_FOP(reinterpret_cast<cl_float*>(fop_ref.data())));
+    ASSERT_TRUE(pipeline.perform_harmonic_summing(reinterpret_cast<cl_float*>(thresholds.data()), FDAS::NegativeAccelerations));
 
-    ASSERT_TRUE(pipeline.perform_harmonic_summing(thresholds, thresholds_shape, FDAS::NegativeAccelerations));
-
-    ASSERT_TRUE(pipeline.retrieve_candidates(detection_location, detection_location_shape, detection_power, detection_power_shape));
-    // store data as downloaded from the device (i.e. before filtering invalid slots)
-    npy::SaveArrayAsNumpy(det_loc_file(), false, detection_location_shape.size(), detection_location_shape.data(), detection_location);
-    npy::SaveArrayAsNumpy(det_pwr_file(), false, detection_power_shape.size(), detection_power_shape.data(), detection_power);
-
-    auto loc_it = detection_location.begin();
-    auto pwr_it = detection_power.begin();
-    while (loc_it != detection_location.end() && pwr_it != detection_power.end()) {
-        auto loc = *loc_it;
-        if (loc == HMS::invalid_location) {
-            loc_it = detection_location.erase(loc_it);
-            pwr_it = detection_power.erase(pwr_it);
-        } else {
-            ++loc_it, ++pwr_it;
-        }
-    }
-    EXPECT_LE(detection_location.size(), detection_location_ref.size());
-    EXPECT_GE(detection_location.size(), 1);
-
-    auto n_non_cands = 0;
-    for (loc_it = detection_location.begin(), pwr_it = detection_power.begin();
-         loc_it != detection_location.end() && pwr_it != detection_power.end();
-         ++loc_it, ++pwr_it) {
-        auto loc = *loc_it;
-        auto pwr = *pwr_it;
-
-        auto it = std::find(detection_location_ref.begin(), detection_location_ref.end(), loc);
-        if (it == detection_location_ref.end()) {
-            ++n_non_cands;
-            continue;
-        }
-        auto dist = std::distance(detection_location_ref.begin(), it);
-        auto amp_ref = detection_power_ref[dist];
-        EXPECT_TRUE(fabs(pwr - amp_ref) < tolerance);
-    }
-    EXPECT_EQ(n_non_cands, 0);
+    detection_location.resize(pipeline.get_candidate_list_sz());
+    detection_power.resize(pipeline.get_candidate_list_sz());
+    ASSERT_TRUE(pipeline.retrieve_candidates(reinterpret_cast<cl_uint*>(detection_location.data()),
+                                             reinterpret_cast<cl_float*>(detection_power.data())));
+    validateHarmonicSumming();
 }
 
 TEST_P(FDASTest, FDAS) {
     FDAS pipeline(std::cerr);
     ASSERT_TRUE(pipeline.initialise_accelerator(bitstream_file,
                                                 FDAS::choose_first_platform, FDAS::choose_accelerator_devices,
-                                                templates, templates_shape,
                                                 input.size()));
+    validateInputDimensions(pipeline);
 
-    ASSERT_TRUE(pipeline.perform_input_tiling(input, input_shape));
-
+    ASSERT_TRUE(pipeline.upload_templates(reinterpret_cast<cl_float2*>(templates.data())));
+    ASSERT_TRUE(pipeline.perform_input_tiling(reinterpret_cast<cl_float2 *>(input.data())));
     ASSERT_TRUE(pipeline.perform_ft_convolution(FDAS::PositiveAccelerations));
+    ASSERT_TRUE(pipeline.perform_harmonic_summing(reinterpret_cast<cl_float*>(thresholds.data()), FDAS::PositiveAccelerations));
 
-    ASSERT_TRUE(pipeline.perform_harmonic_summing(thresholds, thresholds_shape, FDAS::PositiveAccelerations));
-
-    ASSERT_TRUE(pipeline.retrieve_candidates(detection_location, detection_location_shape, detection_power, detection_power_shape));
-    // store data as downloaded from the device (i.e. before filtering invalid slots)
-    npy::SaveArrayAsNumpy(det_loc_file(), false, detection_location_shape.size(), detection_location_shape.data(), detection_location);
-    npy::SaveArrayAsNumpy(det_pwr_file(), false, detection_power_shape.size(), detection_power_shape.data(), detection_power);
-
-    auto loc_it = detection_location.begin();
-    auto pwr_it = detection_power.begin();
-    while (loc_it != detection_location.end() && pwr_it != detection_power.end()) {
-        auto loc = *loc_it;
-        if (loc == HMS::invalid_location) {
-            loc_it = detection_location.erase(loc_it);
-            pwr_it = detection_power.erase(pwr_it);
-        } else {
-            ++loc_it, ++pwr_it;
-        }
-    }
-    EXPECT_LE(detection_location.size(), detection_location_ref.size());
-    EXPECT_GE(detection_location.size(), 1);
-
-    auto n_non_cands = 0;
-    for (loc_it = detection_location.begin(), pwr_it = detection_power.begin();
-         loc_it != detection_location.end() && pwr_it != detection_power.end();
-         ++loc_it, ++pwr_it) {
-        auto loc = *loc_it;
-        auto pwr = *pwr_it;
-
-        auto it = std::find(detection_location_ref.begin(), detection_location_ref.end(), loc);
-        if (it == detection_location_ref.end()) {
-            ++n_non_cands;
-            continue;
-        }
-        auto dist = std::distance(detection_location_ref.begin(), it);
-        auto amp_ref = detection_power_ref[dist];
-        EXPECT_TRUE(fabs(pwr - amp_ref) < tolerance);
-    }
-    EXPECT_EQ(n_non_cands, 0);
+    detection_location.resize(pipeline.get_candidate_list_sz());
+    detection_power.resize(pipeline.get_candidate_list_sz());
+    ASSERT_TRUE(pipeline.retrieve_candidates(reinterpret_cast<cl_uint*>(detection_location.data()),
+                                             reinterpret_cast<cl_float*>(detection_power.data())));
+    validateHarmonicSumming();
 }
 
 INSTANTIATE_TEST_SUITE_P(TestVectors, FDASTest, ::testing::ValuesIn(FDASTest::test_vectors));
