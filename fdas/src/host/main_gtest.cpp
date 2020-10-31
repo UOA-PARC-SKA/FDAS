@@ -32,6 +32,7 @@
 
 #include "FDAS.h"
 #include "gen_info.h"
+#include "AlignedBuffer.h"
 
 using namespace GenInfo;
 
@@ -66,16 +67,6 @@ protected:
 
     std::string det_pwr_file(bool ref = false) { return GetParam() + "/det_pwr" + (ref ? "_ref" : "") + ".npy"; }
 
-    // XXX: std::align is missing in the ancient gcc version I am using...
-    template<typename T> T* align(T* ptr, size_t to_bytes) {
-        auto uint_ptr = reinterpret_cast<std::uintptr_t>(ptr);
-        auto offset = uint_ptr & (to_bytes - 1);
-        if (offset == 0)
-            return ptr;
-        auto aligned = uint_ptr - offset + to_bytes;
-        return reinterpret_cast<T*>(aligned);
-    }
-
     static cl_float2 complex_to_float2(std::complex<float> c) {
         return {c.real(), c.imag()};
     }
@@ -86,36 +77,30 @@ protected:
 
     InputType input;
     ShapeType input_shape;
-    std::unique_ptr<cl_float2[]> input_host;
-    cl_float2 *input_aligned;
+    AlignedBuffer<cl_float2, 64> input_host;
 
     TilesType tiles, tiles_ref;
     ShapeType tiles_ref_shape;
-    std::unique_ptr<cl_float2[]> tiles_host;
-    cl_float2 *tiles_aligned;
+    AlignedBuffer<cl_float2, 64> tiles_host;
 
     TemplatesType templates;
     ShapeType templates_shape;
-    std::unique_ptr<cl_float2[]> templates_host;
-    cl_float2 *templates_aligned;
+    AlignedBuffer<cl_float2, 64> templates_host;
 
     ThreshType thresholds;
     ShapeType thresholds_shape;
 
     FOPType fop, fop_ref;
     ShapeType fop_ref_shape;
-    std::unique_ptr<cl_float[]> fop_host;
-    cl_float *fop_aligned;
+    AlignedBuffer<cl_float, 64> fop_host;
 
     DetLocType detection_location, detection_location_ref;
     ShapeType detection_location_ref_shape;
-    std::unique_ptr<cl_uint[]> detection_location_host;
-    cl_uint *detection_location_aligned;
+    AlignedBuffer<cl_uint, 64> detection_location_host;
 
     DetPwrType detection_power, detection_power_ref;
     ShapeType detection_power_ref_shape;
-    std::unique_ptr<cl_float[]> detection_power_host;
-    cl_float *detection_power_aligned;
+    AlignedBuffer<cl_float, 64> detection_power_host;
 
     void SetUp() override {
         bool fortran_order = false; // library wants this as a reference
@@ -139,21 +124,12 @@ protected:
     }
 
     void allocateAlignedBuffers(const FDAS &pipeline) {
-        const size_t dma_alignment = 64;
-
-        input_host.reset(new cl_float2[pipeline.get_input_sz() + dma_alignment]);
-        tiles_host.reset(new cl_float2[pipeline.get_tiles_sz() + dma_alignment]);
-        templates_host.reset(new cl_float2[pipeline.get_templates_sz() + dma_alignment]);
-        fop_host.reset(new cl_float[pipeline.get_fop_sz() + dma_alignment]);
-        detection_location_host.reset(new cl_uint[pipeline.get_candidate_list_sz() + dma_alignment]);
-        detection_power_host.reset(new cl_float[pipeline.get_candidate_list_sz() + dma_alignment]);
-
-        input_aligned = align(input_host.get(), dma_alignment);
-        tiles_aligned = align(tiles_host.get(), dma_alignment);
-        templates_aligned = align(templates_host.get(), dma_alignment);
-        fop_aligned = align(fop_host.get(), dma_alignment);
-        detection_location_aligned = align(detection_location_host.get(), dma_alignment);
-        detection_power_aligned = align(detection_power_host.get(), dma_alignment);
+        input_host.allocate(pipeline.get_input_sz());
+        tiles_host.allocate(pipeline.get_tiles_sz());
+        templates_host.allocate(pipeline.get_templates_sz());
+        fop_host.allocate(pipeline.get_fop_sz());
+        detection_location_host.allocate(pipeline.get_candidate_list_sz());
+        detection_power_host.allocate(pipeline.get_candidate_list_sz());
     }
 
     void validateInputTiling() {
@@ -222,20 +198,20 @@ TEST_P(FDASTest, FT_Convolution) {
     validateInputDimensions(pipeline);
     allocateAlignedBuffers(pipeline);
 
-    std::transform(templates.begin(), templates.end(), templates_aligned, complex_to_float2);
-    ASSERT_TRUE(pipeline.upload_templates(templates_aligned));
-    std::transform(input.begin(), input.end(), input_aligned, complex_to_float2);
-    ASSERT_TRUE(pipeline.perform_input_tiling(input_aligned));
+    std::transform(templates.begin(), templates.end(), templates_host(), complex_to_float2);
+    ASSERT_TRUE(pipeline.upload_templates(templates_host()));
+    std::transform(input.begin(), input.end(), input_host(), complex_to_float2);
+    ASSERT_TRUE(pipeline.perform_input_tiling(input_host()));
     ASSERT_TRUE(pipeline.perform_ft_convolution(FDAS::AllAccelerations));
 
-    ASSERT_TRUE(pipeline.retrieve_tiles(tiles_aligned));
+    ASSERT_TRUE(pipeline.retrieve_tiles(tiles_host()));
     tiles.resize(pipeline.get_tiles_sz());
-    std::transform(tiles_aligned, tiles_aligned + pipeline.get_tiles_sz(), tiles.begin(), float2_to_complex);
+    std::transform(tiles_host(), tiles_host() + pipeline.get_tiles_sz(), tiles.begin(), float2_to_complex);
     validateInputTiling();
 
-    ASSERT_TRUE(pipeline.retrieve_FOP(fop_aligned));
+    ASSERT_TRUE(pipeline.retrieve_FOP(fop_host()));
     fop.resize(pipeline.get_fop_sz());
-    std::copy(fop_aligned, fop_aligned + pipeline.get_fop_sz(), fop.begin());
+    std::copy(fop_host(), fop_host() + pipeline.get_fop_sz(), fop.begin());
     validateFTConvolution();
 }
 
@@ -247,15 +223,15 @@ TEST_P(FDASTest, Harmonic_Summing) {
     validateInputDimensions(pipeline);
     allocateAlignedBuffers(pipeline);
 
-    std::copy(fop_ref.begin(), fop_ref.end(), fop_aligned);
-    ASSERT_TRUE(pipeline.inject_FOP(fop_aligned));
+    std::copy(fop_ref.begin(), fop_ref.end(), fop_host());
+    ASSERT_TRUE(pipeline.inject_FOP(fop_host()));
     ASSERT_TRUE(pipeline.perform_harmonic_summing(thresholds.data(), FDAS::NegativeAccelerations));
 
-    ASSERT_TRUE(pipeline.retrieve_candidates(detection_location_aligned, detection_power_aligned));
+    ASSERT_TRUE(pipeline.retrieve_candidates(detection_location_host(), detection_power_host()));
     detection_location.resize(pipeline.get_candidate_list_sz());
     detection_power.resize(pipeline.get_candidate_list_sz());
-    std::copy(detection_location_aligned, detection_location_aligned + pipeline.get_candidate_list_sz(), detection_location.begin());
-    std::copy(detection_power_aligned, detection_power_aligned + pipeline.get_candidate_list_sz(), detection_power.begin());
+    std::copy(detection_location_host(), detection_location_host() + pipeline.get_candidate_list_sz(), detection_location.begin());
+    std::copy(detection_power_host(), detection_power_host() + pipeline.get_candidate_list_sz(), detection_power.begin());
     validateHarmonicSumming();
 }
 
@@ -267,18 +243,18 @@ TEST_P(FDASTest, FDAS) {
     validateInputDimensions(pipeline);
     allocateAlignedBuffers(pipeline);
 
-    std::transform(templates.begin(), templates.end(), templates_aligned, complex_to_float2);
-    ASSERT_TRUE(pipeline.upload_templates(templates_aligned));
-    std::transform(input.begin(), input.end(), input_aligned, complex_to_float2);
-    ASSERT_TRUE(pipeline.perform_input_tiling(input_aligned));
+    std::transform(templates.begin(), templates.end(), templates_host(), complex_to_float2);
+    ASSERT_TRUE(pipeline.upload_templates(templates_host()));
+    std::transform(input.begin(), input.end(), input_host(), complex_to_float2);
+    ASSERT_TRUE(pipeline.perform_input_tiling(input_host()));
     ASSERT_TRUE(pipeline.perform_ft_convolution(FDAS::PositiveAccelerations));
     ASSERT_TRUE(pipeline.perform_harmonic_summing(thresholds.data(), FDAS::PositiveAccelerations));
 
-    ASSERT_TRUE(pipeline.retrieve_candidates(detection_location_aligned, detection_power_aligned));
+    ASSERT_TRUE(pipeline.retrieve_candidates(detection_location_host(), detection_power_host()));
     detection_location.resize(pipeline.get_candidate_list_sz());
     detection_power.resize(pipeline.get_candidate_list_sz());
-    std::copy(detection_location_aligned, detection_location_aligned + pipeline.get_candidate_list_sz(), detection_location.begin());
-    std::copy(detection_power_aligned, detection_power_aligned + pipeline.get_candidate_list_sz(), detection_power.begin());
+    std::copy(detection_location_host(), detection_location_host() + pipeline.get_candidate_list_sz(), detection_location.begin());
+    std::copy(detection_power_host(), detection_power_host() + pipeline.get_candidate_list_sz(), detection_power.begin());
     validateHarmonicSumming();
 }
 
