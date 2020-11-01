@@ -38,6 +38,7 @@ public:
     enum FOPPart {NegativeAccelerations, PositiveAccelerations, AllAccelerations};
     enum BufferSet {A=0, B=1};
 
+public:
     FDAS(std::ostream &log) : log(log) {}
 
     bool initialise_accelerator(std::string bitstream_file_name,
@@ -53,6 +54,8 @@ public:
 
     bool perform_harmonic_summing(const cl_float *thresholds, FOPPart which, BufferSet ab = A);
 
+    bool launch(const cl_float2 *input, const cl_float *thresholds, FOPPart which, BufferSet ab = A);
+
     bool retrieve_tiles(cl_float2 *tiles, BufferSet ab = A);
 
     bool retrieve_FOP(cl_float *fop, BufferSet ab = A);
@@ -60,6 +63,8 @@ public:
     bool inject_FOP(const cl_float *fop, BufferSet ab = A);
 
     bool retrieve_candidates(cl_uint *detection_location, cl_float *detection_power, BufferSet ab = A);
+
+    void print_stats(BufferSet ab = A);
 
     cl_uint get_input_sz() const;
 
@@ -76,6 +81,13 @@ public:
     static bool choose_first_platform(const std::string &platform_name, const std::string &platform_version) { return true; }
 
     static bool choose_accelerator_devices(cl_uint device_num, cl_uint device_type, const std::string &device_name) { return device_type == CL_DEVICE_TYPE_ACCELERATOR; }
+
+private:
+    bool enqueue_input_tiling(const cl_float2 *input, BufferSet ab);
+
+    bool enqueue_ft_convolution(FOPPart which, BufferSet ab);
+
+    bool enqueue_harmonic_summing(const cl_float *thresholds, FOPPart which, BufferSet);
 
 private:
     cl_uint n_frequency_bins;
@@ -134,6 +146,17 @@ private:
     std::array<std::unique_ptr<cl::CommandQueue>, 2> fop_buffer_queues;
     std::array<std::unique_ptr<cl::CommandQueue>, 2> detection_location_buffer_queues;
     std::array<std::unique_ptr<cl::CommandQueue>, 2> detection_power_buffer_queues;
+
+    // Events
+    std::array<std::unique_ptr<cl::Event>, 2> xfer_input_events;
+    std::array<std::unique_ptr<cl::Event>, 2> load_input_events;
+    std::array<std::unique_ptr<cl::Event>, 2> store_tiles_events;
+    std::array<std::unique_ptr<cl::Event>, 2> mux_and_mult_events;
+    std::array<std::unique_ptr<cl::Event>, 2> last_square_and_discard_events;
+    std::array<std::unique_ptr<cl::Event>, 2> first_preload_events;
+    std::array<std::unique_ptr<cl::Event>, 2> store_cands_events;
+    std::array<std::unique_ptr<cl::Event>, 2> xfer_det_locs_events;
+    std::array<std::unique_ptr<cl::Event>, 2> xfer_det_pwrs_events;
 
     std::ostream &log;
 
