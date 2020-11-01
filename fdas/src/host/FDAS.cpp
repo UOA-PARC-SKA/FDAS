@@ -23,15 +23,12 @@
 #include <iomanip>
 
 #include "FDAS.h"
-#include "gen_info.h"
 
 #include <CL/cl_ext_intelfpga.h>
 
 using std::endl;
 using std::setprecision;
 using std::fixed;
-
-using namespace GenInfo;
 
 #define cl_chk(cmd) \
     do { \
@@ -139,29 +136,29 @@ bool FDAS::initialise_accelerator(std::string bitstream_file_name,
     bitstream.shrink_to_fit();
 
     // Kernels
+    for (cl_uint e = 0; e < FFT::n_engines; ++e) {
+        auto name = "fft_" + std::to_string(e);
+        cl_chkref(fft_kernels[e].reset(new cl::Kernel(*program, name.c_str(), &status)));
+    }
     cl_chkref(load_input_kernel.reset(new cl::Kernel(*program, "load_input", &status)));
     cl_chkref(tile_kernel.reset(new cl::Kernel(*program, "tile", &status)));
     cl_chkref(store_tiles_kernel.reset(new cl::Kernel(*program, "store_tiles", &status)));
     cl_chkref(mux_and_mult_kernel.reset(new cl::Kernel(*program, "mux_and_mult", &status)));
-
-    fft_kernels.resize(FFT::n_engines);
-    square_and_discard_kernels.resize(FFT::n_engines);
     for (cl_uint e = 0; e < FFT::n_engines; ++e) {
-        auto name = "fft_" + std::to_string(e);
-        cl_chkref(fft_kernels[e].reset(new cl::Kernel(*program, name.c_str(), &status)));
-        name = "square_and_discard_" + std::to_string(e);
+        auto name = "square_and_discard_" + std::to_string(e);
         cl_chkref(square_and_discard_kernels[e].reset(new cl::Kernel(*program, name.c_str(), &status)));
     }
 
-    preload_kernels.resize(HMS::n_planes);
-    delay_kernels.resize(HMS::n_planes);
-    detect_kernels.resize(HMS::n_planes);
     for (cl_uint h = 0; h < HMS::n_planes; ++h) {
         auto name = "preload_" + std::to_string(h + 1);
         cl_chkref(preload_kernels[h].reset(new cl::Kernel(*program, name.c_str(), &status)));
-        name = "delay_" + std::to_string(h + 1);
+    }
+    for (cl_uint h = 0; h < HMS::n_planes; ++h) {
+        auto name = "delay_" + std::to_string(h + 1);
         cl_chkref(delay_kernels[h].reset(new cl::Kernel(*program, name.c_str(), &status)));
-        name = "detect_" + std::to_string(h + 1);
+    }
+    for (cl_uint h = 0; h < HMS::n_planes; ++h) {
+        auto name = "detect_" + std::to_string(h + 1);
         cl_chkref(detect_kernels[h].reset(new cl::Kernel(*program, name.c_str(), &status)));
     }
     cl_chkref(store_cands_kernel.reset(new cl::Kernel(*program, "store_cands", &status)));
@@ -180,25 +177,29 @@ bool FDAS::initialise_accelerator(std::string bitstream_file_name,
 
     size_t total_allocated = 0;
 
-    cl_chkref(input_buffer.reset(new cl::Buffer(*context, CL_MEM_READ_ONLY, sizeof(cl_float2) * n_frequency_bins, nullptr, &status)));
-    total_allocated += input_buffer->getInfo<CL_MEM_SIZE>();
+    cl_chkref(input_buffers[0].reset(new cl::Buffer(*context, CL_MEM_READ_ONLY | CL_CHANNEL_1_INTELFPGA, sizeof(cl_float2) * n_frequency_bins, nullptr, &status)));
+    cl_chkref(input_buffers[1].reset(new cl::Buffer(*context, CL_MEM_READ_ONLY | CL_CHANNEL_2_INTELFPGA, sizeof(cl_float2) * n_frequency_bins, nullptr, &status)));
+    total_allocated += input_buffers[0]->getInfo<CL_MEM_SIZE>() + input_buffers[1]->getInfo<CL_MEM_SIZE>();
 
-    cl_chkref(tiles_buffer.reset(new cl::Buffer(*context, CL_MEM_READ_WRITE, sizeof(cl_float2) * tiles_sz, nullptr, &status)));
-    total_allocated += tiles_buffer->getInfo<CL_MEM_SIZE>();
+    cl_chkref(tiles_buffers[0].reset(new cl::Buffer(*context, CL_MEM_READ_WRITE | CL_CHANNEL_1_INTELFPGA, sizeof(cl_float2) * tiles_sz, nullptr, &status)));
+    cl_chkref(tiles_buffers[1].reset(new cl::Buffer(*context, CL_MEM_READ_WRITE | CL_CHANNEL_2_INTELFPGA, sizeof(cl_float2) * tiles_sz, nullptr, &status)));
+    total_allocated += tiles_buffers[0]->getInfo<CL_MEM_SIZE>() + tiles_buffers[1]->getInfo<CL_MEM_SIZE>();
 
-    cl_chkref(templates_buffer.reset(new cl::Buffer(*context, CL_MEM_READ_ONLY, sizeof(cl_float2) * templates_sz, nullptr, &status)));
-    total_allocated += templates_buffer->getInfo<CL_MEM_SIZE>();
+    cl_chkref(templates_buffers[0].reset(new cl::Buffer(*context, CL_MEM_READ_ONLY | CL_CHANNEL_1_INTELFPGA, sizeof(cl_float2) * templates_sz, nullptr, &status)));
+    cl_chkref(templates_buffers[1].reset(new cl::Buffer(*context, CL_MEM_READ_ONLY | CL_CHANNEL_2_INTELFPGA, sizeof(cl_float2) * templates_sz, nullptr, &status)));
+    total_allocated += templates_buffers[0]->getInfo<CL_MEM_SIZE>() + templates_buffers[1]->getInfo<CL_MEM_SIZE>();
 
-    cl_chkref(fop_buffer_A.reset(new cl::Buffer(*context, CL_MEM_READ_WRITE | CL_CHANNEL_2_INTELFPGA, sizeof(cl_float) * fop_sz, nullptr, &status)));
-    total_allocated += fop_buffer_A->getInfo<CL_MEM_SIZE>();
-    cl_chkref(fop_buffer_B.reset(new cl::Buffer(*context, CL_MEM_READ_WRITE | CL_CHANNEL_1_INTELFPGA, sizeof(cl_float) * fop_sz, nullptr, &status)));
-    total_allocated += fop_buffer_B->getInfo<CL_MEM_SIZE>();
+    cl_chkref(fop_buffers[0].reset(new cl::Buffer(*context, CL_MEM_READ_WRITE | CL_CHANNEL_2_INTELFPGA, sizeof(cl_float) * fop_sz, nullptr, &status)));
+    cl_chkref(fop_buffers[1].reset(new cl::Buffer(*context, CL_MEM_READ_WRITE | CL_CHANNEL_1_INTELFPGA, sizeof(cl_float) * fop_sz, nullptr, &status)));
+    total_allocated += fop_buffers[0]->getInfo<CL_MEM_SIZE>() + fop_buffers[1]->getInfo<CL_MEM_SIZE>();
 
-    cl_chkref(detection_location_buffer.reset(new cl::Buffer(*context, CL_MEM_WRITE_ONLY, sizeof(cl_uint) * Output::n_candidates, nullptr, &status)));
-    total_allocated += detection_location_buffer->getInfo<CL_MEM_SIZE>();
+    cl_chkref(detection_location_buffers[0].reset(new cl::Buffer(*context, CL_MEM_WRITE_ONLY | CL_CHANNEL_2_INTELFPGA, sizeof(cl_uint) * Output::n_candidates, nullptr, &status)));
+    cl_chkref(detection_location_buffers[1].reset(new cl::Buffer(*context, CL_MEM_WRITE_ONLY | CL_CHANNEL_1_INTELFPGA, sizeof(cl_uint) * Output::n_candidates, nullptr, &status)));
+    total_allocated += detection_location_buffers[0]->getInfo<CL_MEM_SIZE>() + detection_location_buffers[1]->getInfo<CL_MEM_SIZE>();
 
-    cl_chkref(detection_power_buffer.reset(new cl::Buffer(*context, CL_MEM_WRITE_ONLY, sizeof(cl_float) * Output::n_candidates, nullptr, &status)));
-    total_allocated += detection_power_buffer->getInfo<CL_MEM_SIZE>();
+    cl_chkref(detection_power_buffers[0].reset(new cl::Buffer(*context, CL_MEM_WRITE_ONLY | CL_CHANNEL_2_INTELFPGA, sizeof(cl_float) * Output::n_candidates, nullptr, &status)));
+    cl_chkref(detection_power_buffers[1].reset(new cl::Buffer(*context, CL_MEM_WRITE_ONLY | CL_CHANNEL_1_INTELFPGA, sizeof(cl_float) * Output::n_candidates, nullptr, &status)));
+    total_allocated += detection_power_buffers[0]->getInfo<CL_MEM_SIZE>() + detection_power_buffers[1]->getInfo<CL_MEM_SIZE>();
 
     log << "[INFO] Allocated "
         << fixed << setprecision(2) << (total_allocated / (1.f * (1 << 20)))
@@ -206,81 +207,92 @@ bool FDAS::initialise_accelerator(std::string bitstream_file_name,
         << setprecision(2) << (100.f * total_allocated / default_device.getInfo<CL_DEVICE_GLOBAL_MEM_SIZE>())
         << " %)" << endl;
 
+    // Queues
+    for (auto &q : fft_queues)
+        cl_chkref(q.reset(new cl::CommandQueue(*context, default_device, CL_QUEUE_PROFILING_ENABLE, &status)));
+    cl_chkref(load_input_queue.reset(new cl::CommandQueue(*context, default_device, CL_QUEUE_PROFILING_ENABLE, &status)));
+    cl_chkref(tile_queue.reset(new cl::CommandQueue(*context, default_device, CL_QUEUE_PROFILING_ENABLE, &status)));
+    cl_chkref(store_tiles_queue.reset(new cl::CommandQueue(*context, default_device, CL_QUEUE_PROFILING_ENABLE, &status)));
+    cl_chkref(mux_and_mult_queue.reset(new cl::CommandQueue(*context, default_device, CL_QUEUE_PROFILING_ENABLE, &status)));
+    for (auto &q : square_and_discard_queues)
+        cl_chkref(q.reset(new cl::CommandQueue(*context, default_device, CL_QUEUE_PROFILING_ENABLE, &status)));
+
+    for (auto &q : preload_queues)
+        cl_chkref(q.reset(new cl::CommandQueue(*context, default_device, CL_QUEUE_PROFILING_ENABLE, &status)));
+    for (auto &q : delay_queues)
+        cl_chkref(q.reset(new cl::CommandQueue(*context, default_device, CL_QUEUE_PROFILING_ENABLE, &status)));
+    for (auto &q : detect_queues)
+        cl_chkref(q.reset(new cl::CommandQueue(*context, default_device, CL_QUEUE_PROFILING_ENABLE, &status)));
+    cl_chkref(store_cands_queue.reset(new cl::CommandQueue(*context, default_device, CL_QUEUE_PROFILING_ENABLE, &status)));
+
+    for (auto &q : input_buffer_queues)
+        cl_chkref(q.reset(new cl::CommandQueue(*context, default_device, CL_QUEUE_PROFILING_ENABLE, &status)));
+    for (auto &q : tiles_buffer_queues)
+        cl_chkref(q.reset(new cl::CommandQueue(*context, default_device, CL_QUEUE_PROFILING_ENABLE, &status)));
+    for (auto &q : templates_buffer_queues)
+        cl_chkref(q.reset(new cl::CommandQueue(*context, default_device, CL_QUEUE_PROFILING_ENABLE, &status)));
+    for (auto &q : fop_buffer_queues)
+        cl_chkref(q.reset(new cl::CommandQueue(*context, default_device, CL_QUEUE_PROFILING_ENABLE, &status)));
+    for (auto &q : detection_location_buffer_queues)
+        cl_chkref(q.reset(new cl::CommandQueue(*context, default_device, CL_QUEUE_PROFILING_ENABLE, &status)));
+    for (auto &q : detection_power_buffer_queues)
+        cl_chkref(q.reset(new cl::CommandQueue(*context, default_device, CL_QUEUE_PROFILING_ENABLE, &status)));
+
     return true;
 }
 
-bool FDAS::upload_templates(const cl_float2 *templates) {
-    cl::CommandQueue buffer_q(*context, default_device, CL_QUEUE_PROFILING_ENABLE);
-    cl_chk(buffer_q.enqueueWriteBuffer(*templates_buffer, true, 0, sizeof(cl_float2) * templates_sz, templates));
-    cl_chk(buffer_q.finish());
+bool FDAS::upload_templates(const cl_float2 *templates, BufferSet ab) {
+    cl_chk(templates_buffer_queues[ab]->enqueueWriteBuffer(*templates_buffers[ab], true, 0, sizeof(cl_float2) * templates_sz, templates));
+    cl_chk(templates_buffer_queues[ab]->finish());
 
     log << "[INFO] Uploaded template coefficients" << endl;
 
     return true;
 }
 
-bool FDAS::perform_input_tiling(const cl_float2 *input) {
+bool FDAS::perform_input_tiling(const cl_float2 *input, BufferSet ab) {
     // Events to track exeuction time
     cl::Event prep_start, prep_end;
 
-    // Instantiate command queues, one per kernel, plus one for I/O operations. Multi-device support is NYI
-    cl::CommandQueue buffer_q(*context, default_device, CL_QUEUE_PROFILING_ENABLE);
-
-    cl::CommandQueue load_input_q(*context, default_device, CL_QUEUE_PROFILING_ENABLE);
-    cl::CommandQueue tile_q(*context, default_device, CL_QUEUE_PROFILING_ENABLE);
-    cl::CommandQueue fft_q(*context, default_device, CL_QUEUE_PROFILING_ENABLE);
-    cl::CommandQueue store_tiles_q(*context, default_device, CL_QUEUE_PROFILING_ENABLE);
-
     // Copy input to device
-    cl_chk(buffer_q.enqueueWriteBuffer(*input_buffer, true, 0, sizeof(cl_float2) * n_frequency_bins, input));
-    cl_chk(buffer_q.finish());
+    cl_chk(input_buffer_queues[ab]->enqueueWriteBuffer(*input_buffers[ab], true, 0, sizeof(cl_float2) * n_frequency_bins, input));
+    cl_chk(input_buffer_queues[ab]->finish());
 
     // Launch pipeline
-    cl_chk(load_input_kernel->setArg<cl::Buffer>(0, *input_buffer));
+    cl_chk(load_input_kernel->setArg<cl::Buffer>(0, *input_buffers[ab]));
     cl_chk(load_input_kernel->setArg<cl_uint>(1, n_frequency_bins / FTC::pack_sz));
     cl_chk(load_input_kernel->setArg<cl_uint>(2, padding_last_tile / FTC::pack_sz)); // TODO: should assert that padding amount is divisible by pack_sz
 
-    cl_chk(load_input_q.enqueueTask(*load_input_kernel, nullptr, &prep_start));
+    cl_chk(load_input_queue->enqueueTask(*load_input_kernel, nullptr, &prep_start));
 
     cl_chk(tile_kernel->setArg<cl_uint>(0, n_tiles));
 
-    cl_chk(tile_q.enqueueTask(*tile_kernel, nullptr, nullptr));
+    cl_chk(tile_queue->enqueueTask(*tile_kernel, nullptr, nullptr));
 
     cl_chk(fft_kernels[0]->setArg<cl_uint>(0, n_tiles));
     cl_chk(fft_kernels[0]->setArg<cl_uint>(1, false));
 
-    cl_chk(fft_q.enqueueTask(*fft_kernels[0], nullptr, nullptr));
+    cl_chk(fft_queues[0]->enqueueTask(*fft_kernels[0], nullptr, nullptr));
 
-    cl_chk(store_tiles_kernel->setArg<cl::Buffer>(0, *tiles_buffer));
+    cl_chk(store_tiles_kernel->setArg<cl::Buffer>(0, *tiles_buffers[ab]));
     cl_chk(store_tiles_kernel->setArg<cl_uint>(1, n_tiles));
 
-    cl_chk(store_tiles_q.enqueueTask(*store_tiles_kernel, nullptr, &prep_end));
+    cl_chk(store_tiles_queue->enqueueTask(*store_tiles_kernel, nullptr, &prep_end));
 
     // Wait for completion
-    cl_chk(load_input_q.finish());
-    cl_chk(tile_q.finish());
-    cl_chk(fft_q.finish());
-    cl_chk(store_tiles_q.finish());
+    cl_chk(load_input_queue->finish());
+    cl_chk(tile_queue->finish());
+    cl_chk(fft_queues[0]->finish());
+    cl_chk(store_tiles_queue->finish());
 
     print_duration("Preparation", prep_start, prep_end);
 
     return true;
 }
 
-bool FDAS::perform_ft_convolution(FOPPart which) {
+bool FDAS::perform_ft_convolution(FOPPart which, BufferSet ab) {
     // Events to track execuction time
     cl::Event conv_start, conv_end;
-
-    // Instantiate command queues, one per kernel. Multi-device support is NYI
-    cl::CommandQueue mux_and_mult_q(*context, default_device, CL_QUEUE_PROFILING_ENABLE);
-
-    std::vector<cl::CommandQueue> fft_queues, square_and_discard_queues;
-    for (cl_uint e = 0; e < FFT::n_engines; ++e) {
-        cl::CommandQueue fft_q(*context, default_device, CL_QUEUE_PROFILING_ENABLE);
-        fft_queues.emplace_back(fft_q);
-        cl::CommandQueue square_and_discard_q(*context, default_device, CL_QUEUE_PROFILING_ENABLE);
-        square_and_discard_queues.emplace_back(square_and_discard_q);
-    }
 
     // Determine scope
     cl_int first_template, last_template;
@@ -302,8 +314,8 @@ bool FDAS::perform_ft_convolution(FOPPart which) {
     // Distribute batches of templates to the available FFT engines
     for (cl_int t = first_template; t <= last_template; t += FFT::n_engines) {
         cl_uint n_engines_to_use = std::min(last_template - t + 1, (cl_int) FFT::n_engines);
-        cl_chk(mux_and_mult_kernel->setArg<cl::Buffer>(0, *tiles_buffer));
-        cl_chk(mux_and_mult_kernel->setArg<cl::Buffer>(1, *templates_buffer));
+        cl_chk(mux_and_mult_kernel->setArg<cl::Buffer>(0, *tiles_buffers[ab]));
+        cl_chk(mux_and_mult_kernel->setArg<cl::Buffer>(1, *templates_buffers[ab]));
         cl_chk(mux_and_mult_kernel->setArg<cl_uint>(2, n_tiles));
         cl_chk(mux_and_mult_kernel->setArg<cl_uint>(3, n_engines_to_use));
 
@@ -316,32 +328,32 @@ bool FDAS::perform_ft_convolution(FOPPart which) {
                 cl_chk(fft_kernels[e]->setArg<cl_uint>(1, true)); // `fft_0` can do both directions - request iFFT here
 
             cl_uint fop_offset = (t + e + Input::n_tmpl_per_accel_sign) * n_frequency_bins / FTC::pack_sz;
-            cl_chk(square_and_discard_kernels[e]->setArg<cl::Buffer>(0, *fop_buffer_A));
+            cl_chk(square_and_discard_kernels[e]->setArg<cl::Buffer>(0, *fop_buffers[ab]));
             cl_chk(square_and_discard_kernels[e]->setArg<cl_uint>(1, n_tiles));
             cl_chk(square_and_discard_kernels[e]->setArg<cl_uint>(2, n_frequency_bins / FTC::pack_sz));
             cl_chk(square_and_discard_kernels[e]->setArg<cl_uint>(3, fop_offset));
         }
 
-        cl_chk(mux_and_mult_q.enqueueTask(*mux_and_mult_kernel, nullptr, (t == first_template ? &conv_start : nullptr)));
+        cl_chk(mux_and_mult_queue->enqueueTask(*mux_and_mult_kernel, nullptr, (t == first_template ? &conv_start : nullptr)));
         for (cl_uint e = 0; e < n_engines_to_use; ++e) {
-            cl_chk(fft_queues[e].enqueueTask(*fft_kernels[e], nullptr, nullptr));
-            cl_chk(square_and_discard_queues[e].enqueueTask(*square_and_discard_kernels[e], nullptr, (t + e == last_template ? &conv_end : nullptr)));
+            cl_chk(fft_queues[e]->enqueueTask(*fft_kernels[e], nullptr, nullptr));
+            cl_chk(square_and_discard_queues[e]->enqueueTask(*square_and_discard_kernels[e], nullptr, (t + e == last_template ? &conv_end : nullptr)));
         }
     }
 
     // Wait for completion
-    cl_chk(mux_and_mult_q.finish());
+    cl_chk(mux_and_mult_queue->finish());
     for (auto &q : fft_queues)
-        cl_chk(q.finish());
+        cl_chk(q->finish());
     for (auto &q : square_and_discard_queues)
-        cl_chk(q.finish());
+        cl_chk(q->finish());
 
     print_duration("FT convolution and IFFT", conv_start, conv_end);
 
     return true;
 }
 
-bool FDAS::perform_harmonic_summing(const cl_float *thresholds, FOPPart which) {
+bool FDAS::perform_harmonic_summing(const cl_float *thresholds, FOPPart which, BufferSet ab) {
     if (which == AllAccelerations) {
         log << "[ERROR] Candidate detection on the entire FOP is not supported" << endl;
         return false;
@@ -356,19 +368,6 @@ bool FDAS::perform_harmonic_summing(const cl_float *thresholds, FOPPart which) {
     const cl_uint n_groups = (cl_uint) ceil(1.0 * n_templates / HMS::group_sz);
     const cl_uint n_bundles = (cl_uint) ceil(1.0 * n_frequency_bins / HMS::bundle_sz);
     const bool negative_tmpls = which == NegativeAccelerations;
-
-    // Instantiate command queues, one per kernel. Multi-device support is NYI
-    cl::CommandQueue store_cands_q(*context, default_device, CL_QUEUE_PROFILING_ENABLE);
-
-    std::vector<cl::CommandQueue> preload_queues, delay_queues, detect_queues;
-    for (cl_uint h = 0; h < n_planes; ++h) {
-        cl::CommandQueue preload_q(*context, default_device, CL_QUEUE_PROFILING_ENABLE);
-        preload_queues.emplace_back(preload_q);
-        cl::CommandQueue delay_q(*context, default_device, CL_QUEUE_PROFILING_ENABLE);
-        delay_queues.emplace_back(delay_q);
-        cl::CommandQueue detect_q(*context, default_device, CL_QUEUE_PROFILING_ENABLE);
-        detect_queues.emplace_back(detect_q);
-    }
 
     // Orchestrate systolic array
     for (cl_uint h = 0; h < n_planes; ++h) {
@@ -389,7 +388,7 @@ bool FDAS::perform_harmonic_summing(const cl_float *thresholds, FOPPart which) {
             if (group_base + n_buffers_to_use >= n_templates)
                 n_buffers_to_use = n_templates - group_base;
 
-            cl_chk(preload_k.setArg<cl::Buffer>(0, *fop_buffer_A));
+            cl_chk(preload_k.setArg<cl::Buffer>(0, *fop_buffers[ab]));
             cl_chk(preload_k.setArg<cl_uint>(1, (cl_uint) ceil(1.0 * n_bundles / k)));
             cl_chk(preload_k.setArg<cl_uint>(2, n_buffers_to_use));
             cl_chk(preload_k.setArg<cl_uint>(3, cc_of_group_base));
@@ -401,8 +400,8 @@ bool FDAS::perform_harmonic_summing(const cl_float *thresholds, FOPPart which) {
 
             cl_chk(delay_k.setArg<cl_uint>(0, n_bundles));
 
-            cl_chk(preload_queues[h].enqueueTask(preload_k, nullptr, (k == 1 && g == 0 ? &hsum_start : nullptr)));
-            cl_chk(delay_queues[h].enqueueTask(delay_k, nullptr, nullptr));
+            cl_chk(preload_queues[h]->enqueueTask(preload_k, nullptr, (k == 1 && g == 0 ? &hsum_start : nullptr)));
+            cl_chk(delay_queues[h]->enqueueTask(delay_k, nullptr, nullptr));
         }
 
         cl_chk(detect_k.setArg<cl_float>(0, thresholds[h]));
@@ -411,57 +410,54 @@ bool FDAS::perform_harmonic_summing(const cl_float *thresholds, FOPPart which) {
         cl_chk(detect_k.setArg<cl_uint>(3, n_groups));
         cl_chk(detect_k.setArg<cl_uint>(4, n_bundles));
 
-        cl_chk(detect_queues[h].enqueueTask(detect_k, nullptr, nullptr));
+        cl_chk(detect_queues[h]->enqueueTask(detect_k, nullptr, nullptr));
     }
 
-    cl_chk(store_cands_kernel->setArg<cl::Buffer>(0, *detection_location_buffer));
-    cl_chk(store_cands_kernel->setArg<cl::Buffer>(1, *detection_power_buffer));
+    cl_chk(store_cands_kernel->setArg<cl::Buffer>(0, *detection_location_buffers[ab]));
+    cl_chk(store_cands_kernel->setArg<cl::Buffer>(1, *detection_power_buffers[ab]));
 
-    cl_chk(store_cands_q.enqueueTask(*store_cands_kernel, nullptr, &hsum_end));
+    cl_chk(store_cands_queue->enqueueTask(*store_cands_kernel, nullptr, &hsum_end));
 
     // Wait for completion
     for (auto &q : preload_queues)
-        cl_chk(q.finish());
+        cl_chk(q->finish());
     for (auto &q : delay_queues)
-        cl_chk(q.finish());
+        cl_chk(q->finish());
     for (auto &q : detect_queues)
-        cl_chk(q.finish());
-    cl_chk(store_cands_q.finish());
+        cl_chk(q->finish());
+    cl_chk(store_cands_queue->finish());
 
     print_duration("Harmonic summing (1/2 FOP)", hsum_start, hsum_end);
 
     return true;
 }
 
-bool FDAS::retrieve_tiles(cl_float2 *tiles) {
-    cl::CommandQueue buffer_q(*context, default_device, CL_QUEUE_PROFILING_ENABLE);
-    cl_chk(buffer_q.enqueueReadBuffer(*tiles_buffer, true, 0, sizeof(cl_float2) * tiles_sz, tiles));
-    cl_chk(buffer_q.finish());
+bool FDAS::retrieve_tiles(cl_float2 *tiles, BufferSet ab) {
+    cl_chk(tiles_buffer_queues[ab]->enqueueReadBuffer(*tiles_buffers[ab], true, 0, sizeof(cl_float2) * tiles_sz, tiles));
+    cl_chk(tiles_buffer_queues[ab]->finish());
 
     return true;
 }
 
-bool FDAS::retrieve_FOP(cl_float *fop) {
-    cl::CommandQueue buffer_q(*context, default_device, CL_QUEUE_PROFILING_ENABLE);
-    cl_chk(buffer_q.enqueueReadBuffer(*fop_buffer_A, true, 0, sizeof(cl_float) * fop_sz, fop));
-    cl_chk(buffer_q.finish());
+bool FDAS::retrieve_FOP(cl_float *fop, BufferSet ab) {
+    cl_chk(fop_buffer_queues[ab]->enqueueReadBuffer(*fop_buffers[ab], true, 0, sizeof(cl_float) * fop_sz, fop));
+    cl_chk(fop_buffer_queues[ab]->finish());
 
     return true;
 }
 
-bool FDAS::retrieve_candidates(cl_uint *detection_location, cl_float *detection_power) {
-    cl::CommandQueue buffer_q(*context, default_device, CL_QUEUE_PROFILING_ENABLE);
-    cl_chk(buffer_q.enqueueReadBuffer(*detection_location_buffer, true, 0, sizeof(cl_uint) * Output::n_candidates, detection_location));
-    cl_chk(buffer_q.enqueueReadBuffer(*detection_power_buffer, true, 0, sizeof(cl_float) * Output::n_candidates, detection_power));
-    cl_chk(buffer_q.finish());
+bool FDAS::retrieve_candidates(cl_uint *detection_location, cl_float *detection_power, BufferSet ab) {
+    cl_chk(detection_location_buffer_queues[ab]->enqueueReadBuffer(*detection_location_buffers[ab], true, 0, sizeof(cl_uint) * Output::n_candidates, detection_location));
+    cl_chk(detection_power_buffer_queues[ab]->enqueueReadBuffer(*detection_power_buffers[ab], true, 0, sizeof(cl_float) * Output::n_candidates, detection_power));
+    cl_chk(detection_location_buffer_queues[ab]->finish());
+    cl_chk(detection_power_buffer_queues[ab]->finish());
 
     return true;
 }
 
-bool FDAS::inject_FOP(const cl_float *fop) {
-    cl::CommandQueue buffer_q(*context, default_device, CL_QUEUE_PROFILING_ENABLE);
-    cl_chk(buffer_q.enqueueWriteBuffer(*fop_buffer_A, true, 0, sizeof(cl_float) * fop_sz, fop));
-    cl_chk(buffer_q.finish());
+bool FDAS::inject_FOP(const cl_float *fop, BufferSet ab) {
+    cl_chk(fop_buffer_queues[ab]->enqueueWriteBuffer(*fop_buffers[ab], true, 0, sizeof(cl_float) * fop_sz, fop));
+    cl_chk(fop_buffer_queues[ab]->finish());
 
     return true;
 }

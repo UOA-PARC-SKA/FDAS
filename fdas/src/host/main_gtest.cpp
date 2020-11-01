@@ -31,10 +31,7 @@
 #include "gtest/gtest.h"
 
 #include "FDAS.h"
-#include "gen_info.h"
 #include "AlignedBuffer.h"
-
-using namespace GenInfo;
 
 class FDASTest : public ::testing::TestWithParam<std::string> {
 public:
