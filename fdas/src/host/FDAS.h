@@ -44,7 +44,7 @@ public:
     bool initialise_accelerator(std::string bitstream_file_name,
                                 const std::function<bool(const std::string &, const std::string &)> &platform_selector,
                                 const std::function<bool(cl_uint, cl_uint, const std::string &)> &device_selector,
-                                cl_uint input_sz);
+                                cl_uint input_sz, bool crossover_banks = false);
 
     bool upload_templates(const cl_float2 *templates, BufferSet ab = A);
 

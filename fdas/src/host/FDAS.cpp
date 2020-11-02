@@ -53,7 +53,7 @@ using std::fixed;
 bool FDAS::initialise_accelerator(std::string bitstream_file_name,
                                   const std::function<bool(const std::string &, const std::string &)> &platform_selector,
                                   const std::function<bool(cl_uint, cl_uint, const std::string &)> &device_selector,
-                                  cl_uint input_sz) {
+                                  cl_uint input_sz, bool crossover_banks) {
     cl_int status;
 
     std::vector<cl::Platform> all_platforms;
@@ -175,37 +175,34 @@ bool FDAS::initialise_accelerator(std::string bitstream_file_name,
     templates_sz = Input::n_templates * FTC::tile_sz;
     fop_sz = Input::n_templates * n_frequency_bins;
 
-    size_t total_allocated = 0;
-
     cl_chkref(input_buffers[0].reset(new cl::Buffer(*context, CL_MEM_READ_ONLY | CL_CHANNEL_1_INTELFPGA, sizeof(cl_float2) * n_frequency_bins, nullptr, &status)));
     cl_chkref(input_buffers[1].reset(new cl::Buffer(*context, CL_MEM_READ_ONLY | CL_CHANNEL_2_INTELFPGA, sizeof(cl_float2) * n_frequency_bins, nullptr, &status)));
-    total_allocated += input_buffers[0]->getInfo<CL_MEM_SIZE>() + input_buffers[1]->getInfo<CL_MEM_SIZE>();
 
     cl_chkref(tiles_buffers[0].reset(new cl::Buffer(*context, CL_MEM_READ_WRITE | CL_CHANNEL_1_INTELFPGA, sizeof(cl_float2) * tiles_sz, nullptr, &status)));
     cl_chkref(tiles_buffers[1].reset(new cl::Buffer(*context, CL_MEM_READ_WRITE | CL_CHANNEL_2_INTELFPGA, sizeof(cl_float2) * tiles_sz, nullptr, &status)));
-    total_allocated += tiles_buffers[0]->getInfo<CL_MEM_SIZE>() + tiles_buffers[1]->getInfo<CL_MEM_SIZE>();
 
     cl_chkref(templates_buffers[0].reset(new cl::Buffer(*context, CL_MEM_READ_ONLY | CL_CHANNEL_1_INTELFPGA, sizeof(cl_float2) * templates_sz, nullptr, &status)));
     cl_chkref(templates_buffers[1].reset(new cl::Buffer(*context, CL_MEM_READ_ONLY | CL_CHANNEL_2_INTELFPGA, sizeof(cl_float2) * templates_sz, nullptr, &status)));
-    total_allocated += templates_buffers[0]->getInfo<CL_MEM_SIZE>() + templates_buffers[1]->getInfo<CL_MEM_SIZE>();
 
-    cl_chkref(fop_buffers[0].reset(new cl::Buffer(*context, CL_MEM_READ_WRITE | CL_CHANNEL_1_INTELFPGA, sizeof(cl_float) * fop_sz, nullptr, &status)));
-    cl_chkref(fop_buffers[1].reset(new cl::Buffer(*context, CL_MEM_READ_WRITE | CL_CHANNEL_2_INTELFPGA, sizeof(cl_float) * fop_sz, nullptr, &status)));
-    total_allocated += fop_buffers[0]->getInfo<CL_MEM_SIZE>() + fop_buffers[1]->getInfo<CL_MEM_SIZE>();
+    if (crossover_banks) {
+        cl_chkref(fop_buffers[0].reset(new cl::Buffer(*context, CL_MEM_READ_WRITE | CL_CHANNEL_2_INTELFPGA, sizeof(cl_float) * fop_sz, nullptr, &status)));
+        cl_chkref(fop_buffers[1].reset(new cl::Buffer(*context, CL_MEM_READ_WRITE | CL_CHANNEL_1_INTELFPGA, sizeof(cl_float) * fop_sz, nullptr, &status)));
 
-    cl_chkref(detection_location_buffers[0].reset(new cl::Buffer(*context, CL_MEM_WRITE_ONLY | CL_CHANNEL_1_INTELFPGA, sizeof(cl_uint) * Output::n_candidates, nullptr, &status)));
-    cl_chkref(detection_location_buffers[1].reset(new cl::Buffer(*context, CL_MEM_WRITE_ONLY | CL_CHANNEL_2_INTELFPGA, sizeof(cl_uint) * Output::n_candidates, nullptr, &status)));
-    total_allocated += detection_location_buffers[0]->getInfo<CL_MEM_SIZE>() + detection_location_buffers[1]->getInfo<CL_MEM_SIZE>();
+        cl_chkref(detection_location_buffers[0].reset(new cl::Buffer(*context, CL_MEM_WRITE_ONLY | CL_CHANNEL_2_INTELFPGA, sizeof(cl_uint) * Output::n_candidates, nullptr, &status)));
+        cl_chkref(detection_location_buffers[1].reset(new cl::Buffer(*context, CL_MEM_WRITE_ONLY | CL_CHANNEL_1_INTELFPGA, sizeof(cl_uint) * Output::n_candidates, nullptr, &status)));
 
-    cl_chkref(detection_power_buffers[0].reset(new cl::Buffer(*context, CL_MEM_WRITE_ONLY | CL_CHANNEL_1_INTELFPGA, sizeof(cl_float) * Output::n_candidates, nullptr, &status)));
-    cl_chkref(detection_power_buffers[1].reset(new cl::Buffer(*context, CL_MEM_WRITE_ONLY | CL_CHANNEL_2_INTELFPGA, sizeof(cl_float) * Output::n_candidates, nullptr, &status)));
-    total_allocated += detection_power_buffers[0]->getInfo<CL_MEM_SIZE>() + detection_power_buffers[1]->getInfo<CL_MEM_SIZE>();
+        cl_chkref(detection_power_buffers[0].reset(new cl::Buffer(*context, CL_MEM_WRITE_ONLY | CL_CHANNEL_2_INTELFPGA, sizeof(cl_float) * Output::n_candidates, nullptr, &status)));
+        cl_chkref(detection_power_buffers[1].reset(new cl::Buffer(*context, CL_MEM_WRITE_ONLY | CL_CHANNEL_1_INTELFPGA, sizeof(cl_float) * Output::n_candidates, nullptr, &status)));
+    } else {
+        cl_chkref(fop_buffers[0].reset(new cl::Buffer(*context, CL_MEM_READ_WRITE | CL_CHANNEL_1_INTELFPGA, sizeof(cl_float) * fop_sz, nullptr, &status)));
+        cl_chkref(fop_buffers[1].reset(new cl::Buffer(*context, CL_MEM_READ_WRITE | CL_CHANNEL_2_INTELFPGA, sizeof(cl_float) * fop_sz, nullptr, &status)));
 
-    log << "[INFO] Allocated "
-        << fixed << setprecision(2) << (total_allocated / (1.f * (1 << 20)))
-        << " MB for buffers in total ("
-        << setprecision(2) << (100.f * total_allocated / default_device.getInfo<CL_DEVICE_GLOBAL_MEM_SIZE>())
-        << " %)" << endl;
+        cl_chkref(detection_location_buffers[0].reset(new cl::Buffer(*context, CL_MEM_WRITE_ONLY | CL_CHANNEL_1_INTELFPGA, sizeof(cl_uint) * Output::n_candidates, nullptr, &status)));
+        cl_chkref(detection_location_buffers[1].reset(new cl::Buffer(*context, CL_MEM_WRITE_ONLY | CL_CHANNEL_2_INTELFPGA, sizeof(cl_uint) * Output::n_candidates, nullptr, &status)));
+
+        cl_chkref(detection_power_buffers[0].reset(new cl::Buffer(*context, CL_MEM_WRITE_ONLY | CL_CHANNEL_1_INTELFPGA, sizeof(cl_float) * Output::n_candidates, nullptr, &status)));
+        cl_chkref(detection_power_buffers[1].reset(new cl::Buffer(*context, CL_MEM_WRITE_ONLY | CL_CHANNEL_2_INTELFPGA, sizeof(cl_float) * Output::n_candidates, nullptr, &status)));
+    }
 
     // Queues
     for (auto &q : fft_queues)

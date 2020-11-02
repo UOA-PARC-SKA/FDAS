@@ -264,7 +264,7 @@ TEST_P(FDASTest, FDAS_serial) {
     FDAS pipeline(logfile);
     ASSERT_TRUE(pipeline.initialise_accelerator(bitstream_file,
                                                 FDAS::choose_first_platform, FDAS::choose_accelerator_devices,
-                                                input.size()));
+                                                input.size(), true));
     validateInputDimensions(pipeline);
     allocateAlignedBuffers(pipeline);
 
@@ -300,7 +300,7 @@ TEST_P(FDASTest, FDAS_pipelined) {
     FDAS pipeline(logfile);
     ASSERT_TRUE(pipeline.initialise_accelerator(bitstream_file,
                                                 FDAS::choose_first_platform, FDAS::choose_accelerator_devices,
-                                                input.size()));
+                                                input.size(), false));
     validateInputDimensions(pipeline);
     allocateAlignedBuffers(pipeline);
 
