@@ -64,7 +64,7 @@ public:
 
     bool retrieve_candidates(cl_uint *detection_location, cl_float *detection_power, BufferSet ab = A);
 
-    void print_stats(BufferSet ab = A);
+    void print_stats(BufferSet ab = A, bool reset = false);
 
     cl_uint get_input_sz() const;
 

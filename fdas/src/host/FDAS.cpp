@@ -189,16 +189,16 @@ bool FDAS::initialise_accelerator(std::string bitstream_file_name,
     cl_chkref(templates_buffers[1].reset(new cl::Buffer(*context, CL_MEM_READ_ONLY | CL_CHANNEL_2_INTELFPGA, sizeof(cl_float2) * templates_sz, nullptr, &status)));
     total_allocated += templates_buffers[0]->getInfo<CL_MEM_SIZE>() + templates_buffers[1]->getInfo<CL_MEM_SIZE>();
 
-    cl_chkref(fop_buffers[0].reset(new cl::Buffer(*context, CL_MEM_READ_WRITE | CL_CHANNEL_2_INTELFPGA, sizeof(cl_float) * fop_sz, nullptr, &status)));
-    cl_chkref(fop_buffers[1].reset(new cl::Buffer(*context, CL_MEM_READ_WRITE | CL_CHANNEL_1_INTELFPGA, sizeof(cl_float) * fop_sz, nullptr, &status)));
+    cl_chkref(fop_buffers[0].reset(new cl::Buffer(*context, CL_MEM_READ_WRITE | CL_CHANNEL_1_INTELFPGA, sizeof(cl_float) * fop_sz, nullptr, &status)));
+    cl_chkref(fop_buffers[1].reset(new cl::Buffer(*context, CL_MEM_READ_WRITE | CL_CHANNEL_2_INTELFPGA, sizeof(cl_float) * fop_sz, nullptr, &status)));
     total_allocated += fop_buffers[0]->getInfo<CL_MEM_SIZE>() + fop_buffers[1]->getInfo<CL_MEM_SIZE>();
 
-    cl_chkref(detection_location_buffers[0].reset(new cl::Buffer(*context, CL_MEM_WRITE_ONLY | CL_CHANNEL_2_INTELFPGA, sizeof(cl_uint) * Output::n_candidates, nullptr, &status)));
-    cl_chkref(detection_location_buffers[1].reset(new cl::Buffer(*context, CL_MEM_WRITE_ONLY | CL_CHANNEL_1_INTELFPGA, sizeof(cl_uint) * Output::n_candidates, nullptr, &status)));
+    cl_chkref(detection_location_buffers[0].reset(new cl::Buffer(*context, CL_MEM_WRITE_ONLY | CL_CHANNEL_1_INTELFPGA, sizeof(cl_uint) * Output::n_candidates, nullptr, &status)));
+    cl_chkref(detection_location_buffers[1].reset(new cl::Buffer(*context, CL_MEM_WRITE_ONLY | CL_CHANNEL_2_INTELFPGA, sizeof(cl_uint) * Output::n_candidates, nullptr, &status)));
     total_allocated += detection_location_buffers[0]->getInfo<CL_MEM_SIZE>() + detection_location_buffers[1]->getInfo<CL_MEM_SIZE>();
 
-    cl_chkref(detection_power_buffers[0].reset(new cl::Buffer(*context, CL_MEM_WRITE_ONLY | CL_CHANNEL_2_INTELFPGA, sizeof(cl_float) * Output::n_candidates, nullptr, &status)));
-    cl_chkref(detection_power_buffers[1].reset(new cl::Buffer(*context, CL_MEM_WRITE_ONLY | CL_CHANNEL_1_INTELFPGA, sizeof(cl_float) * Output::n_candidates, nullptr, &status)));
+    cl_chkref(detection_power_buffers[0].reset(new cl::Buffer(*context, CL_MEM_WRITE_ONLY | CL_CHANNEL_1_INTELFPGA, sizeof(cl_float) * Output::n_candidates, nullptr, &status)));
+    cl_chkref(detection_power_buffers[1].reset(new cl::Buffer(*context, CL_MEM_WRITE_ONLY | CL_CHANNEL_2_INTELFPGA, sizeof(cl_float) * Output::n_candidates, nullptr, &status)));
     total_allocated += detection_power_buffers[0]->getInfo<CL_MEM_SIZE>() + detection_power_buffers[1]->getInfo<CL_MEM_SIZE>();
 
     log << "[INFO] Allocated "
@@ -486,10 +486,29 @@ void FDAS::print_duration(const std::string &phase, const cl::Event &from, const
     log << "[INFO] " << phase << " duration: " << duration << " ms" << endl;
 }
 
-void FDAS::print_stats(BufferSet ab) {
-    print_duration("Preparation", *load_input_events[ab], *store_tiles_events[ab]);
-    print_duration("FT convolution and IFFT", *mux_and_mult_events[ab], *last_square_and_discard_events[ab]);
-    print_duration("Harmonic summing (1/2 FOP)", *first_preload_events[ab], *store_cands_events[ab]);
+static long long pipeline_start, pipeline_accum;
+static unsigned pipeline_launches;
+
+void FDAS::print_stats(BufferSet ab, bool reset) {
+    if (reset) {
+        pipeline_start = xfer_input_events[ab]->getProfilingInfo<CL_PROFILING_COMMAND_START>();
+        pipeline_accum = 0L;
+        pipeline_launches = 1;
+    } else {
+        ++pipeline_launches;
+    }
+
+    long long acc = xfer_det_pwrs_events[ab]->getProfilingInfo<CL_PROFILING_COMMAND_END>() - pipeline_start;
+
+    log << "[INFO] Launch  #" << pipeline_launches << (ab == A ? 'A' : 'B')
+        << " complete @ " << (acc / 1000 / 1000) << " ms"
+        << " II ~ " << ((acc - pipeline_accum) / 1000 / 1000) << " ms" << endl;
+    print_duration("  Preparation", *load_input_events[ab], *store_tiles_events[ab]);
+    print_duration("  FT convolution and IFFT (1/2 FOP)", *mux_and_mult_events[ab], *last_square_and_discard_events[ab]);
+    print_duration("  Harmonic summing (1/2 FOP)", *first_preload_events[ab], *store_cands_events[ab]);
+    print_duration("  Total", *xfer_input_events[ab], *xfer_det_pwrs_events[ab]);
+
+    pipeline_accum = acc;
 }
 
 cl_uint FDAS::get_input_sz() const {

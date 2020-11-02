@@ -24,6 +24,7 @@
 #include <complex>
 #include <functional>
 #include <iostream>
+#include <fstream>
 #include <memory>
 #include <string>
 #include <vector>
@@ -235,7 +236,7 @@ TEST_P(FDASTest, Harmonic_Summing) {
     validateHarmonicSumming();
 }
 
-TEST_P(FDASTest, FDAS_serial) {
+TEST_P(FDASTest, FDAS_steps) {
     FDAS pipeline(std::cerr);
     ASSERT_TRUE(pipeline.initialise_accelerator(bitstream_file,
                                                 FDAS::choose_first_platform, FDAS::choose_accelerator_devices,
@@ -258,8 +259,45 @@ TEST_P(FDASTest, FDAS_serial) {
     validateHarmonicSumming();
 }
 
-TEST_P(FDASTest, FDAS_with_deps) {
-    FDAS pipeline(std::cerr);
+TEST_P(FDASTest, FDAS_serial) {
+    std::ofstream logfile("fdas_serial_log.txt");
+    FDAS pipeline(logfile);
+    ASSERT_TRUE(pipeline.initialise_accelerator(bitstream_file,
+                                                FDAS::choose_first_platform, FDAS::choose_accelerator_devices,
+                                                input.size()));
+    validateInputDimensions(pipeline);
+    allocateAlignedBuffers(pipeline);
+
+    std::transform(templates.begin(), templates.end(), templates_host(), complex_to_float2);
+    ASSERT_TRUE(pipeline.upload_templates(templates_host(), FDAS::A));
+
+    std::transform(input.begin(), input.end(), input_host(), complex_to_float2);
+
+    ASSERT_TRUE(pipeline.launch(input_host(), thresholds.data(), FDAS::PositiveAccelerations, FDAS::A));
+
+    for (int i = 1; i < 10; ++i) {
+        ASSERT_TRUE(pipeline.retrieve_candidates(detection_location_host[FDAS::A](), detection_power_host[FDAS::A](), FDAS::A));
+        pipeline.print_stats(FDAS::A, i == 1);
+        ASSERT_TRUE(pipeline.launch(input_host(), thresholds.data(), FDAS::PositiveAccelerations, FDAS::A));
+    }
+
+    ASSERT_TRUE(pipeline.retrieve_candidates(detection_location_host[FDAS::A](), detection_power_host[FDAS::A](), FDAS::A));
+    pipeline.print_stats(FDAS::A);
+
+    for (auto ab : {FDAS::A}) {
+        detection_location.resize(pipeline.get_candidate_list_sz());
+        detection_power.resize(pipeline.get_candidate_list_sz());
+        std::copy(detection_location_host[ab](), detection_location_host[ab]() + pipeline.get_candidate_list_sz(), detection_location.begin());
+        std::copy(detection_power_host[ab](), detection_power_host[ab]() + pipeline.get_candidate_list_sz(), detection_power.begin());
+        validateHarmonicSumming();
+    }
+
+    logfile.close();
+}
+
+TEST_P(FDASTest, FDAS_pipelined) {
+    std::ofstream logfile("fdas_pipelined_log.txt");
+    FDAS pipeline(logfile);
     ASSERT_TRUE(pipeline.initialise_accelerator(bitstream_file,
                                                 FDAS::choose_first_platform, FDAS::choose_accelerator_devices,
                                                 input.size()));
@@ -275,19 +313,18 @@ TEST_P(FDASTest, FDAS_with_deps) {
     ASSERT_TRUE(pipeline.launch(input_host(), thresholds.data(), FDAS::PositiveAccelerations, FDAS::A));
     ASSERT_TRUE(pipeline.launch(input_host(), thresholds.data(), FDAS::NegativeAccelerations, FDAS::B));
 
+    for (int i = 1; i < 9; ++i) {
+        FDAS::BufferSet ab = (i & 1) ? FDAS::A : FDAS::B;
+        ASSERT_TRUE(pipeline.retrieve_candidates(detection_location_host[ab](), detection_power_host[ab](), ab));
+        pipeline.print_stats(ab, i == 1);
+        ASSERT_TRUE(pipeline.launch(input_host(), thresholds.data(), ab == FDAS::A ? FDAS::PositiveAccelerations : FDAS::NegativeAccelerations, ab));
+    }
+
     ASSERT_TRUE(pipeline.retrieve_candidates(detection_location_host[FDAS::A](), detection_power_host[FDAS::A](), FDAS::A));
-    std::cerr << "[INFO] A1 ===" << std::endl; pipeline.print_stats(FDAS::A);
-    ASSERT_TRUE(pipeline.launch(input_host(), thresholds.data(), FDAS::PositiveAccelerations, FDAS::A));
+    pipeline.print_stats(FDAS::A);
 
     ASSERT_TRUE(pipeline.retrieve_candidates(detection_location_host[FDAS::B](), detection_power_host[FDAS::B](), FDAS::B));
-    std::cerr << "[INFO] B1 ===" << std::endl; pipeline.print_stats(FDAS::B);
-    ASSERT_TRUE(pipeline.launch(input_host(), thresholds.data(), FDAS::NegativeAccelerations, FDAS::B));
-
-    ASSERT_TRUE(pipeline.retrieve_candidates(detection_location_host[FDAS::A](), detection_power_host[FDAS::A](), FDAS::A));
-    std::cerr << "[INFO] A2 ===" << std::endl; pipeline.print_stats(FDAS::A);
-
-    ASSERT_TRUE(pipeline.retrieve_candidates(detection_location_host[FDAS::B](), detection_power_host[FDAS::B](), FDAS::B));
-    std::cerr << "[INFO] B2 ===" << std::endl; pipeline.print_stats(FDAS::B);
+    pipeline.print_stats(FDAS::B);
 
     for (auto ab : {FDAS::A, FDAS::B}) {
         detection_location.resize(pipeline.get_candidate_list_sz());
@@ -296,6 +333,8 @@ TEST_P(FDASTest, FDAS_with_deps) {
         std::copy(detection_power_host[ab](), detection_power_host[ab]() + pipeline.get_candidate_list_sz(), detection_power.begin());
         validateHarmonicSumming();
     }
+
+    logfile.close();
 }
 
 INSTANTIATE_TEST_SUITE_P(TestVectors, FDASTest, ::testing::ValuesIn(FDASTest::test_vectors));
