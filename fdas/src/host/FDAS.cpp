@@ -238,26 +238,6 @@ bool FDAS::initialise_accelerator(std::string bitstream_file_name,
     for (auto &q : detection_power_buffer_queues)
         cl_chkref(q.reset(new cl::CommandQueue(*context, default_device, CL_QUEUE_PROFILING_ENABLE, &status)));
 
-    // Events
-    for (auto &ev : xfer_input_events)
-        ev.reset(new cl::Event);
-    for (auto &ev : load_input_events)
-        ev.reset(new cl::Event);
-    for (auto &ev : store_tiles_events)
-        ev.reset(new cl::Event);
-    for (auto &ev : mux_and_mult_events)
-        ev.reset(new cl::Event);
-    for (auto &ev : last_square_and_discard_events)
-        ev.reset(new cl::Event);
-    for (auto &ev : first_preload_events)
-        ev.reset(new cl::Event);
-    for (auto &ev : store_cands_events)
-        ev.reset(new cl::Event);
-    for (auto &ev : xfer_det_locs_events)
-        ev.reset(new cl::Event);
-    for (auto &ev : xfer_det_pwrs_events)
-        ev.reset(new cl::Event);
-
     return true;
 }
 
@@ -271,6 +251,7 @@ bool FDAS::upload_templates(const cl_float2 *templates, BufferSet ab) {
 
 bool FDAS::enqueue_input_tiling(const cl_float2 *input, BufferSet ab) {
     // Copy input to device
+    xfer_input_events[ab].reset(new cl::Event);
     cl_chk(input_buffer_queues[ab]->enqueueWriteBuffer(*input_buffers[ab], false, 0, sizeof(cl_float2) * n_frequency_bins, input, nullptr, &*xfer_input_events[ab]));
 
     // Launch pipeline
@@ -279,21 +260,23 @@ bool FDAS::enqueue_input_tiling(const cl_float2 *input, BufferSet ab) {
     cl_chk(load_input_kernel->setArg<cl_uint>(2, padding_last_tile / FTC::pack_sz)); // TODO: should assert that padding amount is divisible by pack_sz
 
     std::vector<cl::Event> deps = {*xfer_input_events[ab]};
+    load_input_events[ab].reset(new cl::Event);
     cl_chk(load_input_queue->enqueueTask(*load_input_kernel, &deps, &*load_input_events[ab]));
 
     cl_chk(tile_kernel->setArg<cl_uint>(0, n_tiles));
 
-    cl_chk(tile_queue->enqueueTask(*tile_kernel, nullptr, nullptr));
+    cl_chk(tile_queue->enqueueTask(*tile_kernel, &deps));
 
     cl_chk(fft_kernels[0]->setArg<cl_uint>(0, n_tiles));
     cl_chk(fft_kernels[0]->setArg<cl_uint>(1, false));
 
-    cl_chk(fft_queues[0]->enqueueTask(*fft_kernels[0], nullptr, nullptr));
+    cl_chk(fft_queues[0]->enqueueTask(*fft_kernels[0], &deps));
 
     cl_chk(store_tiles_kernel->setArg<cl::Buffer>(0, *tiles_buffers[ab]));
     cl_chk(store_tiles_kernel->setArg<cl_uint>(1, n_tiles));
 
-    cl_chk(store_tiles_queue->enqueueTask(*store_tiles_kernel, nullptr, &*store_tiles_events[ab]));
+    store_tiles_events[ab].reset(new cl::Event);
+    cl_chk(store_tiles_queue->enqueueTask(*store_tiles_kernel, &deps, &*store_tiles_events[ab]));
 
     return true;
 }
@@ -327,6 +310,8 @@ bool FDAS::enqueue_ft_convolution(FOPPart which, BufferSet ab) {
             break;
     }
 
+    std::vector<cl::Event> deps = {*store_tiles_events[ab]};
+
     // Distribute batches of templates to the available FFT engines
     for (cl_int t = first_template; t <= last_template; t += FFT::n_engines) {
         cl_uint n_engines_to_use = std::min(last_template - t + 1, (cl_int) FFT::n_engines);
@@ -351,17 +336,18 @@ bool FDAS::enqueue_ft_convolution(FOPPart which, BufferSet ab) {
         }
 
         if (t == first_template) {
-            std::vector<cl::Event> deps = {*store_tiles_events[ab]};
+            mux_and_mult_events[ab].reset(new cl::Event);
             cl_chk(mux_and_mult_queue->enqueueTask(*mux_and_mult_kernel, &deps, &*mux_and_mult_events[ab]));
         } else
-            cl_chk(mux_and_mult_queue->enqueueTask(*mux_and_mult_kernel, nullptr, nullptr));
+            cl_chk(mux_and_mult_queue->enqueueTask(*mux_and_mult_kernel, &deps));
 
         for (cl_uint e = 0; e < n_engines_to_use; ++e) {
             cl_chk(fft_queues[e]->enqueueTask(*fft_kernels[e], nullptr, nullptr));
-            if (t + e == last_template)
-                cl_chk(square_and_discard_queues[e]->enqueueTask(*square_and_discard_kernels[e], nullptr, &*last_square_and_discard_events[ab]));
-            else
-                cl_chk(square_and_discard_queues[e]->enqueueTask(*square_and_discard_kernels[e], nullptr, nullptr));
+            if (t + e == last_template) {
+                last_square_and_discard_events[ab].reset(new cl::Event);
+                cl_chk(square_and_discard_queues[e]->enqueueTask(*square_and_discard_kernels[e], &deps, &*last_square_and_discard_events[ab]));
+            } else
+                cl_chk(square_and_discard_queues[e]->enqueueTask(*square_and_discard_kernels[e], &deps));
         }
     }
 
@@ -391,6 +377,8 @@ bool FDAS::enqueue_harmonic_summing(const cl_float *thresholds, FOPPart which, B
     const cl_uint n_groups = (cl_uint) ceil(1.0 * n_templates / HMS::group_sz);
     const cl_uint n_bundles = (cl_uint) ceil(1.0 * n_frequency_bins / HMS::bundle_sz);
     const bool negative_tmpls = which == NegativeAccelerations;
+
+    std::vector<cl::Event> deps = {*last_square_and_discard_events[ab]};
 
     // Orchestrate systolic array
     for (cl_uint h = 0; h < n_planes; ++h) {
@@ -423,16 +411,13 @@ bool FDAS::enqueue_harmonic_summing(const cl_float *thresholds, FOPPart which, B
 
             cl_chk(delay_k.setArg<cl_uint>(0, n_bundles));
 
-            if (g == 0) {
-                std::vector<cl::Event> deps = {*last_square_and_discard_events[ab]};
-                if (k == 1)
-                    cl_chk(preload_queues[h]->enqueueTask(preload_k, &deps, &*first_preload_events[ab]));
-                else
-                    cl_chk(preload_queues[h]->enqueueTask(preload_k, &deps, nullptr));
+            if (k == 1 && g == 0) {
+                first_preload_events[ab].reset(new cl::Event);
+                cl_chk(preload_queues[h]->enqueueTask(preload_k, &deps, &*first_preload_events[ab]));
             } else
-                cl_chk(preload_queues[h]->enqueueTask(preload_k, nullptr, nullptr));
+                cl_chk(preload_queues[h]->enqueueTask(preload_k, &deps));
 
-            cl_chk(delay_queues[h]->enqueueTask(delay_k, nullptr, nullptr));
+            cl_chk(delay_queues[h]->enqueueTask(delay_k, &deps));
         }
 
         cl_chk(detect_k.setArg<cl_float>(0, thresholds[h]));
@@ -441,13 +426,14 @@ bool FDAS::enqueue_harmonic_summing(const cl_float *thresholds, FOPPart which, B
         cl_chk(detect_k.setArg<cl_uint>(3, n_groups));
         cl_chk(detect_k.setArg<cl_uint>(4, n_bundles));
 
-        cl_chk(detect_queues[h]->enqueueTask(detect_k, nullptr, nullptr));
+        cl_chk(detect_queues[h]->enqueueTask(detect_k, &deps));
     }
 
     cl_chk(store_cands_kernel->setArg<cl::Buffer>(0, *detection_location_buffers[ab]));
     cl_chk(store_cands_kernel->setArg<cl::Buffer>(1, *detection_power_buffers[ab]));
 
-    cl_chk(store_cands_queue->enqueueTask(*store_cands_kernel, nullptr, &*store_cands_events[ab]));
+    store_cands_events[ab].reset(new cl::Event);
+    cl_chk(store_cands_queue->enqueueTask(*store_cands_kernel, &deps, &*store_cands_events[ab]));
 
     return true;
 }
@@ -478,10 +464,11 @@ bool FDAS::retrieve_FOP(cl_float *fop, BufferSet ab) {
 }
 
 bool FDAS::retrieve_candidates(cl_uint *detection_location, cl_float *detection_power, BufferSet ab) {
-    //std::vector<cl::Event> deps = {store_cands_events[ab]};
-    cl_chk(store_cands_queue->finish());
-    cl_chk(detection_location_buffer_queues[ab]->enqueueReadBuffer(*detection_location_buffers[ab], false, 0, sizeof(cl_uint) * Output::n_candidates, detection_location, nullptr, &*xfer_det_locs_events[ab]));
-    cl_chk(detection_power_buffer_queues[ab]->enqueueReadBuffer(*detection_power_buffers[ab], false, 0, sizeof(cl_float) * Output::n_candidates, detection_power, nullptr, &*xfer_det_pwrs_events[ab]));
+    std::vector<cl::Event> deps = {*store_cands_events[ab]};
+    xfer_det_locs_events[ab].reset(new cl::Event);
+    xfer_det_pwrs_events[ab].reset(new cl::Event);
+    cl_chk(detection_location_buffer_queues[ab]->enqueueReadBuffer(*detection_location_buffers[ab], false, 0, sizeof(cl_uint) * Output::n_candidates, detection_location, &deps, &*xfer_det_locs_events[ab]));
+    cl_chk(detection_power_buffer_queues[ab]->enqueueReadBuffer(*detection_power_buffers[ab], false, 0, sizeof(cl_float) * Output::n_candidates, detection_power, &deps, &*xfer_det_pwrs_events[ab]));
     cl_chk(xfer_det_locs_events[ab]->wait());
     cl_chk(xfer_det_pwrs_events[ab]->wait());
 
