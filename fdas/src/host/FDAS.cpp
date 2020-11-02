@@ -473,6 +473,7 @@ bool FDAS::retrieve_candidates(cl_uint *detection_location, cl_float *detection_
 }
 
 bool FDAS::inject_FOP(const cl_float *fop, BufferSet ab) {
+    last_square_and_discard_events[ab].reset(new cl::Event);
     cl_chk(fop_buffer_queues[ab]->enqueueWriteBuffer(*fop_buffers[ab], false, 0, sizeof(cl_float) * fop_sz, fop, nullptr, &*last_square_and_discard_events[ab]));
     return true;
 }
