@@ -46,27 +46,27 @@ public:
                                 const std::function<bool(cl_uint, cl_uint, const std::string &)> &device_selector,
                                 cl_uint input_sz, bool crossover_banks = false);
 
-    bool upload_templates(const cl_float2 *templates, BufferSet ab = A);
+    bool upload_templates(const cl_float2 *templates, BufferSet ab);
 
-    bool perform_input_tiling(const cl_float2 *input, BufferSet ab = A);
+    bool perform_input_tiling(const cl_float2 *input, BufferSet ab);
 
-    bool perform_ft_convolution(FOPPart which, BufferSet ab = A);
+    bool perform_ft_convolution(FOPPart which, BufferSet ab);
 
-    bool perform_harmonic_summing(const cl_float *thresholds, FOPPart which, BufferSet ab = A);
+    bool perform_harmonic_summing(const cl_float *thresholds, FOPPart which, BufferSet ab);
 
-    bool launch(const cl_float2 *input, const cl_float *thresholds, FOPPart which, BufferSet ab = A);
+    bool launch(const cl_float2 *input, const cl_float *thresholds, FOPPart which, BufferSet ab);
 
-    bool retrieve_tiles(cl_float2 *tiles, BufferSet ab = A);
+    bool retrieve_tiles(cl_float2 *tiles, BufferSet ab);
 
-    bool retrieve_FOP(cl_float *fop, BufferSet ab = A);
+    bool retrieve_FOP(cl_float *fop, BufferSet ab);
 
-    bool inject_FOP(const cl_float *fop, BufferSet ab = A);
+    bool inject_FOP(const cl_float *fop, BufferSet ab);
 
-    bool retrieve_candidates(cl_uint *detection_location, cl_float *detection_power, BufferSet ab = A);
+    bool retrieve_candidates(cl_uint *detection_location, cl_float *detection_power, BufferSet ab);
 
-    void print_stats(BufferSet ab = A, bool reset = false);
+    void print_stats(BufferSet ab, bool reset = false);
 
-    void print_events(BufferSet ab = A);
+    void print_events(BufferSet ab);
 
     cl_uint get_input_sz() const;
 
