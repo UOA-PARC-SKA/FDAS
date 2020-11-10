@@ -66,6 +66,8 @@ public:
 
     void print_stats(BufferSet ab = A, bool reset = false);
 
+    void print_events(BufferSet ab = A);
+
     cl_uint get_input_sz() const;
 
     cl_uint get_tiles_sz() const;

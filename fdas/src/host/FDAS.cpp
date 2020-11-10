@@ -509,6 +509,21 @@ void FDAS::print_stats(BufferSet ab, bool reset) {
     pipeline_accum = acc;
 }
 
+void FDAS::print_events(BufferSet ab) {
+    log << "@@@,"
+        << (ab == A ? 'A' : 'B') << ','
+        << xfer_input_events[ab]->getProfilingInfo<CL_PROFILING_COMMAND_START>() << ','
+        << xfer_input_events[ab]->getProfilingInfo<CL_PROFILING_COMMAND_END>() << ','
+        << load_input_events[ab]->getProfilingInfo<CL_PROFILING_COMMAND_START>() << ','
+        << store_tiles_events[ab]->getProfilingInfo<CL_PROFILING_COMMAND_END>() << ','
+        << mux_and_mult_events[ab]->getProfilingInfo<CL_PROFILING_COMMAND_START>() << ','
+        << last_square_and_discard_events[ab]->getProfilingInfo<CL_PROFILING_COMMAND_END>() << ','
+        << first_preload_events[ab]->getProfilingInfo<CL_PROFILING_COMMAND_START>() << ','
+        << store_cands_events[ab]->getProfilingInfo<CL_PROFILING_COMMAND_END>() << ','
+        << xfer_det_locs_events[ab]->getProfilingInfo<CL_PROFILING_COMMAND_START>() << ','
+        << xfer_det_pwrs_events[ab]->getProfilingInfo<CL_PROFILING_COMMAND_END>() << endl;
+}
+
 cl_uint FDAS::get_input_sz() const {
     return n_frequency_bins;
 }
