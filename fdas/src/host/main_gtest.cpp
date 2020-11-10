@@ -27,6 +27,7 @@
 #include <fstream>
 #include <memory>
 #include <string>
+#include <sstream>
 #include <vector>
 
 #include "libnpy/npy.hpp"
@@ -34,6 +35,9 @@
 
 #include "FDAS.h"
 #include "AlignedBuffer.h"
+
+#define TEST_SINGLE 0
+#define TEST_CONTINUOUS 1
 
 class FDASTest : public ::testing::TestWithParam<std::string> {
 public:
@@ -65,6 +69,20 @@ protected:
     std::string det_loc_file(bool ref = false) { return GetParam() + "/det_loc" + (ref ? "_ref" : "") + ".npy"; }
 
     std::string det_pwr_file(bool ref = false) { return GetParam() + "/det_pwr" + (ref ? "_ref" : "") + ".npy"; }
+
+    std::string log_file(bool pipelined, bool crossover) {
+        std::stringstream stream;
+        stream << "fdas";
+        stream << '_' << FFT::n_engines << 'x' << HMS::group_sz << 'x' << HMS::bundle_sz;
+        if (pipelined)
+            stream << "_pipelined";
+        else
+            stream << "_serial";
+        if (crossover)
+            stream << "_x";
+        stream << ".log";
+        return stream.str();
+    }
 
     static cl_float2 complex_to_float2(std::complex<float> c) {
         return {c.real(), c.imag()};
@@ -191,6 +209,7 @@ protected:
     }
 };
 
+#if TEST_SINGLE
 TEST_P(FDASTest, FT_Convolution) {
     FDAS pipeline(std::cerr);
     ASSERT_TRUE(pipeline.initialise_accelerator(bitstream_file,
@@ -258,10 +277,48 @@ TEST_P(FDASTest, FDAS_steps) {
     std::copy(detection_power_host[FDAS::B](), detection_power_host[FDAS::B]() + pipeline.get_candidate_list_sz(), detection_power.begin());
     validateHarmonicSumming();
 }
+#endif // TEST_SINGLE
 
+#if TEST_CONTINUOUS
 TEST_P(FDASTest, FDAS_serial) {
-    std::ofstream logfile("fdas_serial_log.txt");
-    FDAS pipeline(logfile);
+    std::ofstream log(log_file(false, false));
+    FDAS pipeline(log);
+    ASSERT_TRUE(pipeline.initialise_accelerator(bitstream_file,
+                                                FDAS::choose_first_platform, FDAS::choose_accelerator_devices,
+                                                input.size(), false));
+    validateInputDimensions(pipeline);
+    allocateAlignedBuffers(pipeline);
+
+    std::transform(templates.begin(), templates.end(), templates_host(), complex_to_float2);
+    ASSERT_TRUE(pipeline.upload_templates(templates_host(), FDAS::A));
+
+    std::transform(input.begin(), input.end(), input_host(), complex_to_float2);
+
+    ASSERT_TRUE(pipeline.launch(input_host(), thresholds.data(), FDAS::PositiveAccelerations, FDAS::A));
+
+    for (int i = 1; i < 10; ++i) {
+        ASSERT_TRUE(pipeline.retrieve_candidates(detection_location_host[FDAS::A](), detection_power_host[FDAS::A](), FDAS::A));
+        pipeline.print_stats(FDAS::A, i == 1);
+        ASSERT_TRUE(pipeline.launch(input_host(), thresholds.data(), FDAS::PositiveAccelerations, FDAS::A));
+    }
+
+    ASSERT_TRUE(pipeline.retrieve_candidates(detection_location_host[FDAS::A](), detection_power_host[FDAS::A](), FDAS::A));
+    pipeline.print_stats(FDAS::A);
+
+    for (auto ab : {FDAS::A}) {
+        detection_location.resize(pipeline.get_candidate_list_sz());
+        detection_power.resize(pipeline.get_candidate_list_sz());
+        std::copy(detection_location_host[ab](), detection_location_host[ab]() + pipeline.get_candidate_list_sz(), detection_location.begin());
+        std::copy(detection_power_host[ab](), detection_power_host[ab]() + pipeline.get_candidate_list_sz(), detection_power.begin());
+        validateHarmonicSumming();
+    }
+
+    log.close();
+}
+
+TEST_P(FDASTest, FDAS_serial_x) {
+    std::ofstream log(log_file(false, true));
+    FDAS pipeline(log);
     ASSERT_TRUE(pipeline.initialise_accelerator(bitstream_file,
                                                 FDAS::choose_first_platform, FDAS::choose_accelerator_devices,
                                                 input.size(), true));
@@ -292,12 +349,12 @@ TEST_P(FDASTest, FDAS_serial) {
         validateHarmonicSumming();
     }
 
-    logfile.close();
+    log.close();
 }
 
 TEST_P(FDASTest, FDAS_pipelined) {
-    std::ofstream logfile("fdas_pipelined_log.txt");
-    FDAS pipeline(logfile);
+    std::ofstream log(log_file(true, false));
+    FDAS pipeline(log);
     ASSERT_TRUE(pipeline.initialise_accelerator(bitstream_file,
                                                 FDAS::choose_first_platform, FDAS::choose_accelerator_devices,
                                                 input.size(), false));
@@ -334,8 +391,51 @@ TEST_P(FDASTest, FDAS_pipelined) {
         validateHarmonicSumming();
     }
 
-    logfile.close();
+    log.close();
 }
+
+TEST_P(FDASTest, FDAS_pipelined_x) {
+    std::ofstream log(log_file(true, true));
+    FDAS pipeline(log);
+    ASSERT_TRUE(pipeline.initialise_accelerator(bitstream_file,
+                                                FDAS::choose_first_platform, FDAS::choose_accelerator_devices,
+                                                input.size(), true));
+    validateInputDimensions(pipeline);
+    allocateAlignedBuffers(pipeline);
+
+    std::transform(templates.begin(), templates.end(), templates_host(), complex_to_float2);
+    ASSERT_TRUE(pipeline.upload_templates(templates_host(), FDAS::A));
+    ASSERT_TRUE(pipeline.upload_templates(templates_host(), FDAS::B));
+
+    std::transform(input.begin(), input.end(), input_host(), complex_to_float2);
+
+    ASSERT_TRUE(pipeline.launch(input_host(), thresholds.data(), FDAS::PositiveAccelerations, FDAS::A));
+    ASSERT_TRUE(pipeline.launch(input_host(), thresholds.data(), FDAS::NegativeAccelerations, FDAS::B));
+
+    for (int i = 1; i < 9; ++i) {
+        FDAS::BufferSet ab = (i & 1) ? FDAS::A : FDAS::B;
+        ASSERT_TRUE(pipeline.retrieve_candidates(detection_location_host[ab](), detection_power_host[ab](), ab));
+        pipeline.print_stats(ab, i == 1);
+        ASSERT_TRUE(pipeline.launch(input_host(), thresholds.data(), ab == FDAS::A ? FDAS::PositiveAccelerations : FDAS::NegativeAccelerations, ab));
+    }
+
+    ASSERT_TRUE(pipeline.retrieve_candidates(detection_location_host[FDAS::A](), detection_power_host[FDAS::A](), FDAS::A));
+    pipeline.print_stats(FDAS::A);
+
+    ASSERT_TRUE(pipeline.retrieve_candidates(detection_location_host[FDAS::B](), detection_power_host[FDAS::B](), FDAS::B));
+    pipeline.print_stats(FDAS::B);
+
+    for (auto ab : {FDAS::A, FDAS::B}) {
+        detection_location.resize(pipeline.get_candidate_list_sz());
+        detection_power.resize(pipeline.get_candidate_list_sz());
+        std::copy(detection_location_host[ab](), detection_location_host[ab]() + pipeline.get_candidate_list_sz(), detection_location.begin());
+        std::copy(detection_power_host[ab](), detection_power_host[ab]() + pipeline.get_candidate_list_sz(), detection_power.begin());
+        validateHarmonicSumming();
+    }
+
+    log.close();
+}
+#endif // TEST_CONTINUOUS
 
 INSTANTIATE_TEST_SUITE_P(TestVectors, FDASTest, ::testing::ValuesIn(FDASTest::test_vectors));
 
