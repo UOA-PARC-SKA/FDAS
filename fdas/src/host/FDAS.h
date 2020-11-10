@@ -54,7 +54,9 @@ public:
 
     bool perform_harmonic_summing(const cl_float *thresholds, FOPPart which, BufferSet ab);
 
-    bool launch(const cl_float2 *input, const cl_float *thresholds, FOPPart which, BufferSet ab);
+    bool launch(const cl_float2 *input, const cl_float *thresholds, cl_uint *detection_location, cl_float *detection_power, FOPPart which, BufferSet ab);
+
+    bool wait(BufferSet ab);
 
     bool retrieve_tiles(cl_float2 *tiles, BufferSet ab);
 
@@ -89,7 +91,9 @@ private:
 
     bool enqueue_ft_convolution(FOPPart which, BufferSet ab);
 
-    bool enqueue_harmonic_summing(const cl_float *thresholds, FOPPart which, BufferSet);
+    bool enqueue_harmonic_summing(const cl_float *thresholds, FOPPart which, BufferSet ab);
+
+    bool enqueue_candidate_retrieval(cl_uint *detection_location, cl_float *detection_power, BufferSet ab);
 
 private:
     cl_uint n_frequency_bins;
@@ -146,8 +150,7 @@ private:
     std::array<std::unique_ptr<cl::CommandQueue>, 2> tiles_buffer_queues;
     std::array<std::unique_ptr<cl::CommandQueue>, 2> templates_buffer_queues;
     std::array<std::unique_ptr<cl::CommandQueue>, 2> fop_buffer_queues;
-    std::array<std::unique_ptr<cl::CommandQueue>, 2> detection_location_buffer_queues;
-    std::array<std::unique_ptr<cl::CommandQueue>, 2> detection_power_buffer_queues;
+    std::array<std::unique_ptr<cl::CommandQueue>, 2> detection_buffer_queues;
 
     // Events
     std::array<std::unique_ptr<cl::Event>, 2> xfer_input_events;
@@ -157,8 +160,7 @@ private:
     std::array<std::unique_ptr<cl::Event>, 2> last_square_and_discard_events;
     std::array<std::unique_ptr<cl::Event>, 2> first_preload_events;
     std::array<std::unique_ptr<cl::Event>, 2> store_cands_events;
-    std::array<std::unique_ptr<cl::Event>, 2> xfer_det_locs_events;
-    std::array<std::unique_ptr<cl::Event>, 2> xfer_det_pwrs_events;
+    std::array<std::unique_ptr<cl::Event>, 2> xfer_cands_events;
 
     std::ostream &log;
 

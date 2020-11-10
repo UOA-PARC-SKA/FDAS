@@ -294,16 +294,16 @@ TEST_P(FDASTest, FDAS_serial) {
 
     std::transform(input.begin(), input.end(), input_host(), complex_to_float2);
 
-    ASSERT_TRUE(pipeline.launch(input_host(), thresholds.data(), FDAS::PositiveAccelerations, FDAS::A));
+    ASSERT_TRUE(pipeline.launch(input_host(), thresholds.data(), detection_location_host[FDAS::A](), detection_power_host[FDAS::A](), FDAS::PositiveAccelerations, FDAS::A));
 
     for (int i = 1; i < 10; ++i) {
-        ASSERT_TRUE(pipeline.retrieve_candidates(detection_location_host[FDAS::A](), detection_power_host[FDAS::A](), FDAS::A));
+        ASSERT_TRUE(pipeline.wait(FDAS::A));
         pipeline.print_stats(FDAS::A, i == 1);
         pipeline.print_events(FDAS::A);
-        ASSERT_TRUE(pipeline.launch(input_host(), thresholds.data(), (i & 1) ? FDAS::NegativeAccelerations : FDAS::PositiveAccelerations, FDAS::A));
+        ASSERT_TRUE(pipeline.launch(input_host(), thresholds.data(), detection_location_host[FDAS::A](), detection_power_host[FDAS::A](), (i & 1) ? FDAS::NegativeAccelerations : FDAS::PositiveAccelerations, FDAS::A));
     }
 
-    ASSERT_TRUE(pipeline.retrieve_candidates(detection_location_host[FDAS::A](), detection_power_host[FDAS::A](), FDAS::A));
+    ASSERT_TRUE(pipeline.wait(FDAS::A));
     pipeline.print_stats(FDAS::A);
     pipeline.print_events(FDAS::A);
 
@@ -332,16 +332,16 @@ TEST_P(FDASTest, FDAS_serial_x) {
 
     std::transform(input.begin(), input.end(), input_host(), complex_to_float2);
 
-    ASSERT_TRUE(pipeline.launch(input_host(), thresholds.data(), FDAS::PositiveAccelerations, FDAS::A));
+    ASSERT_TRUE(pipeline.launch(input_host(), thresholds.data(), detection_location_host[FDAS::A](), detection_power_host[FDAS::A](), FDAS::PositiveAccelerations, FDAS::A));
 
     for (int i = 1; i < 10; ++i) {
-        ASSERT_TRUE(pipeline.retrieve_candidates(detection_location_host[FDAS::A](), detection_power_host[FDAS::A](), FDAS::A));
+        ASSERT_TRUE(pipeline.wait(FDAS::A));
         pipeline.print_stats(FDAS::A, i == 1);
         pipeline.print_events(FDAS::A);
-        ASSERT_TRUE(pipeline.launch(input_host(), thresholds.data(), (i & 1) ? FDAS::NegativeAccelerations : FDAS::PositiveAccelerations, FDAS::A));
+        ASSERT_TRUE(pipeline.launch(input_host(), thresholds.data(), detection_location_host[FDAS::A](), detection_power_host[FDAS::A](), (i & 1) ? FDAS::NegativeAccelerations : FDAS::PositiveAccelerations, FDAS::A));
     }
 
-    ASSERT_TRUE(pipeline.retrieve_candidates(detection_location_host[FDAS::A](), detection_power_host[FDAS::A](), FDAS::A));
+    ASSERT_TRUE(pipeline.wait(FDAS::A));
     pipeline.print_stats(FDAS::A);
     pipeline.print_events(FDAS::A);
 
@@ -371,22 +371,22 @@ TEST_P(FDASTest, FDAS_pipelined) {
 
     std::transform(input.begin(), input.end(), input_host(), complex_to_float2);
 
-    ASSERT_TRUE(pipeline.launch(input_host(), thresholds.data(), FDAS::PositiveAccelerations, FDAS::A));
-    ASSERT_TRUE(pipeline.launch(input_host(), thresholds.data(), FDAS::NegativeAccelerations, FDAS::B));
+    ASSERT_TRUE(pipeline.launch(input_host(), thresholds.data(), detection_location_host[FDAS::A](), detection_power_host[FDAS::A](), FDAS::PositiveAccelerations, FDAS::A));
+    ASSERT_TRUE(pipeline.launch(input_host(), thresholds.data(), detection_location_host[FDAS::B](), detection_power_host[FDAS::B](), FDAS::NegativeAccelerations, FDAS::B));
 
     for (int i = 1; i < 9; ++i) {
         FDAS::BufferSet ab = (i & 1) ? FDAS::A : FDAS::B;
-        ASSERT_TRUE(pipeline.retrieve_candidates(detection_location_host[ab](), detection_power_host[ab](), ab));
+        ASSERT_TRUE(pipeline.wait(ab));
         pipeline.print_stats(ab, i == 1);
         pipeline.print_events(ab);
-        ASSERT_TRUE(pipeline.launch(input_host(), thresholds.data(), ab == FDAS::A ? FDAS::PositiveAccelerations : FDAS::NegativeAccelerations, ab));
+        ASSERT_TRUE(pipeline.launch(input_host(), thresholds.data(), detection_location_host[ab](), detection_power_host[ab](), ab == FDAS::A ? FDAS::PositiveAccelerations : FDAS::NegativeAccelerations, ab));
     }
 
-    ASSERT_TRUE(pipeline.retrieve_candidates(detection_location_host[FDAS::A](), detection_power_host[FDAS::A](), FDAS::A));
+    ASSERT_TRUE(pipeline.wait(FDAS::A));
     pipeline.print_stats(FDAS::A);
     pipeline.print_events(FDAS::A);
 
-    ASSERT_TRUE(pipeline.retrieve_candidates(detection_location_host[FDAS::B](), detection_power_host[FDAS::B](), FDAS::B));
+    ASSERT_TRUE(pipeline.wait(FDAS::B));
     pipeline.print_stats(FDAS::B);
     pipeline.print_events(FDAS::B);
 
@@ -416,22 +416,22 @@ TEST_P(FDASTest, FDAS_pipelined_x) {
 
     std::transform(input.begin(), input.end(), input_host(), complex_to_float2);
 
-    ASSERT_TRUE(pipeline.launch(input_host(), thresholds.data(), FDAS::PositiveAccelerations, FDAS::A));
-    ASSERT_TRUE(pipeline.launch(input_host(), thresholds.data(), FDAS::NegativeAccelerations, FDAS::B));
+    ASSERT_TRUE(pipeline.launch(input_host(), thresholds.data(), detection_location_host[FDAS::A](), detection_power_host[FDAS::A](), FDAS::PositiveAccelerations, FDAS::A));
+    ASSERT_TRUE(pipeline.launch(input_host(), thresholds.data(), detection_location_host[FDAS::B](), detection_power_host[FDAS::B](), FDAS::NegativeAccelerations, FDAS::B));
 
     for (int i = 1; i < 9; ++i) {
         FDAS::BufferSet ab = (i & 1) ? FDAS::A : FDAS::B;
-        ASSERT_TRUE(pipeline.retrieve_candidates(detection_location_host[ab](), detection_power_host[ab](), ab));
+        ASSERT_TRUE(pipeline.wait(ab));
         pipeline.print_stats(ab, i == 1);
         pipeline.print_events(ab);
-        ASSERT_TRUE(pipeline.launch(input_host(), thresholds.data(), ab == FDAS::A ? FDAS::PositiveAccelerations : FDAS::NegativeAccelerations, ab));
+        ASSERT_TRUE(pipeline.launch(input_host(), thresholds.data(), detection_location_host[ab](), detection_power_host[ab](), ab == FDAS::A ? FDAS::PositiveAccelerations : FDAS::NegativeAccelerations, ab));
     }
 
-    ASSERT_TRUE(pipeline.retrieve_candidates(detection_location_host[FDAS::A](), detection_power_host[FDAS::A](), FDAS::A));
+    ASSERT_TRUE(pipeline.wait(FDAS::A));
     pipeline.print_stats(FDAS::A);
     pipeline.print_events(FDAS::A);
 
-    ASSERT_TRUE(pipeline.retrieve_candidates(detection_location_host[FDAS::B](), detection_power_host[FDAS::B](), FDAS::B));
+    ASSERT_TRUE(pipeline.wait(FDAS::B));
     pipeline.print_stats(FDAS::B);
     pipeline.print_events(FDAS::B);
 

@@ -230,9 +230,7 @@ bool FDAS::initialise_accelerator(std::string bitstream_file_name,
         cl_chkref(q.reset(new cl::CommandQueue(*context, default_device, CL_QUEUE_PROFILING_ENABLE, &status)));
     for (auto &q : fop_buffer_queues)
         cl_chkref(q.reset(new cl::CommandQueue(*context, default_device, CL_QUEUE_PROFILING_ENABLE, &status)));
-    for (auto &q : detection_location_buffer_queues)
-        cl_chkref(q.reset(new cl::CommandQueue(*context, default_device, CL_QUEUE_PROFILING_ENABLE, &status)));
-    for (auto &q : detection_power_buffer_queues)
+    for (auto &q : detection_buffer_queues)
         cl_chkref(q.reset(new cl::CommandQueue(*context, default_device, CL_QUEUE_PROFILING_ENABLE, &status)));
 
     return true;
@@ -446,8 +444,16 @@ bool FDAS::perform_harmonic_summing(const cl_float *thresholds, FOPPart which, B
     return true;
 }
 
-bool FDAS::launch(const cl_float2 *input, const cl_float *thresholds, FDAS::FOPPart which, FDAS::BufferSet ab) {
-    return enqueue_input_tiling(input, ab) && enqueue_ft_convolution(which, ab) && enqueue_harmonic_summing(thresholds, which, ab);
+bool FDAS::launch(const cl_float2 *input, const cl_float *thresholds, cl_uint *detection_location, cl_float *detection_power, FDAS::FOPPart which, FDAS::BufferSet ab) {
+    return enqueue_input_tiling(input, ab)
+        && enqueue_ft_convolution(which, ab)
+        && enqueue_harmonic_summing(thresholds, which, ab)
+        && enqueue_candidate_retrieval(detection_location, detection_power, ab);
+}
+
+bool FDAS::wait(BufferSet ab) {
+    cl_chk(xfer_cands_events[ab]->wait());
+    return true;
 }
 
 bool FDAS::retrieve_tiles(cl_float2 *tiles, BufferSet ab) {
@@ -460,14 +466,20 @@ bool FDAS::retrieve_FOP(cl_float *fop, BufferSet ab) {
     return true;
 }
 
-bool FDAS::retrieve_candidates(cl_uint *detection_location, cl_float *detection_power, BufferSet ab) {
+bool FDAS::enqueue_candidate_retrieval(cl_uint *detection_location, cl_float *detection_power, BufferSet ab) {
     std::vector<cl::Event> deps = {*store_cands_events[ab]};
-    xfer_det_locs_events[ab].reset(new cl::Event);
-    xfer_det_pwrs_events[ab].reset(new cl::Event);
-    cl_chk(detection_location_buffer_queues[ab]->enqueueReadBuffer(*detection_location_buffers[ab], false, 0, sizeof(cl_uint) * Output::n_candidates, detection_location, &deps, &*xfer_det_locs_events[ab]));
-    cl_chk(detection_power_buffer_queues[ab]->enqueueReadBuffer(*detection_power_buffers[ab], false, 0, sizeof(cl_float) * Output::n_candidates, detection_power, &deps, &*xfer_det_pwrs_events[ab]));
-    cl_chk(xfer_det_locs_events[ab]->wait());
-    cl_chk(xfer_det_pwrs_events[ab]->wait());
+    xfer_cands_events[ab].reset(new cl::Event);
+    cl_chk(detection_buffer_queues[ab]->enqueueReadBuffer(*detection_location_buffers[ab], false, 0, sizeof(cl_uint) * Output::n_candidates, detection_location, &deps, nullptr));
+    cl_chk(detection_buffer_queues[ab]->enqueueReadBuffer(*detection_power_buffers[ab], false, 0, sizeof(cl_float) * Output::n_candidates, detection_power, nullptr, &*xfer_cands_events[ab]));
+
+    return true;
+}
+
+bool FDAS::retrieve_candidates(cl_uint *detection_location, cl_float *detection_power, BufferSet ab) {
+    if (! enqueue_candidate_retrieval(detection_location, detection_power, ab))
+        return false;
+
+    cl_chk(xfer_cands_events[ab]->wait());
 
     return true;
 }
@@ -496,7 +508,7 @@ void FDAS::print_stats(BufferSet ab, bool reset) {
         ++pipeline_launches;
     }
 
-    long long acc = xfer_det_pwrs_events[ab]->getProfilingInfo<CL_PROFILING_COMMAND_END>() - pipeline_start;
+    long long acc = xfer_cands_events[ab]->getProfilingInfo<CL_PROFILING_COMMAND_END>() - pipeline_start;
 
     log << "[INFO] Launch  #" << pipeline_launches << (ab == A ? 'A' : 'B')
         << " complete @ " << (acc / 1000 / 1000) << " ms"
@@ -504,7 +516,7 @@ void FDAS::print_stats(BufferSet ab, bool reset) {
     print_duration("  Preparation", *load_input_events[ab], *store_tiles_events[ab]);
     print_duration("  FT convolution and IFFT (1/2 FOP)", *mux_and_mult_events[ab], *last_square_and_discard_events[ab]);
     print_duration("  Harmonic summing (1/2 FOP)", *first_preload_events[ab], *store_cands_events[ab]);
-    print_duration("  Total", *xfer_input_events[ab], *xfer_det_pwrs_events[ab]);
+    print_duration("  Total", *xfer_input_events[ab], *xfer_cands_events[ab]);
 
     pipeline_accum = acc;
 }
@@ -520,8 +532,8 @@ void FDAS::print_events(BufferSet ab) {
         << last_square_and_discard_events[ab]->getProfilingInfo<CL_PROFILING_COMMAND_END>() << ','
         << first_preload_events[ab]->getProfilingInfo<CL_PROFILING_COMMAND_START>() << ','
         << store_cands_events[ab]->getProfilingInfo<CL_PROFILING_COMMAND_END>() << ','
-        << xfer_det_locs_events[ab]->getProfilingInfo<CL_PROFILING_COMMAND_START>() << ','
-        << xfer_det_pwrs_events[ab]->getProfilingInfo<CL_PROFILING_COMMAND_END>() << endl;
+        << xfer_cands_events[ab]->getProfilingInfo<CL_PROFILING_COMMAND_START>() << ','
+        << xfer_cands_events[ab]->getProfilingInfo<CL_PROFILING_COMMAND_END>() << endl;
 }
 
 cl_uint FDAS::get_input_sz() const {
