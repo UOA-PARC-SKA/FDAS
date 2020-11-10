@@ -300,7 +300,7 @@ TEST_P(FDASTest, FDAS_serial) {
         ASSERT_TRUE(pipeline.retrieve_candidates(detection_location_host[FDAS::A](), detection_power_host[FDAS::A](), FDAS::A));
         pipeline.print_stats(FDAS::A, i == 1);
         pipeline.print_events(FDAS::A);
-        ASSERT_TRUE(pipeline.launch(input_host(), thresholds.data(), FDAS::PositiveAccelerations, FDAS::A));
+        ASSERT_TRUE(pipeline.launch(input_host(), thresholds.data(), (i & 1) ? FDAS::NegativeAccelerations : FDAS::PositiveAccelerations, FDAS::A));
     }
 
     ASSERT_TRUE(pipeline.retrieve_candidates(detection_location_host[FDAS::A](), detection_power_host[FDAS::A](), FDAS::A));
@@ -338,7 +338,7 @@ TEST_P(FDASTest, FDAS_serial_x) {
         ASSERT_TRUE(pipeline.retrieve_candidates(detection_location_host[FDAS::A](), detection_power_host[FDAS::A](), FDAS::A));
         pipeline.print_stats(FDAS::A, i == 1);
         pipeline.print_events(FDAS::A);
-        ASSERT_TRUE(pipeline.launch(input_host(), thresholds.data(), FDAS::PositiveAccelerations, FDAS::A));
+        ASSERT_TRUE(pipeline.launch(input_host(), thresholds.data(), (i & 1) ? FDAS::NegativeAccelerations : FDAS::PositiveAccelerations, FDAS::A));
     }
 
     ASSERT_TRUE(pipeline.retrieve_candidates(detection_location_host[FDAS::A](), detection_power_host[FDAS::A](), FDAS::A));
