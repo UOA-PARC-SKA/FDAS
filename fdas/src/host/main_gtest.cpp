@@ -356,6 +356,7 @@ TEST_P(FDASTest, FDAS_serial_x) {
     log.close();
 }
 
+/*
 TEST_P(FDASTest, FDAS_pipelined) {
     std::ofstream log(log_file(true, false));
     FDAS pipeline(log);
@@ -389,6 +390,37 @@ TEST_P(FDASTest, FDAS_pipelined) {
     ASSERT_TRUE(pipeline.wait(FDAS::B));
     pipeline.print_stats(FDAS::B);
     pipeline.print_events(FDAS::B);
+
+    for (auto ab : {FDAS::A, FDAS::B}) {
+        detection_location.resize(pipeline.get_candidate_list_sz());
+        detection_power.resize(pipeline.get_candidate_list_sz());
+        std::copy(detection_location_host[ab](), detection_location_host[ab]() + pipeline.get_candidate_list_sz(), detection_location.begin());
+        std::copy(detection_power_host[ab](), detection_power_host[ab]() + pipeline.get_candidate_list_sz(), detection_power.begin());
+        validateHarmonicSumming();
+    }
+
+    log.close();
+}
+*/
+
+TEST_P(FDASTest, FDAS_pipelined_new_launch) {
+    std::ofstream log(log_file(true, false));
+    FDAS pipeline(log);
+    ASSERT_TRUE(pipeline.initialise_accelerator(bitstream_file,
+                                                FDAS::choose_first_platform, FDAS::choose_accelerator_devices,
+                                                input.size(), false));
+    validateInputDimensions(pipeline);
+    allocateAlignedBuffers(pipeline);
+
+    std::transform(templates.begin(), templates.end(), templates_host(), complex_to_float2);
+    ASSERT_TRUE(pipeline.upload_templates(templates_host(), FDAS::A));
+    ASSERT_TRUE(pipeline.upload_templates(templates_host(), FDAS::B));
+
+    std::transform(input.begin(), input.end(), input_host(), complex_to_float2);
+
+    ASSERT_TRUE(pipeline.launch2(input_host(), detection_location_host[FDAS::A](), detection_power_host[FDAS::A](), FDAS::PositiveAccelerations,
+                                 input_host(), detection_location_host[FDAS::B](), detection_power_host[FDAS::B](), FDAS::NegativeAccelerations,
+                                 thresholds.data()));
 
     for (auto ab : {FDAS::A, FDAS::B}) {
         detection_location.resize(pipeline.get_candidate_list_sz());

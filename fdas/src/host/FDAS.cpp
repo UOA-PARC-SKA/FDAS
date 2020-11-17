@@ -460,6 +460,47 @@ bool FDAS::launch(const cl_float2 *input, const cl_float *thresholds, cl_uint *d
         && enqueue_candidate_retrieval(detection_location, detection_power, ab);
 }
 
+bool FDAS::launch2(const cl_float2 *input_A, cl_uint *detection_location_A, cl_float *detection_power_A, FOPPart which_A,
+                  const cl_float2 *input_B, cl_uint *detection_location_B, cl_float *detection_power_B, FOPPart which_B,
+                  const cl_float *thresholds) {
+    std::vector<cl::Event> deps;
+
+    enqueue_input_tiling(input_A, A);
+    enqueue_ft_convolution(which_A, A);
+
+    deps.push_back(*last_square_and_discard_events[A]);
+    cl::Event::waitForEvents(deps);
+
+    for (int i = 0; i < 5; ++i) {
+        enqueue_harmonic_summing(thresholds, which_A, A);
+        enqueue_candidate_retrieval(detection_location_A, detection_power_A, A);
+        enqueue_input_tiling(input_B, B);
+        enqueue_ft_convolution(which_B, B);
+
+        deps.clear();
+        deps.push_back(*xfer_cands_events[A]);
+        deps.push_back(*last_square_and_discard_events[B]);
+        cl::Event::waitForEvents(deps);
+        print_events(A);
+
+        if (i < 4) {
+            enqueue_input_tiling(input_A, A);
+            enqueue_ft_convolution(which_A, A);
+        }
+        enqueue_harmonic_summing(thresholds, which_B, B);
+        enqueue_candidate_retrieval(detection_location_B, detection_power_B, B);
+
+        deps.clear();
+        if (i < 4)
+            deps.push_back(*last_square_and_discard_events[A]);
+        deps.push_back(*xfer_cands_events[B]);
+        cl::Event::waitForEvents(deps);
+        print_events(B);
+    }
+
+    return true;
+}
+
 bool FDAS::wait(BufferSet ab) {
     cl_chk(xfer_cands_events[ab]->wait());
     return true;
