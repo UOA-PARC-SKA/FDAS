@@ -333,19 +333,20 @@ bool FDAS::enqueue_ft_convolution(FOPPart which, BufferSet ab) {
         if (t == first_template) {
             mux_and_mult_events[ab].reset(new cl::Event);
             cl_chk(mux_and_mult_queue->enqueueTask(*mux_and_mult_kernel, &deps, &*mux_and_mult_events[ab]));
-        } else
+        } else {
             cl_chk(mux_and_mult_queue->enqueueTask(*mux_and_mult_kernel));
+        }
 
         for (cl_uint e = 0; e < n_engines_to_use; ++e) {
             cl_chk(fft_queues[e]->enqueueTask(*fft_kernels[e], nullptr, nullptr));
-            if (t == first_template)
+            if (t == first_template) {
                 cl_chk(square_and_discard_queues[e]->enqueueTask(*square_and_discard_kernels[e], &deps));
-            else if (t + e == last_template) {
+            } else if (t + e == last_template) {
                 last_square_and_discard_events[ab].reset(new cl::Event);
                 cl_chk(square_and_discard_queues[e]->enqueueTask(*square_and_discard_kernels[e], nullptr, &*last_square_and_discard_events[ab]));
-            }
-            else
+            } else {
                 cl_chk(square_and_discard_queues[e]->enqueueTask(*square_and_discard_kernels[e]));
+            }
         }
     }
 
@@ -413,9 +414,9 @@ bool FDAS::enqueue_harmonic_summing(const cl_float *thresholds, FOPPart which, B
                 if (k == 1) {
                     first_preload_events[ab].reset(new cl::Event);
                     cl_chk(preload_queues[h]->enqueueTask(preload_k, &deps, &*first_preload_events[ab]));
-                } else
+                } else {
                     cl_chk(preload_queues[h]->enqueueTask(preload_k, &deps));
-
+                }
                 cl_chk(delay_queues[h]->enqueueTask(delay_k, &deps));
             } else {
                 cl_chk(preload_queues[h]->enqueueTask(preload_k));
