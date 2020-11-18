@@ -21,6 +21,7 @@
 #include <cerrno>
 #include <fstream>
 #include <iomanip>
+#include <chrono>
 
 #include "FDAS.h"
 
@@ -458,10 +459,31 @@ bool FDAS::perform_harmonic_summing(const cl_float *thresholds, FOPPart which, B
 }
 
 bool FDAS::launch(const cl_float2 *input, const cl_float *thresholds, cl_uint *detection_location, cl_float *detection_power, FDAS::FOPPart which, FDAS::BufferSet ab) {
-    return enqueue_input_tiling(input, ab)
-        && enqueue_ft_convolution(which, ab)
-        && enqueue_harmonic_summing(thresholds, which, ab)
-        && enqueue_candidate_retrieval(detection_location, detection_power, ab);
+    std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
+    bool ok = true;
+    ok &= enqueue_input_tiling(input, ab);
+    std::chrono::steady_clock::time_point s1 = std::chrono::steady_clock::now();
+    ok &= enqueue_ft_convolution(which, ab);
+    std::chrono::steady_clock::time_point s2 = std::chrono::steady_clock::now();
+    ok &= enqueue_harmonic_summing(thresholds, which, ab);
+    std::chrono::steady_clock::time_point s3 = std::chrono::steady_clock::now();
+    ok &= enqueue_candidate_retrieval(detection_location, detection_power, ab);
+    std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
+    log << "[INFO] Enqueueing: " << (ab == A ? 'A' : 'B') << "\n"
+        << "       " << std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() << "ms\n"
+        << "       " << std::chrono::duration_cast<std::chrono::milliseconds>(s1 - begin).count() << "ms\n"
+        << "       " << std::chrono::duration_cast<std::chrono::milliseconds>(s2 - s1).count() << "ms\n"
+        << "       " << std::chrono::duration_cast<std::chrono::milliseconds>(s3 - s2).count() << "ms\n"
+        << "       " << std::chrono::duration_cast<std::chrono::milliseconds>(end - s3).count() << "ms"
+        << endl;
+    log << "%%%,"
+        << (ab == A ? 'A' : 'B') << ','
+        << begin.time_since_epoch().count() << ','
+        << s1.time_since_epoch().count() << ','
+        << s2.time_since_epoch().count() << ','
+        << s3.time_since_epoch().count() << ','
+        << end.time_since_epoch().count() << ','
+        << endl;
 }
 
 bool FDAS::launch_staged(const cl_float2 *input_A, cl_uint *detection_location_A, cl_float *detection_power_A, FOPPart which_A,
