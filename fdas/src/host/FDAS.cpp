@@ -380,14 +380,32 @@ bool FDAS::enqueue_harmonic_summing(const cl_float *thresholds, FOPPart which, B
     std::vector<cl::Event> deps = {*last_square_and_discard_events[ab]};
 
     // Orchestrate systolic array
+    cl_chk(store_cands_kernel->setArg<cl::Buffer>(0, *detection_location_buffers[ab]));
+    cl_chk(store_cands_kernel->setArg<cl::Buffer>(1, *detection_power_buffers[ab]));
+
+    store_cands_events[ab].reset(new cl::Event);
+    cl_chk(store_cands_queue->enqueueTask(*store_cands_kernel, &deps, &*store_cands_events[ab]));
+
     for (cl_uint h = 0; h < n_planes; ++h) {
         cl_uint k = h + 1;
 
-        auto &preload_k = *preload_kernels[h];
-        auto &delay_k = *delay_kernels[h];
         auto &detect_k = *detect_kernels[h];
+        cl_chk(detect_k.setArg<cl_float>(0, thresholds[h]));
+        cl_chk(detect_k.setArg<cl_uint>(1, n_templates));
+        cl_chk(detect_k.setArg<cl_uint>(2, negative_tmpls));
+        cl_chk(detect_k.setArg<cl_uint>(3, n_groups));
+        cl_chk(detect_k.setArg<cl_uint>(4, n_bundles));
 
-        for (cl_uint g = 0; g < n_groups; ++g) {
+        cl_chk(detect_queues[h]->enqueueTask(detect_k, &deps));
+    }
+
+    for (cl_uint g = 0; g < n_groups; ++g) {
+        for (cl_uint h = 0; h < n_planes; ++h) {
+            cl_uint k = h + 1;
+
+            auto &preload_k = *preload_kernels[h];
+            auto &delay_k = *delay_kernels[h];
+
             cl_uint group_base = g * HMS::group_sz / k;
             cl_uint cc_of_group_base = g * HMS::group_sz % k;
 
@@ -423,21 +441,7 @@ bool FDAS::enqueue_harmonic_summing(const cl_float *thresholds, FOPPart which, B
                 cl_chk(delay_queues[h]->enqueueTask(delay_k));
             }
         }
-
-        cl_chk(detect_k.setArg<cl_float>(0, thresholds[h]));
-        cl_chk(detect_k.setArg<cl_uint>(1, n_templates));
-        cl_chk(detect_k.setArg<cl_uint>(2, negative_tmpls));
-        cl_chk(detect_k.setArg<cl_uint>(3, n_groups));
-        cl_chk(detect_k.setArg<cl_uint>(4, n_bundles));
-
-        cl_chk(detect_queues[h]->enqueueTask(detect_k, &deps));
     }
-
-    cl_chk(store_cands_kernel->setArg<cl::Buffer>(0, *detection_location_buffers[ab]));
-    cl_chk(store_cands_kernel->setArg<cl::Buffer>(1, *detection_power_buffers[ab]));
-
-    store_cands_events[ab].reset(new cl::Event);
-    cl_chk(store_cands_queue->enqueueTask(*store_cands_kernel, &deps, &*store_cands_events[ab]));
 
     return true;
 }
