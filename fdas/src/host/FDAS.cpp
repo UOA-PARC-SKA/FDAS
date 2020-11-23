@@ -57,6 +57,11 @@ bool FDAS::initialise_accelerator(std::string bitstream_file_name,
                                   cl_uint input_sz, bool crossover_banks) {
     cl_int status;
 
+    // emit timestamp to be able to sync between wall-clock time and the "steady" time later
+    auto system_now = std::chrono::system_clock::now();
+    auto steady_now = std::chrono::steady_clock::now();
+    log << "^^^," << system_now.time_since_epoch().count() << ',' << steady_now.time_since_epoch().count() << endl;
+
     std::vector<cl::Platform> all_platforms;
     cl_chk(cl::Platform::get(&all_platforms));
     if (all_platforms.empty()) {
