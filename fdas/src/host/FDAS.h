@@ -56,10 +56,6 @@ public:
 
     bool launch(const cl_float2 *input, const cl_float *thresholds, cl_uint *detection_location, cl_float *detection_power, FOPPart which, BufferSet ab);
 
-    bool launch_staged(const cl_float2 *input_A, cl_uint *detection_location_A, cl_float *detection_power_A, FOPPart which_A,
-                       const cl_float2 *input_B, cl_uint *detection_location_B, cl_float *detection_power_B, FOPPart which_B,
-                       const cl_float *thresholds, cl_uint N = 5);
-
     bool wait(BufferSet ab);
 
     bool retrieve_tiles(cl_float2 *tiles, BufferSet ab);
