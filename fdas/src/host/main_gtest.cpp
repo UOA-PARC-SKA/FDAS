@@ -53,6 +53,7 @@ public:
     constexpr static float tolerance = 1e-5f;
 
     static std::vector<std::string> test_vectors;
+    static unsigned n_runs;
 
     static std::string templates_file;
     static std::string bitstream_file;
@@ -209,6 +210,9 @@ protected:
         }
         ASSERT_EQ(n_non_cands, 0);
     }
+
+    void drive_serially(bool crossover);
+    void drive_pipelined(bool crossover);
 };
 
 #if TEST_SINGLE
@@ -282,12 +286,12 @@ TEST_P(FDASTest, FDAS_steps) {
 #endif // TEST_SINGLE
 
 #if TEST_CONTINUOUS
-TEST_P(FDASTest, FDAS_serial) {
-    std::ofstream log(log_file(false, false, false));
+void FDASTest::drive_serially(bool crossover) {
+    std::ofstream log(log_file(false, crossover, false));
     FDAS pipeline(log);
     ASSERT_TRUE(pipeline.initialise_accelerator(bitstream_file,
                                                 FDAS::choose_first_platform, FDAS::choose_accelerator_devices,
-                                                input.size(), false));
+                                                input.size(), crossover));
     validateInputDimensions(pipeline);
     allocateAlignedBuffers(pipeline);
 
@@ -296,18 +300,13 @@ TEST_P(FDASTest, FDAS_serial) {
 
     std::transform(input.begin(), input.end(), input_host(), complex_to_float2);
 
-    ASSERT_TRUE(pipeline.launch(input_host(), thresholds.data(), detection_location_host[FDAS::A](), detection_power_host[FDAS::A](), FDAS::PositiveAccelerations, FDAS::A));
-
-    for (int i = 1; i < 10; ++i) {
+    for (int i = 0; i < n_runs; ++i) {
+        FDAS::FOPPart which = (i & 1) == 0 ? FDAS::PositiveAccelerations : FDAS::NegativeAccelerations;
+        ASSERT_TRUE(pipeline.launch(input_host(), thresholds.data(), detection_location_host[FDAS::A](), detection_power_host[FDAS::A](), which, FDAS::A));
         ASSERT_TRUE(pipeline.wait(FDAS::A));
-        pipeline.print_stats(FDAS::A, i == 1);
+        pipeline.print_stats(FDAS::A, i == 0);
         pipeline.print_events(FDAS::A);
-        ASSERT_TRUE(pipeline.launch(input_host(), thresholds.data(), detection_location_host[FDAS::A](), detection_power_host[FDAS::A](), (i & 1) ? FDAS::NegativeAccelerations : FDAS::PositiveAccelerations, FDAS::A));
     }
-
-    ASSERT_TRUE(pipeline.wait(FDAS::A));
-    pipeline.print_stats(FDAS::A);
-    pipeline.print_events(FDAS::A);
 
     for (auto ab : {FDAS::A}) {
         detection_location.resize(pipeline.get_candidate_list_sz());
@@ -318,47 +317,16 @@ TEST_P(FDASTest, FDAS_serial) {
     }
 
     log.close();
+}
+TEST_P(FDASTest, FDAS_serial) {
+    drive_serially(false);
 }
 
 TEST_P(FDASTest, FDAS_serial_x) {
-    std::ofstream log(log_file(false, true, false));
-    FDAS pipeline(log);
-    ASSERT_TRUE(pipeline.initialise_accelerator(bitstream_file,
-                                                FDAS::choose_first_platform, FDAS::choose_accelerator_devices,
-                                                input.size(), true));
-    validateInputDimensions(pipeline);
-    allocateAlignedBuffers(pipeline);
-
-    std::transform(templates.begin(), templates.end(), templates_host(), complex_to_float2);
-    ASSERT_TRUE(pipeline.upload_templates(templates_host(), FDAS::A));
-
-    std::transform(input.begin(), input.end(), input_host(), complex_to_float2);
-
-    ASSERT_TRUE(pipeline.launch(input_host(), thresholds.data(), detection_location_host[FDAS::A](), detection_power_host[FDAS::A](), FDAS::PositiveAccelerations, FDAS::A));
-
-    for (int i = 1; i < 10; ++i) {
-        ASSERT_TRUE(pipeline.wait(FDAS::A));
-        pipeline.print_stats(FDAS::A, i == 1);
-        pipeline.print_events(FDAS::A);
-        ASSERT_TRUE(pipeline.launch(input_host(), thresholds.data(), detection_location_host[FDAS::A](), detection_power_host[FDAS::A](), (i & 1) ? FDAS::NegativeAccelerations : FDAS::PositiveAccelerations, FDAS::A));
-    }
-
-    ASSERT_TRUE(pipeline.wait(FDAS::A));
-    pipeline.print_stats(FDAS::A);
-    pipeline.print_events(FDAS::A);
-
-    for (auto ab : {FDAS::A}) {
-        detection_location.resize(pipeline.get_candidate_list_sz());
-        detection_power.resize(pipeline.get_candidate_list_sz());
-        std::copy(detection_location_host[ab](), detection_location_host[ab]() + pipeline.get_candidate_list_sz(), detection_location.begin());
-        std::copy(detection_power_host[ab](), detection_power_host[ab]() + pipeline.get_candidate_list_sz(), detection_power.begin());
-        validateHarmonicSumming();
-    }
-
-    log.close();
+    drive_serially(true);
 }
 
-TEST_P(FDASTest, FDAS_pipelined) {
+void FDASTest::drive_pipelined(bool crossover) {
     std::ofstream log(log_file(true, false, false));
     FDAS pipeline(log);
     ASSERT_TRUE(pipeline.initialise_accelerator(bitstream_file,
@@ -373,24 +341,23 @@ TEST_P(FDASTest, FDAS_pipelined) {
 
     std::transform(input.begin(), input.end(), input_host(), complex_to_float2);
 
-    ASSERT_TRUE(pipeline.launch(input_host(), thresholds.data(), detection_location_host[FDAS::A](), detection_power_host[FDAS::A](), FDAS::PositiveAccelerations, FDAS::A));
-    ASSERT_TRUE(pipeline.launch(input_host(), thresholds.data(), detection_location_host[FDAS::B](), detection_power_host[FDAS::B](), FDAS::NegativeAccelerations, FDAS::B));
+    FDAS::FOPPart which[2] = {FDAS::PositiveAccelerations, FDAS::NegativeAccelerations};
+    for (int i = 0; i < n_runs + 1; ++i) {
+        FDAS::BufferSet ab, prev_ab;
+        if ((i & 1) == 0)
+            ab = FDAS::A, prev_ab = FDAS::B;
+        else
+            ab = FDAS::B, prev_ab = FDAS::A;
 
-    for (int i = 1; i < 9; ++i) {
-        FDAS::BufferSet ab = (i & 1) ? FDAS::A : FDAS::B;
-        ASSERT_TRUE(pipeline.wait(ab));
-        pipeline.print_stats(ab, i == 1);
-        pipeline.print_events(ab);
-        ASSERT_TRUE(pipeline.launch(input_host(), thresholds.data(), detection_location_host[ab](), detection_power_host[ab](), ab == FDAS::A ? FDAS::PositiveAccelerations : FDAS::NegativeAccelerations, ab));
+        if (i < n_runs)
+            ASSERT_TRUE(pipeline.launch(input_host(), thresholds.data(), detection_location_host[ab](), detection_power_host[ab](), which[ab], ab));
+
+        if (i > 0) {
+            ASSERT_TRUE(pipeline.wait(prev_ab));
+            pipeline.print_stats(prev_ab, i-1 == 0);
+            pipeline.print_events(prev_ab);
+        }
     }
-
-    ASSERT_TRUE(pipeline.wait(FDAS::A));
-    pipeline.print_stats(FDAS::A);
-    pipeline.print_events(FDAS::A);
-
-    ASSERT_TRUE(pipeline.wait(FDAS::B));
-    pipeline.print_stats(FDAS::B);
-    pipeline.print_events(FDAS::B);
 
     for (auto ab : {FDAS::A, FDAS::B}) {
         detection_location.resize(pipeline.get_candidate_list_sz());
@@ -401,6 +368,10 @@ TEST_P(FDASTest, FDAS_pipelined) {
     }
 
     log.close();
+}
+
+TEST_P(FDASTest, FDAS_pipelined) {
+    drive_pipelined(false);
 }
 
 TEST_P(FDASTest, FDAS_pipelined_s) {
@@ -434,48 +405,7 @@ TEST_P(FDASTest, FDAS_pipelined_s) {
 }
 
 TEST_P(FDASTest, FDAS_pipelined_x) {
-    std::ofstream log(log_file(true, true, false));
-    FDAS pipeline(log);
-    ASSERT_TRUE(pipeline.initialise_accelerator(bitstream_file,
-                                                FDAS::choose_first_platform, FDAS::choose_accelerator_devices,
-                                                input.size(), true));
-    validateInputDimensions(pipeline);
-    allocateAlignedBuffers(pipeline);
-
-    std::transform(templates.begin(), templates.end(), templates_host(), complex_to_float2);
-    ASSERT_TRUE(pipeline.upload_templates(templates_host(), FDAS::A));
-    ASSERT_TRUE(pipeline.upload_templates(templates_host(), FDAS::B));
-
-    std::transform(input.begin(), input.end(), input_host(), complex_to_float2);
-
-    ASSERT_TRUE(pipeline.launch(input_host(), thresholds.data(), detection_location_host[FDAS::A](), detection_power_host[FDAS::A](), FDAS::PositiveAccelerations, FDAS::A));
-    ASSERT_TRUE(pipeline.launch(input_host(), thresholds.data(), detection_location_host[FDAS::B](), detection_power_host[FDAS::B](), FDAS::NegativeAccelerations, FDAS::B));
-
-    for (int i = 1; i < 9; ++i) {
-        FDAS::BufferSet ab = (i & 1) ? FDAS::A : FDAS::B;
-        ASSERT_TRUE(pipeline.wait(ab));
-        pipeline.print_stats(ab, i == 1);
-        pipeline.print_events(ab);
-        ASSERT_TRUE(pipeline.launch(input_host(), thresholds.data(), detection_location_host[ab](), detection_power_host[ab](), ab == FDAS::A ? FDAS::PositiveAccelerations : FDAS::NegativeAccelerations, ab));
-    }
-
-    ASSERT_TRUE(pipeline.wait(FDAS::A));
-    pipeline.print_stats(FDAS::A);
-    pipeline.print_events(FDAS::A);
-
-    ASSERT_TRUE(pipeline.wait(FDAS::B));
-    pipeline.print_stats(FDAS::B);
-    pipeline.print_events(FDAS::B);
-
-    for (auto ab : {FDAS::A, FDAS::B}) {
-        detection_location.resize(pipeline.get_candidate_list_sz());
-        detection_power.resize(pipeline.get_candidate_list_sz());
-        std::copy(detection_location_host[ab](), detection_location_host[ab]() + pipeline.get_candidate_list_sz(), detection_location.begin());
-        std::copy(detection_power_host[ab](), detection_power_host[ab]() + pipeline.get_candidate_list_sz(), detection_power.begin());
-        validateHarmonicSumming();
-    }
-
-    log.close();
+    drive_pipelined(true);
 }
 
 TEST_P(FDASTest, FDAS_pipelined_x_s) {
@@ -512,15 +442,25 @@ TEST_P(FDASTest, FDAS_pipelined_x_s) {
 INSTANTIATE_TEST_SUITE_P(TestVectors, FDASTest, ::testing::ValuesIn(FDASTest::test_vectors));
 
 std::vector<std::string> FDASTest::test_vectors;
+unsigned FDASTest::n_runs;
+
 std::string FDASTest::bitstream_file;
 std::string FDASTest::templates_file;
 
 int main(int argc, char **argv) {
+    FDASTest::n_runs = 10;
     for (int i = 1; i < argc; ++i) {
         std::string arg(argv[i]);
-        if (arg.empty() || arg[0] == '-')
+        if (arg == "-N" && (i+1) < argc) {
+            FDASTest::n_runs = std::stoi(std::string(argv[i+1]));
+            ++i;
+            continue;
+        } else if (arg.empty() || arg[0] == '-') {
+            // reached the end of (non-googletest) arguments
             break;
-        FDASTest::test_vectors.push_back(arg);
+        } else {
+            FDASTest::test_vectors.push_back(arg);
+        }
     }
 
     ::testing::InitGoogleTest(&argc, argv);
