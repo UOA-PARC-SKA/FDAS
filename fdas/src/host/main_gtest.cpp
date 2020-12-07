@@ -20,6 +20,7 @@
 
 #include <array>
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <complex>
 #include <functional>
@@ -28,6 +29,7 @@
 #include <memory>
 #include <string>
 #include <sstream>
+#include <thread>
 #include <vector>
 
 #include "libnpy/npy.hpp"
@@ -38,6 +40,7 @@
 
 #define TEST_SINGLE 0
 #define TEST_CONTINUOUS 1
+#define POWER_MEASUREMENT 1
 
 class FDASTest : public ::testing::TestWithParam<std::string> {
 public:
@@ -317,20 +320,48 @@ void FDASTest::drive_serially(bool crossover) {
     log.close();
 }
 
+#ifdef POWER_MEASUREMENT
+TEST_P(FDASTest, flash) {
+    FDAS pipeline(std::cerr);
+    ASSERT_TRUE(pipeline.initialise_accelerator(bitstream_file,
+                                                FDAS::choose_first_platform, FDAS::choose_accelerator_devices,
+                                                input.size(), false));
+    std::chrono::seconds cool_down_period(30);
+    std::this_thread::sleep_for(cool_down_period);
+    ASSERT_TRUE(true);
+}
+#endif
+
 TEST_P(FDASTest, FDAS_serial) {
     drive_serially(false);
 }
 
+#ifdef POWER_MEASUREMENT
+TEST_P(FDASTest, cool_down_1) {
+    std::chrono::seconds cool_down_period(30);
+    std::this_thread::sleep_for(cool_down_period);
+    ASSERT_TRUE(true);
+}
+#endif
+
 TEST_P(FDASTest, FDAS_serial_x) {
     drive_serially(true);
 }
+
+#ifdef POWER_MEASUREMENT
+TEST_P(FDASTest, cool_down_2) {
+    std::chrono::seconds cool_down_period(30);
+    std::this_thread::sleep_for(cool_down_period);
+    ASSERT_TRUE(true);
+}
+#endif
 
 void FDASTest::drive_pipelined(bool crossover) {
     std::ofstream log(log_file(true, false));
     FDAS pipeline(log);
     ASSERT_TRUE(pipeline.initialise_accelerator(bitstream_file,
                                                 FDAS::choose_first_platform, FDAS::choose_accelerator_devices,
-                                                input.size(), false));
+                                                input.size(), crossover));
     validateInputDimensions(pipeline);
     allocateAlignedBuffers(pipeline);
 
@@ -373,9 +404,25 @@ TEST_P(FDASTest, FDAS_pipelined) {
     drive_pipelined(false);
 }
 
+#ifdef POWER_MEASUREMENT
+TEST_P(FDASTest, cool_down_3) {
+    std::chrono::seconds cool_down_period(30);
+    std::this_thread::sleep_for(cool_down_period);
+    ASSERT_TRUE(true);
+}
+#endif
+
 TEST_P(FDASTest, FDAS_pipelined_x) {
     drive_pipelined(true);
 }
+
+#ifdef POWER_MEASUREMENT
+TEST_P(FDASTest, cool_down_4) {
+    std::chrono::seconds cool_down_period(30);
+    std::this_thread::sleep_for(cool_down_period);
+    ASSERT_TRUE(true);
+}
+#endif
 #endif // TEST_CONTINUOUS
 
 INSTANTIATE_TEST_SUITE_P(TestVectors, FDASTest, ::testing::ValuesIn(FDASTest::test_vectors));
