@@ -357,7 +357,7 @@ TEST_P(FDASTest, cool_down_2) {
 #endif
 
 void FDASTest::drive_pipelined(bool crossover) {
-    std::ofstream log(log_file(true, false));
+    std::ofstream log(log_file(true, crossover));
     FDAS pipeline(log);
     ASSERT_TRUE(pipeline.initialise_accelerator(bitstream_file,
                                                 FDAS::choose_first_platform, FDAS::choose_accelerator_devices,
