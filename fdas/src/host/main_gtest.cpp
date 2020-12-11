@@ -77,7 +77,10 @@ protected:
     std::string log_file(bool pipelined, bool crossover) {
         std::stringstream stream;
         stream << "fdas";
-        stream << '_' << FFT::n_engines << 'x' << HMS::group_sz << 'x' << HMS::bundle_sz;
+        if (HMS::baseline)
+            stream << "_baseline_x" << HMS::unroll_x;
+        else
+            stream << '_' << FFT::n_engines << 'x' << HMS::group_sz << 'x' << HMS::bundle_sz;
         if (pipelined)
             stream << "_pipelined";
         else

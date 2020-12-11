@@ -93,6 +93,10 @@ private:
 
     bool enqueue_harmonic_summing(const cl_float *thresholds, FOPPart which, BufferSet ab);
 
+    bool enqueue_harmonic_summing_baseline(const cl_float *thresholds, FOPPart which, BufferSet ab);
+
+    bool enqueue_harmonic_summing_systolic(const cl_float *thresholds, FOPPart which, BufferSet ab);
+
     bool enqueue_candidate_retrieval(cl_uint *detection_location, cl_float *detection_power, BufferSet ab);
 
 private:
@@ -119,6 +123,7 @@ private:
     std::array<std::unique_ptr<cl::Kernel>, FFT::n_engines> square_and_discard_kernels;
 
     // Harmonic summing kernels
+    std::unique_ptr<cl::Kernel> harmonic_summing_kernel;
     std::array<std::unique_ptr<cl::Kernel>, HMS::n_planes> preload_kernels;
     std::array<std::unique_ptr<cl::Kernel>, HMS::n_planes> delay_kernels;
     std::array<std::unique_ptr<cl::Kernel>, HMS::n_planes> detect_kernels;
@@ -129,6 +134,7 @@ private:
     std::array<std::unique_ptr<cl::Buffer>, 2> tiles_buffers;
     std::array<std::unique_ptr<cl::Buffer>, 2> templates_buffers;
     std::array<std::unique_ptr<cl::Buffer>, 2> fop_buffers;
+    std::array<std::unique_ptr<cl::Buffer>, 2> thresholds_buffers;
     std::array<std::unique_ptr<cl::Buffer>, 2> detection_location_buffers;
     std::array<std::unique_ptr<cl::Buffer>, 2> detection_power_buffers;
 
@@ -140,6 +146,7 @@ private:
     std::unique_ptr<cl::CommandQueue> mux_and_mult_queue;
     std::array<std::unique_ptr<cl::CommandQueue>, FFT::n_engines> square_and_discard_queues;
 
+    std::unique_ptr<cl::CommandQueue> harmonic_summing_queue;
     std::array<std::unique_ptr<cl::CommandQueue>, HMS::n_planes> preload_queues;
     std::array<std::unique_ptr<cl::CommandQueue>, HMS::n_planes> delay_queues;
     std::array<std::unique_ptr<cl::CommandQueue>, HMS::n_planes> detect_queues;
@@ -150,6 +157,7 @@ private:
     std::array<std::unique_ptr<cl::CommandQueue>, 2> tiles_buffer_queues;
     std::array<std::unique_ptr<cl::CommandQueue>, 2> templates_buffer_queues;
     std::array<std::unique_ptr<cl::CommandQueue>, 2> fop_buffer_queues;
+    std::array<std::unique_ptr<cl::CommandQueue>, 2> thresholds_buffer_queues;
     std::array<std::unique_ptr<cl::CommandQueue>, 2> detection_buffer_queues;
 
     // Events
@@ -158,6 +166,8 @@ private:
     std::array<std::unique_ptr<cl::Event>, 2> store_tiles_events;
     std::array<std::unique_ptr<cl::Event>, 2> mux_and_mult_events;
     std::array<std::unique_ptr<cl::Event>, 2> last_square_and_discard_events;
+    std::array<std::unique_ptr<cl::Event>, 2> xfer_thrsh_events;
+    std::array<std::unique_ptr<cl::Event>, 2> harmonic_summing_events;
     std::array<std::unique_ptr<cl::Event>, 2> first_preload_events;
     std::array<std::unique_ptr<cl::Event>, 2> store_cands_events;
     std::array<std::unique_ptr<cl::Event>, 2> xfer_cands_events;

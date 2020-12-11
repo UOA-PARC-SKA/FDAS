@@ -155,19 +155,23 @@ bool FDAS::initialise_accelerator(std::string bitstream_file_name,
         cl_chkref(square_and_discard_kernels[e].reset(new cl::Kernel(*program, name.c_str(), &status)));
     }
 
-    for (cl_uint h = 0; h < HMS::n_planes; ++h) {
-        auto name = "preload_" + std::to_string(h + 1);
-        cl_chkref(preload_kernels[h].reset(new cl::Kernel(*program, name.c_str(), &status)));
+    if (HMS::baseline) {
+        harmonic_summing_kernel.reset(new cl::Kernel(*program, "harmonic_summing", &status));
+    } else {
+        for (cl_uint h = 0; h < HMS::n_planes; ++h) {
+            auto name = "preload_" + std::to_string(h + 1);
+            cl_chkref(preload_kernels[h].reset(new cl::Kernel(*program, name.c_str(), &status)));
+        }
+        for (cl_uint h = 0; h < HMS::n_planes; ++h) {
+            auto name = "delay_" + std::to_string(h + 1);
+            cl_chkref(delay_kernels[h].reset(new cl::Kernel(*program, name.c_str(), &status)));
+        }
+        for (cl_uint h = 0; h < HMS::n_planes; ++h) {
+            auto name = "detect_" + std::to_string(h + 1);
+            cl_chkref(detect_kernels[h].reset(new cl::Kernel(*program, name.c_str(), &status)));
+        }
+        cl_chkref(store_cands_kernel.reset(new cl::Kernel(*program, "store_cands", &status)));
     }
-    for (cl_uint h = 0; h < HMS::n_planes; ++h) {
-        auto name = "delay_" + std::to_string(h + 1);
-        cl_chkref(delay_kernels[h].reset(new cl::Kernel(*program, name.c_str(), &status)));
-    }
-    for (cl_uint h = 0; h < HMS::n_planes; ++h) {
-        auto name = "detect_" + std::to_string(h + 1);
-        cl_chkref(detect_kernels[h].reset(new cl::Kernel(*program, name.c_str(), &status)));
-    }
-    cl_chkref(store_cands_kernel.reset(new cl::Kernel(*program, "store_cands", &status)));
 
     // Buffers
     n_frequency_bins = input_sz;
@@ -194,6 +198,11 @@ bool FDAS::initialise_accelerator(std::string bitstream_file_name,
         cl_chkref(fop_buffers[0].reset(new cl::Buffer(*context, CL_MEM_READ_WRITE | CL_CHANNEL_2_INTELFPGA, sizeof(cl_float) * fop_sz, nullptr, &status)));
         cl_chkref(fop_buffers[1].reset(new cl::Buffer(*context, CL_MEM_READ_WRITE | CL_CHANNEL_1_INTELFPGA, sizeof(cl_float) * fop_sz, nullptr, &status)));
 
+        if (HMS::baseline) {
+            cl_chkref(thresholds_buffers[0].reset(new cl::Buffer(*context, CL_MEM_READ_ONLY | CL_CHANNEL_2_INTELFPGA, sizeof(cl_float) * HMS::n_planes, nullptr, &status)));
+            cl_chkref(thresholds_buffers[1].reset(new cl::Buffer(*context, CL_MEM_READ_ONLY | CL_CHANNEL_1_INTELFPGA, sizeof(cl_float) * HMS::n_planes, nullptr, &status)));
+        }
+
         cl_chkref(detection_location_buffers[0].reset(new cl::Buffer(*context, CL_MEM_WRITE_ONLY | CL_CHANNEL_2_INTELFPGA, sizeof(cl_uint) * Output::n_candidates, nullptr, &status)));
         cl_chkref(detection_location_buffers[1].reset(new cl::Buffer(*context, CL_MEM_WRITE_ONLY | CL_CHANNEL_1_INTELFPGA, sizeof(cl_uint) * Output::n_candidates, nullptr, &status)));
 
@@ -202,6 +211,11 @@ bool FDAS::initialise_accelerator(std::string bitstream_file_name,
     } else {
         cl_chkref(fop_buffers[0].reset(new cl::Buffer(*context, CL_MEM_READ_WRITE | CL_CHANNEL_1_INTELFPGA, sizeof(cl_float) * fop_sz, nullptr, &status)));
         cl_chkref(fop_buffers[1].reset(new cl::Buffer(*context, CL_MEM_READ_WRITE | CL_CHANNEL_2_INTELFPGA, sizeof(cl_float) * fop_sz, nullptr, &status)));
+
+        if (HMS::baseline) {
+            cl_chkref(thresholds_buffers[0].reset(new cl::Buffer(*context, CL_MEM_READ_ONLY | CL_CHANNEL_1_INTELFPGA, sizeof(cl_float) * HMS::n_planes, nullptr, &status)));
+            cl_chkref(thresholds_buffers[1].reset(new cl::Buffer(*context, CL_MEM_READ_ONLY | CL_CHANNEL_2_INTELFPGA, sizeof(cl_float) * HMS::n_planes, nullptr, &status)));
+        }
 
         cl_chkref(detection_location_buffers[0].reset(new cl::Buffer(*context, CL_MEM_WRITE_ONLY | CL_CHANNEL_1_INTELFPGA, sizeof(cl_uint) * Output::n_candidates, nullptr, &status)));
         cl_chkref(detection_location_buffers[1].reset(new cl::Buffer(*context, CL_MEM_WRITE_ONLY | CL_CHANNEL_2_INTELFPGA, sizeof(cl_uint) * Output::n_candidates, nullptr, &status)));
@@ -220,13 +234,17 @@ bool FDAS::initialise_accelerator(std::string bitstream_file_name,
     for (auto &q : square_and_discard_queues)
         cl_chkref(q.reset(new cl::CommandQueue(*context, default_device, CL_QUEUE_PROFILING_ENABLE, &status)));
 
-    for (auto &q : preload_queues)
-        cl_chkref(q.reset(new cl::CommandQueue(*context, default_device, CL_QUEUE_PROFILING_ENABLE, &status)));
-    for (auto &q : delay_queues)
-        cl_chkref(q.reset(new cl::CommandQueue(*context, default_device, CL_QUEUE_PROFILING_ENABLE, &status)));
-    for (auto &q : detect_queues)
-        cl_chkref(q.reset(new cl::CommandQueue(*context, default_device, CL_QUEUE_PROFILING_ENABLE, &status)));
-    cl_chkref(store_cands_queue.reset(new cl::CommandQueue(*context, default_device, CL_QUEUE_PROFILING_ENABLE, &status)));
+    if (HMS::baseline) {
+        cl_chkref(harmonic_summing_queue.reset(new cl::CommandQueue(*context, default_device, CL_QUEUE_PROFILING_ENABLE, &status)));
+    } else {
+        for (auto &q : preload_queues)
+            cl_chkref(q.reset(new cl::CommandQueue(*context, default_device, CL_QUEUE_PROFILING_ENABLE, &status)));
+        for (auto &q : delay_queues)
+            cl_chkref(q.reset(new cl::CommandQueue(*context, default_device, CL_QUEUE_PROFILING_ENABLE, &status)));
+        for (auto &q : detect_queues)
+            cl_chkref(q.reset(new cl::CommandQueue(*context, default_device, CL_QUEUE_PROFILING_ENABLE, &status)));
+        cl_chkref(store_cands_queue.reset(new cl::CommandQueue(*context, default_device, CL_QUEUE_PROFILING_ENABLE, &status)));
+    }
 
     for (auto &q : input_buffer_queues)
         cl_chkref(q.reset(new cl::CommandQueue(*context, default_device, CL_QUEUE_PROFILING_ENABLE, &status)));
@@ -236,6 +254,10 @@ bool FDAS::initialise_accelerator(std::string bitstream_file_name,
         cl_chkref(q.reset(new cl::CommandQueue(*context, default_device, CL_QUEUE_PROFILING_ENABLE, &status)));
     for (auto &q : fop_buffer_queues)
         cl_chkref(q.reset(new cl::CommandQueue(*context, default_device, CL_QUEUE_PROFILING_ENABLE, &status)));
+    if (HMS::baseline) {
+        for (auto &q : thresholds_buffer_queues)
+            cl_chkref(q.reset(new cl::CommandQueue(*context, default_device, CL_QUEUE_PROFILING_ENABLE, &status)));
+    }
     for (auto &q : detection_buffer_queues)
         cl_chkref(q.reset(new cl::CommandQueue(*context, default_device, CL_QUEUE_PROFILING_ENABLE, &status)));
 
@@ -371,6 +393,51 @@ bool FDAS::perform_ft_convolution(FOPPart which, BufferSet ab) {
 }
 
 bool FDAS::enqueue_harmonic_summing(const cl_float *thresholds, FOPPart which, BufferSet ab) {
+    if (HMS::baseline)
+        return enqueue_harmonic_summing_baseline(thresholds, which, ab);
+    else
+        return enqueue_harmonic_summing_systolic(thresholds, which, ab);
+}
+
+bool FDAS::enqueue_harmonic_summing_baseline(const cl_float *thresholds, FOPPart which, BufferSet ab) {
+    cl_int first_template, last_template;
+    switch (which) {
+        case NegativeAccelerations:
+            first_template = -Input::n_tmpl_per_accel_sign;
+            last_template = 0;
+            break;
+        case PositiveAccelerations:
+            first_template = 0;
+            last_template = Input::n_tmpl_per_accel_sign;
+            break;
+        case AllAccelerations:
+            first_template = -Input::n_tmpl_per_accel_sign;
+            last_template = Input::n_tmpl_per_accel_sign;
+            break;
+    }
+
+    std::vector<cl::Event> deps(1);
+
+    deps[0] = *last_square_and_discard_events[ab];
+    xfer_thrsh_events[ab].reset(new cl::Event);
+    cl_chk(thresholds_buffer_queues[ab]->enqueueWriteBuffer(*thresholds_buffers[ab], false, 0, sizeof(cl_float) * HMS::n_planes, thresholds, &deps, &*xfer_thrsh_events[ab]));
+
+    cl_chk(harmonic_summing_kernel->setArg<cl::Buffer>(0, *fop_buffers[ab]));
+    cl_chk(harmonic_summing_kernel->setArg<cl_int>(1, first_template));
+    cl_chk(harmonic_summing_kernel->setArg<cl_int>(2, last_template));
+    cl_chk(harmonic_summing_kernel->setArg<cl_uint>(3, n_frequency_bins));
+    cl_chk(harmonic_summing_kernel->setArg<cl::Buffer>(4, *thresholds_buffers[ab]));
+    cl_chk(harmonic_summing_kernel->setArg<cl::Buffer>(5, *detection_location_buffers[ab]));
+    cl_chk(harmonic_summing_kernel->setArg<cl::Buffer>(6, *detection_power_buffers[ab]));
+
+    deps[0] = *xfer_thrsh_events[ab];
+    harmonic_summing_events[ab].reset(new cl::Event);
+    cl_chk(harmonic_summing_queue->enqueueTask(*harmonic_summing_kernel, &deps, &*harmonic_summing_events[ab]));
+
+    return true;
+}
+
+bool FDAS::enqueue_harmonic_summing_systolic(const cl_float *thresholds, FOPPart which, BufferSet ab) {
     if (which == AllAccelerations) {
         log << "[ERROR] Candidate detection on the entire FOP is not supported" << endl;
         return false;
@@ -456,9 +523,13 @@ bool FDAS::perform_harmonic_summing(const cl_float *thresholds, FOPPart which, B
     if (! enqueue_harmonic_summing(thresholds, which, ab))
         return false;
 
-    cl_chk(store_cands_events[ab]->wait());
-
-    print_duration("Harmonic summing (1/2 FOP)", *first_preload_events[ab], *store_cands_events[ab]);
+    if (HMS::baseline) {
+        cl_chk(harmonic_summing_events[ab]->wait());
+        print_duration("Harmonic summing (1/2 FOP)", *xfer_thrsh_events[ab], *harmonic_summing_events[ab]);
+    } else {
+        cl_chk(store_cands_events[ab]->wait());
+        print_duration("Harmonic summing (1/2 FOP)", *first_preload_events[ab], *store_cands_events[ab]);
+    }
 
     return true;
 }
@@ -513,7 +584,11 @@ bool FDAS::retrieve_FOP(cl_float *fop, BufferSet ab) {
 }
 
 bool FDAS::enqueue_candidate_retrieval(cl_uint *detection_location, cl_float *detection_power, BufferSet ab) {
-    std::vector<cl::Event> deps = {*store_cands_events[ab]};
+    std::vector<cl::Event> deps;
+    if (HMS::baseline)
+        deps.push_back(*harmonic_summing_events[ab]);
+    else
+        deps.push_back(*store_cands_events[ab]);
     xfer_cands_events[ab].reset(new cl::Event);
     cl_chk(detection_buffer_queues[ab]->enqueueReadBuffer(*detection_location_buffers[ab], false, 0, sizeof(cl_uint) * Output::n_candidates, detection_location, &deps, nullptr));
     cl_chk(detection_buffer_queues[ab]->enqueueReadBuffer(*detection_power_buffers[ab], false, 0, sizeof(cl_float) * Output::n_candidates, detection_power, nullptr, &*xfer_cands_events[ab]));
@@ -561,7 +636,10 @@ void FDAS::print_stats(BufferSet ab, bool reset) {
         << " II ~ " << ((acc - pipeline_accum) / 1000 / 1000) << " ms" << endl;
     print_duration("  Preparation", *load_input_events[ab], *store_tiles_events[ab]);
     print_duration("  FT convolution and IFFT (1/2 FOP)", *mux_and_mult_events[ab], *last_square_and_discard_events[ab]);
-    print_duration("  Harmonic summing (1/2 FOP)", *first_preload_events[ab], *store_cands_events[ab]);
+    if (HMS::baseline)
+        print_duration("  Harmonic summing (1/2 FOP)", *xfer_thrsh_events[ab], *harmonic_summing_events[ab]);
+    else
+        print_duration("  Harmonic summing (1/2 FOP)", *first_preload_events[ab], *store_cands_events[ab]);
     print_duration("  Total", *xfer_input_events[ab], *xfer_cands_events[ab]);
 
     pipeline_accum = acc;
@@ -575,10 +653,15 @@ void FDAS::print_events(BufferSet ab) {
         << load_input_events[ab]->getProfilingInfo<CL_PROFILING_COMMAND_START>() << ','
         << store_tiles_events[ab]->getProfilingInfo<CL_PROFILING_COMMAND_END>() << ','
         << mux_and_mult_events[ab]->getProfilingInfo<CL_PROFILING_COMMAND_START>() << ','
-        << last_square_and_discard_events[ab]->getProfilingInfo<CL_PROFILING_COMMAND_END>() << ','
-        << first_preload_events[ab]->getProfilingInfo<CL_PROFILING_COMMAND_START>() << ','
-        << store_cands_events[ab]->getProfilingInfo<CL_PROFILING_COMMAND_END>() << ','
-        << xfer_cands_events[ab]->getProfilingInfo<CL_PROFILING_COMMAND_START>() << ','
+        << last_square_and_discard_events[ab]->getProfilingInfo<CL_PROFILING_COMMAND_END>() << ',';
+    if (HMS::baseline) {
+        log << xfer_thrsh_events[ab]->getProfilingInfo<CL_PROFILING_COMMAND_START>() << ','
+            << harmonic_summing_events[ab]->getProfilingInfo<CL_PROFILING_COMMAND_END>() << ',';
+    } else {
+        log << first_preload_events[ab]->getProfilingInfo<CL_PROFILING_COMMAND_START>() << ','
+            << store_cands_events[ab]->getProfilingInfo<CL_PROFILING_COMMAND_END>() << ',';
+    }
+    log << xfer_cands_events[ab]->getProfilingInfo<CL_PROFILING_COMMAND_START>() << ','
         << xfer_cands_events[ab]->getProfilingInfo<CL_PROFILING_COMMAND_END>() << endl;
 }
 

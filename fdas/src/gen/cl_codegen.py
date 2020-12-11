@@ -64,6 +64,8 @@ def main():
     parser.add_argument('--n-engines', dest='fft_n_engines', type=int, default=4)
     parser.add_argument('--group-sz', dest='hms_group_sz', type=int, default=8)
     parser.add_argument('--bundle-sz', dest='hms_bundle_sz', type=int, default=2)
+    parser.add_argument('--hms-baseline', dest='hms_baseline', action='store_true')
+    parser.add_argument('--hms-unroll-x', dest='hms_unroll_x', type=int, default=1)
 
     args = parser.parse_args()
 
@@ -95,13 +97,20 @@ def main():
     ftc_real_pack_ty = "float4"
 
     # Harmonic summing
+    hms_baseline = args.hms_baseline or False
+
     hms_n_planes = 8
     hms_detection_sz = 64
 
     hms_group_sz = args.hms_group_sz
     hms_bundle_sz = args.hms_bundle_sz
-    hms_slot_sz = 2 ** int(ceil(log2(hms_group_sz * hms_bundle_sz)))
+    if hms_baseline:
+        hms_slot_sz = 1
+    else:
+        hms_slot_sz = 2 ** int(ceil(log2(hms_group_sz * hms_bundle_sz)))
     hms_bundle_ty = "float" if hms_bundle_sz == 1 else f"float{hms_bundle_sz}"
+
+    hms_unroll_x = args.hms_unroll_x
 
     # Output
     n_candidates = hms_n_planes * hms_detection_sz * hms_slot_sz
@@ -119,6 +128,7 @@ def main():
     preload_template = Template(filename='preload.cl.mako')
     detect_template = Template(filename='detect.cl.mako')
     store_cands_template = Template(filename='store_cands.cl.mako')
+    hms_baseline_template = Template(filename='hms_baseline.cl.mako')
     gen_info_template = Template(filename='gen_info.h.mako')
 
     copyright_header = """/*
@@ -153,11 +163,14 @@ def main():
         fdas_file.write(mux_and_mult_template.render(**fdas_configuration))
         for e in range(fft_n_engines):
             fdas_file.write(square_and_discard_template.render(engine=e, **fdas_configuration))
-        for h in range(hms_n_planes):
-            fdas_file.write(preload_template.render(k=h + 1, **fdas_configuration))
-        for h in range(hms_n_planes):
-            fdas_file.write(detect_template.render(k=h + 1, **fdas_configuration))
-        fdas_file.write(store_cands_template.render(**fdas_configuration))
+        if hms_baseline:
+            fdas_file.write(hms_baseline_template.render(**fdas_configuration))
+        else:
+            for h in range(hms_n_planes):
+                fdas_file.write(preload_template.render(k=h + 1, **fdas_configuration))
+            for h in range(hms_n_planes):
+                fdas_file.write(detect_template.render(k=h + 1, **fdas_configuration))
+            fdas_file.write(store_cands_template.render(**fdas_configuration))
 
     with open(args.gen_info_file, 'wt') as gen_info_file:
         gen_info_file.write(copyright_header)
