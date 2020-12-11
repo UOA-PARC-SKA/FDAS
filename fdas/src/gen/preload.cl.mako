@@ -15,6 +15,7 @@
 ##
 ## You should have received a copy of the GNU General Public License
 ## along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 <%
     from cl_codegen import get_output_mapping
 
@@ -32,7 +33,6 @@
             assert len(idxs) == 2
             buffers_for_output += [(idxs[0], idxs[1], min(out_map[p][idxs[1]]))]
 %>\
-
 __attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
 kernel void preload_${k}(global ${hms_bundle_ty} * restrict fop,

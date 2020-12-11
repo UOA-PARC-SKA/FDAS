@@ -15,10 +15,10 @@
 ##
 ## You should have received a copy of the GNU General Public License
 ## along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 <%
     from cl_codegen import get_output_mapping, lcm
 %>\
-
 #ifndef FDAS_GEN_INFO_H
 #define FDAS_GEN_INFO_H
 
