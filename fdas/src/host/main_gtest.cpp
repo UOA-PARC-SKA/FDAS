@@ -78,7 +78,7 @@ protected:
         std::stringstream stream;
         stream << "fdas";
         if (HMS::baseline)
-            stream << "_baseline_x" << HMS::unroll_x;
+            stream << '_' << FFT::n_engines << 'x' << 'B' << 'x' << HMS::unroll_x;
         else
             stream << '_' << FFT::n_engines << 'x' << HMS::group_sz << 'x' << HMS::bundle_sz;
         if (pipelined)

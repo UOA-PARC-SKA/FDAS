@@ -65,7 +65,7 @@ def main():
     parser.add_argument('--group-sz', dest='hms_group_sz', type=int, default=8)
     parser.add_argument('--bundle-sz', dest='hms_bundle_sz', type=int, default=2)
     parser.add_argument('--hms-baseline', dest='hms_baseline', action='store_true')
-    parser.add_argument('--hms-unroll-x', dest='hms_unroll_x', type=int, default=1)
+    parser.add_argument('--unroll-x', dest='unroll_x', type=int, default=1)
 
     args = parser.parse_args()
 
@@ -110,7 +110,7 @@ def main():
         hms_slot_sz = 2 ** int(ceil(log2(hms_group_sz * hms_bundle_sz)))
     hms_bundle_ty = "float" if hms_bundle_sz == 1 else f"float{hms_bundle_sz}"
 
-    hms_unroll_x = args.hms_unroll_x
+    hms_unroll_x = args.unroll_x
 
     # Output
     n_candidates = hms_n_planes * hms_detection_sz * hms_slot_sz

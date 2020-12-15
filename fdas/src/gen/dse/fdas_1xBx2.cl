@@ -323,13 +323,13 @@ kernel void harmonic_summing(global volatile float * restrict fop,       // `vol
 
     // The actual layout and banking of the detection and bookkeeping buffers is chosen to allow `aoc` to implement
     // hms_unroll_x-many no-stall parallel accesses in the unrolled region below. The logical layout is as explained above.
-    uint __attribute__((numbanks(8))) location_buf[64][1][8];
-    float __attribute__((numbanks(8))) power_buf[64][1][8];
-    ulong valid[1][8];
-    uint next_slot[1][8];
+    uint __attribute__((numbanks(16))) location_buf[32][2][8];
+    float __attribute__((numbanks(16))) power_buf[32][2][8];
+    ulong valid[2][8];
+    uint next_slot[2][8];
 
     // Zero-initialise bookkeeping buffers
-    for (uint x = 0; x < 1; ++x) {
+    for (uint x = 0; x < 2; ++x) {
         for (uint h = 0; h < 8; ++h) {
             next_slot[x][h] = 0;
             valid[x][h] = 0l;
@@ -345,7 +345,7 @@ kernel void harmonic_summing(global volatile float * restrict fop,       // `vol
     // MAIN LOOP: Iterates over all (t,f) coordinates in the FOP, handling hms_unroll_x-many channels per iteration of the
     //            inner loop
     for (int tmpl = first_template; tmpl <= last_template; ++tmpl) {
-        #pragma unroll 1
+        #pragma unroll 2
         #pragma ii 1
         for (uint freq = 0; freq < n_frequency_bins; ++freq) {
             float hsum = 0.0f;
@@ -364,12 +364,12 @@ kernel void harmonic_summing(global volatile float * restrict fop,       // `vol
 
                 // If we have a candidate, store it in the detection buffers and perform bookkeeping
                 if (hsum > thrsh[h]) {
-                    uint x = freq % 1;
+                    uint x = freq % 2;
                     uint slot = next_slot[x][h];
                     location_buf[slot][x][h] = encode_location(k, tmpl, freq);
                     power_buf[slot][x][h] = hsum;
                     valid[x][h] |= 1l << slot;
-                    next_slot[x][h] = (slot == 63) ? 0 : slot + 1;
+                    next_slot[x][h] = (slot == 31) ? 0 : slot + 1;
                 }
             }
         }
@@ -377,14 +377,14 @@ kernel void harmonic_summing(global volatile float * restrict fop,       // `vol
 
     // Write detection buffers to global memory without messing up the banking of the buffers
     for (uint h = 0; h < 8; ++h) {
-        for (uint x = 0; x < 1; ++x) {
-            for (uint d = 0; d < 64; ++d) {
+        for (uint x = 0; x < 2; ++x) {
+            for (uint d = 0; d < 32; ++d) {
                 if (valid[x][h] & (1l << d)) {
-                    detection_location[h * 64 + x * 64 + d] = location_buf[d][x][h];
-                    detection_power[h * 64 + x * 64 + d] = power_buf[d][x][h];
+                    detection_location[h * 64 + x * 32 + d] = location_buf[d][x][h];
+                    detection_power[h * 64 + x * 32 + d] = power_buf[d][x][h];
                 } else {
-                    detection_location[h * 64 + x * 64 + d] = invalid_location;
-                    detection_power[h * 64 + x * 64 + d] = invalid_power;
+                    detection_location[h * 64 + x * 32 + d] = invalid_location;
+                    detection_power[h * 64 + x * 32 + d] = invalid_power;
                 }
             }
         }

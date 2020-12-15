@@ -26,8 +26,8 @@ channel float2x4 load_to_tile __attribute__((depth(0)));
 channel float2x4 fft_in __attribute__((depth(0)));
 channel float2x4 fft_out __attribute__((depth(0)));
 
-channel float2x4 ifft_in[1] __attribute__((depth(0)));
-channel float2x4 ifft_out[1] __attribute__((depth(0)));
+channel float2x4 ifft_in[2] __attribute__((depth(0)));
+channel float2x4 ifft_out[2] __attribute__((depth(0)));
 
 
 inline uint bit_reversed(uint x, uint bits)
@@ -102,6 +102,36 @@ kernel void fft_0(const uint n_tiles, const uint is_inverse)
             }
 
             data = fft_step(data, step, fft_delay_elements, is_inverse, 11);
+        }
+    }
+}
+
+__attribute__((max_global_work_dim(0)))
+__attribute__((uses_global_work_offset(0)))
+kernel void fft_1(const uint n_tiles)
+{
+    const float2x4 zeros = {0, 0, 0, 0};
+
+    float2x4 __attribute__((bank_bits(9))) buf[2][512];
+    float2 fft_delay_elements[2080];
+    float2x4 data;
+
+    for (uint tile = 0; tile < n_tiles + 2; ++tile) {
+        for (uint step = 0; step < 512; ++step) {
+            if (tile >= 1) {
+                buf[1 - (tile & 1)][bit_reversed(step, 9)] = data;
+            }
+            if (tile >= 2) {
+                write_channel_intel(ifft_out[1], buf[tile & 1][step]);
+            }
+
+            if (tile < n_tiles) {
+                data = read_channel_intel(ifft_in[1]);
+            } else {
+                data = zeros;
+            }
+
+            data = fft_step(data, step, fft_delay_elements, 1, 11);
         }
     }
 }
@@ -210,27 +240,33 @@ kernel void mux_and_mult(global float2x4 * restrict tiles,
                          global float2x4 * restrict templates,
                          const uint n_tiles,
                          const uint n_engines_to_use,
-                         const uint tmpl_offset_0)
+                         const uint tmpl_offset_0,
+                         const uint tmpl_offset_1)
 {
     const float2x4 zeros = {0, 0, 0, 0};
 
     float2x4 template_buf_0[512];
+    float2x4 template_buf_1[512];
 
     for (uint pack = 0; pack < 512; ++pack) {
         float2x4 tmpl_0 = 0 < n_engines_to_use ? templates[tmpl_offset_0 + pack] : zeros;
+        float2x4 tmpl_1 = 1 < n_engines_to_use ? templates[tmpl_offset_1 + pack] : zeros;
         template_buf_0[pack] = tmpl_0;
+        template_buf_1[pack] = tmpl_1;
     }
 
     for (uint pack = 0; pack < n_tiles * 512; ++pack) {
-        float2x4 coeffs[1];
-        float2x4 prods[1];
+        float2x4 coeffs[2];
+        float2x4 prods[2];
 
         float2x4 load = tiles[pack];
         coeffs[0] = template_buf_0[pack % 512];
+        coeffs[1] = template_buf_1[pack % 512];
         prods[0] = complex_mult(load, coeffs[0]);
+        prods[1] = complex_mult(load, coeffs[1]);
 
         #pragma unroll
-        for (uint e = 0; e < 1; ++e) {
+        for (uint e = 0; e < 2; ++e) {
             if (e < n_engines_to_use)
                 write_channel_intel(ifft_in[e], prods[e]);
         }
@@ -310,6 +346,77 @@ kernel void square_and_discard_0(global float4 * restrict fop,
 
 __attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
+kernel void square_and_discard_1(global float4 * restrict fop,
+                                 const uint n_tiles,
+                                 const uint n_packs,
+                                 const uint fop_offset)
+{
+    const float4 zeros = {0, 0, 0, 0};
+
+    float __attribute__((bank_bits(9))) chunk_buf_0[2][512];
+    float __attribute__((bank_bits(9))) chunk_buf_1[2][512];
+    float __attribute__((bank_bits(9))) chunk_buf_2[2][512];
+    float __attribute__((bank_bits(9))) chunk_buf_3[2][512];
+
+    uint fop_pack = 0;
+    for (uint tile = 0; tile < n_tiles + 1; ++tile) {
+        for (uint step = 0; step < 512; ++step) {
+            if (tile >= 1 && step >= 105) {
+                uint chunk = step / 128;
+                uint pack = step % 128;
+
+                float4 store = zeros;
+                switch (chunk) {
+                    case 0:
+                        store.s0 = chunk_buf_0[1 - (tile & 1)][pack * 4 + 0];
+                        store.s1 = chunk_buf_0[1 - (tile & 1)][pack * 4 + 1];
+                        store.s2 = chunk_buf_0[1 - (tile & 1)][pack * 4 + 2];
+                        store.s3 = chunk_buf_0[1 - (tile & 1)][pack * 4 + 3];
+                        break;
+                    case 1:
+                        store.s0 = chunk_buf_1[1 - (tile & 1)][pack * 4 + 0];
+                        store.s1 = chunk_buf_1[1 - (tile & 1)][pack * 4 + 1];
+                        store.s2 = chunk_buf_1[1 - (tile & 1)][pack * 4 + 2];
+                        store.s3 = chunk_buf_1[1 - (tile & 1)][pack * 4 + 3];
+                        break;
+                    case 2:
+                        store.s0 = chunk_buf_2[1 - (tile & 1)][pack * 4 + 0];
+                        store.s1 = chunk_buf_2[1 - (tile & 1)][pack * 4 + 1];
+                        store.s2 = chunk_buf_2[1 - (tile & 1)][pack * 4 + 2];
+                        store.s3 = chunk_buf_2[1 - (tile & 1)][pack * 4 + 3];
+                        break;
+                    case 3:
+                        store.s0 = chunk_buf_3[1 - (tile & 1)][pack * 4 + 0];
+                        store.s1 = chunk_buf_3[1 - (tile & 1)][pack * 4 + 1];
+                        store.s2 = chunk_buf_3[1 - (tile & 1)][pack * 4 + 2];
+                        store.s3 = chunk_buf_3[1 - (tile & 1)][pack * 4 + 3];
+                        break;
+                    default:
+                        break;
+                }
+
+                // Quick hack: Just run idle at the end of the last tile, to discard the zero padding there.
+                //   This may actually be a good solution (tm), because complicating the control flow would likely
+                //   introduce fmax bottlnecks -- need to test this!
+                if (fop_pack < n_packs)
+                    fop[fop_offset + fop_pack] = store;
+                ++fop_pack;
+            }
+
+            if (tile < n_tiles) {
+                float2x4 read = read_channel_intel(ifft_out[1]);
+                float4 norm = power_norm(read);
+                chunk_buf_0[tile & 1][step] = norm.s0;
+                chunk_buf_1[tile & 1][step] = norm.s2;
+                chunk_buf_2[tile & 1][step] = norm.s1;
+                chunk_buf_3[tile & 1][step] = norm.s3;
+            }
+        }
+    }
+}
+
+__attribute__((max_global_work_dim(0)))
+__attribute__((uses_global_work_offset(0)))
 kernel void harmonic_summing(global volatile float * restrict fop,       // `volatile` to disable private caches
                              const int first_template,
                              const int last_template,
@@ -323,13 +430,13 @@ kernel void harmonic_summing(global volatile float * restrict fop,       // `vol
 
     // The actual layout and banking of the detection and bookkeeping buffers is chosen to allow `aoc` to implement
     // hms_unroll_x-many no-stall parallel accesses in the unrolled region below. The logical layout is as explained above.
-    uint __attribute__((numbanks(8))) location_buf[64][1][8];
-    float __attribute__((numbanks(8))) power_buf[64][1][8];
-    ulong valid[1][8];
-    uint next_slot[1][8];
+    uint __attribute__((numbanks(16))) location_buf[32][2][8];
+    float __attribute__((numbanks(16))) power_buf[32][2][8];
+    ulong valid[2][8];
+    uint next_slot[2][8];
 
     // Zero-initialise bookkeeping buffers
-    for (uint x = 0; x < 1; ++x) {
+    for (uint x = 0; x < 2; ++x) {
         for (uint h = 0; h < 8; ++h) {
             next_slot[x][h] = 0;
             valid[x][h] = 0l;
@@ -345,7 +452,7 @@ kernel void harmonic_summing(global volatile float * restrict fop,       // `vol
     // MAIN LOOP: Iterates over all (t,f) coordinates in the FOP, handling hms_unroll_x-many channels per iteration of the
     //            inner loop
     for (int tmpl = first_template; tmpl <= last_template; ++tmpl) {
-        #pragma unroll 1
+        #pragma unroll 2
         #pragma ii 1
         for (uint freq = 0; freq < n_frequency_bins; ++freq) {
             float hsum = 0.0f;
@@ -364,12 +471,12 @@ kernel void harmonic_summing(global volatile float * restrict fop,       // `vol
 
                 // If we have a candidate, store it in the detection buffers and perform bookkeeping
                 if (hsum > thrsh[h]) {
-                    uint x = freq % 1;
+                    uint x = freq % 2;
                     uint slot = next_slot[x][h];
                     location_buf[slot][x][h] = encode_location(k, tmpl, freq);
                     power_buf[slot][x][h] = hsum;
                     valid[x][h] |= 1l << slot;
-                    next_slot[x][h] = (slot == 63) ? 0 : slot + 1;
+                    next_slot[x][h] = (slot == 31) ? 0 : slot + 1;
                 }
             }
         }
@@ -377,14 +484,14 @@ kernel void harmonic_summing(global volatile float * restrict fop,       // `vol
 
     // Write detection buffers to global memory without messing up the banking of the buffers
     for (uint h = 0; h < 8; ++h) {
-        for (uint x = 0; x < 1; ++x) {
-            for (uint d = 0; d < 64; ++d) {
+        for (uint x = 0; x < 2; ++x) {
+            for (uint d = 0; d < 32; ++d) {
                 if (valid[x][h] & (1l << d)) {
-                    detection_location[h * 64 + x * 64 + d] = location_buf[d][x][h];
-                    detection_power[h * 64 + x * 64 + d] = power_buf[d][x][h];
+                    detection_location[h * 64 + x * 32 + d] = location_buf[d][x][h];
+                    detection_power[h * 64 + x * 32 + d] = power_buf[d][x][h];
                 } else {
-                    detection_location[h * 64 + x * 64 + d] = invalid_location;
-                    detection_power[h * 64 + x * 64 + d] = invalid_power;
+                    detection_location[h * 64 + x * 32 + d] = invalid_location;
+                    detection_power[h * 64 + x * 32 + d] = invalid_power;
                 }
             }
         }

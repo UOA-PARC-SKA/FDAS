@@ -23,3 +23,13 @@ python3 cl_codegen.py -c dse/fdas_${N_ENGINES}x2x8.cl  -g dse/gen_info_${N_ENGIN
 python3 cl_codegen.py -c dse/fdas_${N_ENGINES}x1x16.cl -g dse/gen_info_${N_ENGINES}x1x16.h --n-engines ${N_ENGINES} --group-sz 1  --bundle-sz 16
 
 done
+
+
+for N_ENGINES in $(seq 1 2) ; do
+for UNROLL_X in 1 2 4 8 ; do
+
+# baseline architectures
+python3 cl_codegen.py -c dse/fdas_${N_ENGINES}xBx${UNROLL_X}.cl -g dse/gen_info_${N_ENGINES}xBx${UNROLL_X}.h --n-engines ${N_ENGINES} --hms-baseline --unroll-x ${UNROLL_X}
+
+done
+done

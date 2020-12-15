@@ -34,7 +34,7 @@ kernel void harmonic_summing(global volatile float * restrict fop,       // `vol
     uint __attribute__((numbanks(${hms_unroll_x * hms_n_planes}))) location_buf[${hms_detection_sz // hms_unroll_x}][${hms_unroll_x}][${hms_n_planes}];
     float __attribute__((numbanks(${hms_unroll_x * hms_n_planes}))) power_buf[${hms_detection_sz // hms_unroll_x}][${hms_unroll_x}][${hms_n_planes}];
     ulong valid[${hms_unroll_x}][${hms_n_planes}];
-    ushort next_slot[${hms_unroll_x}][${hms_n_planes}];
+    uint next_slot[${hms_unroll_x}][${hms_n_planes}];
 
     // Zero-initialise bookkeeping buffers
     for (uint x = 0; x < ${hms_unroll_x}; ++x) {
@@ -54,6 +54,7 @@ kernel void harmonic_summing(global volatile float * restrict fop,       // `vol
     //            inner loop
     for (int tmpl = first_template; tmpl <= last_template; ++tmpl) {
         #pragma unroll ${hms_unroll_x}
+        #pragma ii 1
         for (uint freq = 0; freq < n_frequency_bins; ++freq) {
             float hsum = 0.0f;
 
@@ -72,7 +73,7 @@ kernel void harmonic_summing(global volatile float * restrict fop,       // `vol
                 // If we have a candidate, store it in the detection buffers and perform bookkeeping
                 if (hsum > thrsh[h]) {
                     uint x = freq % ${hms_unroll_x};
-                    ushort slot = next_slot[x][h];
+                    uint slot = next_slot[x][h];
                     location_buf[slot][x][h] = encode_location(k, tmpl, freq);
                     power_buf[slot][x][h] = hsum;
                     valid[x][h] |= 1l << slot;
