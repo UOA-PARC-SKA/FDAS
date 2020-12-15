@@ -2662,6 +2662,7 @@ kernel void detect_8(float threshold,
         }
     }
 }
+
 __attribute__((max_global_work_dim(0)))
 __attribute__((uses_global_work_offset(0)))
 kernel void store_cands(global uint * restrict detection_location,
