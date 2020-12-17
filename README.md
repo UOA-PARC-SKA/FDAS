@@ -39,7 +39,7 @@ The following `make` targets are available:
 
 The command-line flags passed to `aoc` can be configured in `fdas/CMakeLists.txt`
 
-### Running the host application/unit tests:
+### Running the host application/unit tests
 
     $ cd build/fdas
     $ ./fdas_gtest <TEST_DATA_DIR>
