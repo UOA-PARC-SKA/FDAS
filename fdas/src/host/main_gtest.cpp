@@ -323,7 +323,7 @@ void FDASTest::drive_serially(bool crossover) {
     log.close();
 }
 
-#ifdef POWER_MEASUREMENT
+#if POWER_MEASUREMENT
 TEST_P(FDASTest, flash) {
     FDAS pipeline(std::cerr);
     ASSERT_TRUE(pipeline.initialise_accelerator(bitstream_file,
@@ -339,7 +339,7 @@ TEST_P(FDASTest, FDAS_serial) {
     drive_serially(false);
 }
 
-#ifdef POWER_MEASUREMENT
+#if POWER_MEASUREMENT
 TEST_P(FDASTest, cool_down_1) {
     std::chrono::seconds cool_down_period(30);
     std::this_thread::sleep_for(cool_down_period);
@@ -351,7 +351,7 @@ TEST_P(FDASTest, FDAS_serial_x) {
     drive_serially(true);
 }
 
-#ifdef POWER_MEASUREMENT
+#if POWER_MEASUREMENT
 TEST_P(FDASTest, cool_down_2) {
     std::chrono::seconds cool_down_period(30);
     std::this_thread::sleep_for(cool_down_period);
@@ -407,7 +407,7 @@ TEST_P(FDASTest, FDAS_pipelined) {
     drive_pipelined(false);
 }
 
-#ifdef POWER_MEASUREMENT
+#if POWER_MEASUREMENT
 TEST_P(FDASTest, cool_down_3) {
     std::chrono::seconds cool_down_period(30);
     std::this_thread::sleep_for(cool_down_period);
@@ -419,7 +419,7 @@ TEST_P(FDASTest, FDAS_pipelined_x) {
     drive_pipelined(true);
 }
 
-#ifdef POWER_MEASUREMENT
+#if POWER_MEASUREMENT
 TEST_P(FDASTest, cool_down_4) {
     std::chrono::seconds cool_down_period(30);
     std::this_thread::sleep_for(cool_down_period);
