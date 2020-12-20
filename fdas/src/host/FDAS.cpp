@@ -272,6 +272,17 @@ bool FDAS::upload_templates(const cl_float2 *templates, BufferSet ab) {
     return true;
 }
 
+bool FDAS::upload_thresholds(const cl_float *thresholds, BufferSet ab) {
+    if (! HMS::baseline)
+        return true;
+
+    cl_chk(thresholds_buffer_queues[ab]->enqueueWriteBuffer(*thresholds_buffers[ab], true /* blocking */, 0, sizeof(cl_float) * HMS::n_planes, thresholds));
+
+    log << "[INFO] Uploaded thresholds" << endl;
+
+    return true;
+}
+
 bool FDAS::enqueue_input_tiling(const cl_float2 *input, BufferSet ab) {
     // Copy input to device
     xfer_input_events[ab].reset(new cl::Event);
@@ -394,12 +405,12 @@ bool FDAS::perform_ft_convolution(FOPPart which, BufferSet ab) {
 
 bool FDAS::enqueue_harmonic_summing(const cl_float *thresholds, FOPPart which, BufferSet ab) {
     if (HMS::baseline)
-        return enqueue_harmonic_summing_baseline(thresholds, which, ab);
+        return enqueue_harmonic_summing_baseline(which, ab);
     else
         return enqueue_harmonic_summing_systolic(thresholds, which, ab);
 }
 
-bool FDAS::enqueue_harmonic_summing_baseline(const cl_float *thresholds, FOPPart which, BufferSet ab) {
+bool FDAS::enqueue_harmonic_summing_baseline(FOPPart which, BufferSet ab) {
     cl_int first_template, last_template;
     switch (which) {
         case NegativeAccelerations:
@@ -416,12 +427,6 @@ bool FDAS::enqueue_harmonic_summing_baseline(const cl_float *thresholds, FOPPart
             break;
     }
 
-    std::vector<cl::Event> deps(1);
-
-    deps[0] = *last_square_and_discard_events[ab];
-    xfer_thrsh_events[ab].reset(new cl::Event);
-    cl_chk(thresholds_buffer_queues[ab]->enqueueWriteBuffer(*thresholds_buffers[ab], false, 0, sizeof(cl_float) * HMS::n_planes, thresholds, &deps, &*xfer_thrsh_events[ab]));
-
     cl_chk(harmonic_summing_kernel->setArg<cl::Buffer>(0, *fop_buffers[ab]));
     cl_chk(harmonic_summing_kernel->setArg<cl_int>(1, first_template));
     cl_chk(harmonic_summing_kernel->setArg<cl_int>(2, last_template));
@@ -430,7 +435,7 @@ bool FDAS::enqueue_harmonic_summing_baseline(const cl_float *thresholds, FOPPart
     cl_chk(harmonic_summing_kernel->setArg<cl::Buffer>(5, *detection_location_buffers[ab]));
     cl_chk(harmonic_summing_kernel->setArg<cl::Buffer>(6, *detection_power_buffers[ab]));
 
-    deps[0] = *xfer_thrsh_events[ab];
+    std::vector<cl::Event> deps = {*last_square_and_discard_events[ab]};
     harmonic_summing_events[ab].reset(new cl::Event);
     cl_chk(harmonic_summing_queue->enqueueTask(*harmonic_summing_kernel, &deps, &*harmonic_summing_events[ab]));
 
@@ -525,7 +530,7 @@ bool FDAS::perform_harmonic_summing(const cl_float *thresholds, FOPPart which, B
 
     if (HMS::baseline) {
         cl_chk(harmonic_summing_events[ab]->wait());
-        print_duration("Harmonic summing (1/2 FOP)", *xfer_thrsh_events[ab], *harmonic_summing_events[ab]);
+        print_duration("Harmonic summing (1/2 FOP)", *harmonic_summing_events[ab], *harmonic_summing_events[ab]);
     } else {
         cl_chk(store_cands_events[ab]->wait());
         print_duration("Harmonic summing (1/2 FOP)", *first_preload_events[ab], *store_cands_events[ab]);
@@ -637,7 +642,7 @@ void FDAS::print_stats(BufferSet ab, bool reset) {
     print_duration("  Preparation", *load_input_events[ab], *store_tiles_events[ab]);
     print_duration("  FT convolution and IFFT (1/2 FOP)", *mux_and_mult_events[ab], *last_square_and_discard_events[ab]);
     if (HMS::baseline)
-        print_duration("  Harmonic summing (1/2 FOP)", *xfer_thrsh_events[ab], *harmonic_summing_events[ab]);
+        print_duration("  Harmonic summing (1/2 FOP)", *harmonic_summing_events[ab], *harmonic_summing_events[ab]);
     else
         print_duration("  Harmonic summing (1/2 FOP)", *first_preload_events[ab], *store_cands_events[ab]);
     print_duration("  Total", *xfer_input_events[ab], *xfer_cands_events[ab]);
@@ -655,7 +660,7 @@ void FDAS::print_events(BufferSet ab) {
         << mux_and_mult_events[ab]->getProfilingInfo<CL_PROFILING_COMMAND_START>() << ','
         << last_square_and_discard_events[ab]->getProfilingInfo<CL_PROFILING_COMMAND_END>() << ',';
     if (HMS::baseline) {
-        log << xfer_thrsh_events[ab]->getProfilingInfo<CL_PROFILING_COMMAND_START>() << ','
+        log << harmonic_summing_events[ab]->getProfilingInfo<CL_PROFILING_COMMAND_START>() << ','
             << harmonic_summing_events[ab]->getProfilingInfo<CL_PROFILING_COMMAND_END>() << ',';
     } else {
         log << first_preload_events[ab]->getProfilingInfo<CL_PROFILING_COMMAND_START>() << ','

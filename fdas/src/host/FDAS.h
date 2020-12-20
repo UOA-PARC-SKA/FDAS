@@ -48,6 +48,8 @@ public:
 
     bool upload_templates(const cl_float2 *templates, BufferSet ab);
 
+    bool upload_thresholds(const cl_float *thresholds, BufferSet ab);
+
     bool perform_input_tiling(const cl_float2 *input, BufferSet ab);
 
     bool perform_ft_convolution(FOPPart which, BufferSet ab);
@@ -93,7 +95,7 @@ private:
 
     bool enqueue_harmonic_summing(const cl_float *thresholds, FOPPart which, BufferSet ab);
 
-    bool enqueue_harmonic_summing_baseline(const cl_float *thresholds, FOPPart which, BufferSet ab);
+    bool enqueue_harmonic_summing_baseline(FOPPart which, BufferSet ab);
 
     bool enqueue_harmonic_summing_systolic(const cl_float *thresholds, FOPPart which, BufferSet ab);
 
@@ -166,7 +168,6 @@ private:
     std::array<std::unique_ptr<cl::Event>, 2> store_tiles_events;
     std::array<std::unique_ptr<cl::Event>, 2> mux_and_mult_events;
     std::array<std::unique_ptr<cl::Event>, 2> last_square_and_discard_events;
-    std::array<std::unique_ptr<cl::Event>, 2> xfer_thrsh_events;
     std::array<std::unique_ptr<cl::Event>, 2> harmonic_summing_events;
     std::array<std::unique_ptr<cl::Event>, 2> first_preload_events;
     std::array<std::unique_ptr<cl::Event>, 2> store_cands_events;

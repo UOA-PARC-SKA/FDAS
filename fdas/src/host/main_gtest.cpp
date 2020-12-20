@@ -113,6 +113,7 @@ protected:
 
     ThreshType thresholds;
     ShapeType thresholds_shape;
+    AlignedBuffer<cl_float, 64> thresholds_host;
 
     FOPType fop, fop_ref;
     ShapeType fop_ref_shape;
@@ -151,6 +152,7 @@ protected:
         input_host.allocate(pipeline.get_input_sz());
         tiles_host.allocate(pipeline.get_tiles_sz());
         templates_host.allocate(pipeline.get_templates_sz());
+        thresholds_host.allocate(pipeline.get_thresholds_sz());
         fop_host.allocate(pipeline.get_fop_sz());
         detection_location_host[FDAS::A].allocate(pipeline.get_candidate_list_sz());
         detection_location_host[FDAS::B].allocate(pipeline.get_candidate_list_sz());
@@ -255,6 +257,11 @@ TEST_P(FDASTest, Harmonic_Summing) {
 
     std::copy(fop_ref.begin(), fop_ref.end(), fop_host());
     ASSERT_TRUE(pipeline.inject_FOP(fop_host(), FDAS::A));
+    if (HMS::baseline) {
+        std::copy(thresholds.begin(), thresholds.end(), thresholds_host());
+        ASSERT_TRUE(pipeline.upload_thresholds(thresholds_host(), FDAS::A));
+    }
+
     ASSERT_TRUE(pipeline.perform_harmonic_summing(thresholds.data(), FDAS::NegativeAccelerations, FDAS::A));
 
     ASSERT_TRUE(pipeline.retrieve_candidates(detection_location_host[FDAS::A](), detection_power_host[FDAS::A](), FDAS::A));
@@ -275,6 +282,11 @@ TEST_P(FDASTest, FDAS_steps) {
 
     std::transform(templates.begin(), templates.end(), templates_host(), complex_to_float2);
     ASSERT_TRUE(pipeline.upload_templates(templates_host(), FDAS::B));
+    if (HMS::baseline) {
+        std::copy(thresholds.begin(), thresholds.end(), thresholds_host());
+        ASSERT_TRUE(pipeline.upload_thresholds(thresholds_host(), FDAS::B));
+    }
+
     std::transform(input.begin(), input.end(), input_host(), complex_to_float2);
     ASSERT_TRUE(pipeline.perform_input_tiling(input_host(), FDAS::B));
     ASSERT_TRUE(pipeline.perform_ft_convolution(FDAS::PositiveAccelerations, FDAS::B));
@@ -301,6 +313,10 @@ void FDASTest::drive_serially(bool crossover) {
 
     std::transform(templates.begin(), templates.end(), templates_host(), complex_to_float2);
     ASSERT_TRUE(pipeline.upload_templates(templates_host(), FDAS::A));
+    if (HMS::baseline) {
+        std::copy(thresholds.begin(), thresholds.end(), thresholds_host());
+        ASSERT_TRUE(pipeline.upload_thresholds(thresholds_host(), FDAS::A));
+    }
 
     std::transform(input.begin(), input.end(), input_host(), complex_to_float2);
 
@@ -371,6 +387,11 @@ void FDASTest::drive_pipelined(bool crossover) {
     std::transform(templates.begin(), templates.end(), templates_host(), complex_to_float2);
     ASSERT_TRUE(pipeline.upload_templates(templates_host(), FDAS::A));
     ASSERT_TRUE(pipeline.upload_templates(templates_host(), FDAS::B));
+    if (HMS::baseline) {
+        std::copy(thresholds.begin(), thresholds.end(), thresholds_host());
+        ASSERT_TRUE(pipeline.upload_thresholds(thresholds_host(), FDAS::A));
+        ASSERT_TRUE(pipeline.upload_thresholds(thresholds_host(), FDAS::B));
+    }
 
     std::transform(input.begin(), input.end(), input_host(), complex_to_float2);
 
