@@ -237,17 +237,13 @@ bool FDAS::initialise_accelerator(std::string bitstream_file_name,
     if (HMS::baseline) {
         cl_chkref(harmonic_summing_queue.reset(new cl::CommandQueue(*context, default_device, CL_QUEUE_PROFILING_ENABLE, &status)));
     } else {
-        for (auto &qq : preload_queues)
-            for (auto &q : qq)
-                cl_chkref(q.reset(new cl::CommandQueue(*context, default_device, CL_QUEUE_PROFILING_ENABLE, &status)));
-        for (auto &qq : delay_queues)
-            for (auto &q : qq)
-                cl_chkref(q.reset(new cl::CommandQueue(*context, default_device, CL_QUEUE_PROFILING_ENABLE, &status)));
-        for (auto &qq : detect_queues)
-            for (auto &q : qq)
-                cl_chkref(q.reset(new cl::CommandQueue(*context, default_device, CL_QUEUE_PROFILING_ENABLE, &status)));
-        for (auto &q : store_cands_queue)
+        for (auto &q : preload_queues)
             cl_chkref(q.reset(new cl::CommandQueue(*context, default_device, CL_QUEUE_PROFILING_ENABLE, &status)));
+        for (auto &q : delay_queues)
+            cl_chkref(q.reset(new cl::CommandQueue(*context, default_device, CL_QUEUE_PROFILING_ENABLE, &status)));
+        for (auto &q : detect_queues)
+            cl_chkref(q.reset(new cl::CommandQueue(*context, default_device, CL_QUEUE_PROFILING_ENABLE, &status)));
+        cl_chkref(store_cands_queue.reset(new cl::CommandQueue(*context, default_device, CL_QUEUE_PROFILING_ENABLE, &status)));
     }
 
     for (auto &q : input_buffer_queues)
@@ -460,15 +456,13 @@ bool FDAS::enqueue_harmonic_summing_systolic(const cl_float *thresholds, FOPPart
     const bool negative_tmpls = which == NegativeAccelerations;
 
     std::vector<cl::Event> deps = {*last_square_and_discard_events[ab]};
-    if (store_cands_events[1-ab])
-        deps.push_back(*store_cands_events[1-ab]);
 
     // Orchestrate systolic array
     cl_chk(store_cands_kernel->setArg<cl::Buffer>(0, *detection_location_buffers[ab]));
     cl_chk(store_cands_kernel->setArg<cl::Buffer>(1, *detection_power_buffers[ab]));
 
     store_cands_events[ab].reset(new cl::Event);
-    cl_chk(store_cands_queue[ab]->enqueueTask(*store_cands_kernel, &deps, &*store_cands_events[ab]));
+    cl_chk(store_cands_queue->enqueueTask(*store_cands_kernel, &deps, &*store_cands_events[ab]));
 
     for (cl_uint h = 0; h < n_planes; ++h) {
         cl_uint k = h + 1;
@@ -480,7 +474,7 @@ bool FDAS::enqueue_harmonic_summing_systolic(const cl_float *thresholds, FOPPart
         cl_chk(detect_k.setArg<cl_uint>(3, n_groups));
         cl_chk(detect_k.setArg<cl_uint>(4, n_bundles));
 
-        cl_chk(detect_queues[ab][h]->enqueueTask(detect_k, &deps));
+        cl_chk(detect_queues[h]->enqueueTask(detect_k, &deps));
     }
 
     for (cl_uint g = 0; g < n_groups; ++g) {
@@ -515,14 +509,14 @@ bool FDAS::enqueue_harmonic_summing_systolic(const cl_float *thresholds, FOPPart
             if (g == 0) {
                 if (k == 1) {
                     first_preload_events[ab].reset(new cl::Event);
-                    cl_chk(preload_queues[ab][h]->enqueueTask(preload_k, &deps, &*first_preload_events[ab]));
+                    cl_chk(preload_queues[h]->enqueueTask(preload_k, &deps, &*first_preload_events[ab]));
                 } else {
-                    cl_chk(preload_queues[ab][h]->enqueueTask(preload_k, &deps));
+                    cl_chk(preload_queues[h]->enqueueTask(preload_k, &deps));
                 }
-                cl_chk(delay_queues[ab][h]->enqueueTask(delay_k, &deps));
+                cl_chk(delay_queues[h]->enqueueTask(delay_k, &deps));
             } else {
-                cl_chk(preload_queues[ab][h]->enqueueTask(preload_k));
-                cl_chk(delay_queues[ab][h]->enqueueTask(delay_k));
+                cl_chk(preload_queues[h]->enqueueTask(preload_k));
+                cl_chk(delay_queues[h]->enqueueTask(delay_k));
             }
         }
     }
