@@ -380,7 +380,7 @@ void FDASTest::drive_pipelined(bool crossover) {
     FDAS pipeline(log);
     ASSERT_TRUE(pipeline.initialise_accelerator(bitstream_file,
                                                 FDAS::choose_first_platform, FDAS::choose_accelerator_devices,
-                                                input.size(), crossover));
+                                                input.size(), crossover, true));
     validateInputDimensions(pipeline);
     allocateAlignedBuffers(pipeline);
 
@@ -405,6 +405,8 @@ void FDASTest::drive_pipelined(bool crossover) {
 
         if (i < n_runs)
             ASSERT_TRUE(pipeline.launch(input_host(), thresholds.data(), detection_location_host[ab](), detection_power_host[ab](), which[ab], ab));
+        else
+            ASSERT_TRUE(pipeline.end_pipeline(ab));
 
         if (i > 0) {
             ASSERT_TRUE(pipeline.wait(prev_ab));

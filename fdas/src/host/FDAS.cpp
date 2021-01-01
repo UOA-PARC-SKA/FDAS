@@ -54,7 +54,7 @@ using std::fixed;
 bool FDAS::initialise_accelerator(std::string bitstream_file_name,
                                   const std::function<bool(const std::string &, const std::string &)> &platform_selector,
                                   const std::function<bool(cl_uint, cl_uint, const std::string &)> &device_selector,
-                                  cl_uint input_sz, bool crossover_banks) {
+                                  cl_uint input_sz, bool crossover_banks, bool sync_pipeline) {
     cl_int status;
 
     // emit timestamp to be able to sync between wall-clock time and the "steady" time later
@@ -261,6 +261,8 @@ bool FDAS::initialise_accelerator(std::string bitstream_file_name,
     for (auto &q : detection_buffer_queues)
         cl_chkref(q.reset(new cl::CommandQueue(*context, default_device, CL_QUEUE_PROFILING_ENABLE, &status)));
 
+    this->sync_pipeline = sync_pipeline;
+
     return true;
 }
 
@@ -457,6 +459,11 @@ bool FDAS::enqueue_harmonic_summing_systolic(const cl_float *thresholds, FOPPart
 
     std::vector<cl::Event> deps = {*last_square_and_discard_events[ab]};
 
+    if (sync_pipeline) {
+        sync_events[ab].reset(new cl::UserEvent(*context));
+        deps.push_back(*sync_events[ab]);
+    }
+
     // Orchestrate systolic array
     cl_chk(store_cands_kernel->setArg<cl::Buffer>(0, *detection_location_buffers[ab]));
     cl_chk(store_cands_kernel->setArg<cl::Buffer>(1, *detection_power_buffers[ab]));
@@ -540,6 +547,9 @@ bool FDAS::perform_harmonic_summing(const cl_float *thresholds, FOPPart which, B
 }
 
 bool FDAS::launch(const cl_float2 *input, const cl_float *thresholds, cl_uint *detection_location, cl_float *detection_power, FDAS::FOPPart which, FDAS::BufferSet ab) {
+    if (sync_pipeline && sync_events[1-ab])
+        sync_events[1-ab]->setStatus(CL_COMPLETE);
+
     std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
     if (enqueue_input_tiling(input, ab)) {
         std::chrono::steady_clock::time_point s1 = std::chrono::steady_clock::now();
@@ -575,6 +585,12 @@ bool FDAS::launch(const cl_float2 *input, const cl_float *thresholds, cl_uint *d
 
 bool FDAS::wait(BufferSet ab) {
     cl_chk(xfer_cands_events[ab]->wait());
+    return true;
+}
+
+bool FDAS::end_pipeline(BufferSet ab) {
+    if (sync_events[1 - ab])
+        cl_chk(sync_events[1 - ab]->setStatus(CL_COMPLETE));
     return true;
 }
 

@@ -44,7 +44,7 @@ public:
     bool initialise_accelerator(std::string bitstream_file_name,
                                 const std::function<bool(const std::string &, const std::string &)> &platform_selector,
                                 const std::function<bool(cl_uint, cl_uint, const std::string &)> &device_selector,
-                                cl_uint input_sz, bool crossover_banks = false);
+                                cl_uint input_sz, bool crossover_banks = false, bool sync_pipeline = false);
 
     bool upload_templates(const cl_float2 *templates, BufferSet ab);
 
@@ -59,6 +59,8 @@ public:
     bool launch(const cl_float2 *input, const cl_float *thresholds, cl_uint *detection_location, cl_float *detection_power, FOPPart which, BufferSet ab);
 
     bool wait(BufferSet ab);
+
+    bool end_pipeline(BufferSet ab);
 
     bool retrieve_tiles(cl_float2 *tiles, BufferSet ab);
 
@@ -172,6 +174,10 @@ private:
     std::array<std::unique_ptr<cl::Event>, 2> first_preload_events;
     std::array<std::unique_ptr<cl::Event>, 2> store_cands_events;
     std::array<std::unique_ptr<cl::Event>, 2> xfer_cands_events;
+
+    // Synchronisation of pipeline stages
+    bool sync_pipeline;
+    std::array<std::unique_ptr<cl::UserEvent>, 2> sync_events;
 
     std::ostream &log;
 
