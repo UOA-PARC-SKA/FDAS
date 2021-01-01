@@ -286,16 +286,21 @@ bool FDAS::upload_thresholds(const cl_float *thresholds, BufferSet ab) {
 }
 
 bool FDAS::enqueue_input_tiling(const cl_float2 *input, BufferSet ab) {
+    std::vector<cl::Event> deps;
+
     // Copy input to device
     xfer_input_events[ab].reset(new cl::Event);
-    cl_chk(input_buffer_queues[ab]->enqueueWriteBuffer(*input_buffers[ab], false, 0, sizeof(cl_float2) * n_frequency_bins, input, nullptr, &*xfer_input_events[ab]));
+    if (sync_pipeline && last_square_and_discard_events[1 - ab])
+        deps.push_back(*last_square_and_discard_events[1 - ab]);
+    cl_chk(input_buffer_queues[ab]->enqueueWriteBuffer(*input_buffers[ab], false, 0, sizeof(cl_float2) * n_frequency_bins, input, &deps, &*xfer_input_events[ab]));
 
     // Launch pipeline
     cl_chk(load_input_kernel->setArg<cl::Buffer>(0, *input_buffers[ab]));
     cl_chk(load_input_kernel->setArg<cl_uint>(1, n_frequency_bins / FTC::pack_sz));
     cl_chk(load_input_kernel->setArg<cl_uint>(2, padding_last_tile / FTC::pack_sz)); // TODO: should assert that padding amount is divisible by pack_sz
 
-    std::vector<cl::Event> deps = {*xfer_input_events[ab]};
+    deps.clear();
+    deps.push_back(*xfer_input_events[ab]);
     load_input_events[ab].reset(new cl::Event);
     cl_chk(load_input_queue->enqueueTask(*load_input_kernel, &deps, &*load_input_events[ab]));
 
