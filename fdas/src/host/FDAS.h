@@ -149,10 +149,10 @@ private:
     std::array<std::unique_ptr<cl::CommandQueue>, FFT::n_engines> square_and_discard_queues;
 
     std::unique_ptr<cl::CommandQueue> harmonic_summing_queue;
-    std::array<std::unique_ptr<cl::CommandQueue>, HMS::n_planes> preload_queues;
-    std::array<std::unique_ptr<cl::CommandQueue>, HMS::n_planes> delay_queues;
-    std::array<std::unique_ptr<cl::CommandQueue>, HMS::n_planes> detect_queues;
-    std::unique_ptr<cl::CommandQueue> store_cands_queue;
+    std::array<std::array<std::unique_ptr<cl::CommandQueue>, HMS::n_planes>, 2> preload_queues;
+    std::array<std::array<std::unique_ptr<cl::CommandQueue>, HMS::n_planes>, 2> delay_queues;
+    std::array<std::array<std::unique_ptr<cl::CommandQueue>, HMS::n_planes>, 2> detect_queues;
+    std::array<std::unique_ptr<cl::CommandQueue>, 2> store_cands_queue;
 
     // Queues for buffer operations
     std::array<std::unique_ptr<cl::CommandQueue>, 2> input_buffer_queues;
