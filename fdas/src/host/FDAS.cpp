@@ -215,7 +215,7 @@ bool FDAS::initialise_accelerator(std::string bitstream_file_name,
         if (HMS::baseline)
             cl_chkref(thresholds_buffers[ab].reset(new cl::Buffer(*context, CL_MEM_READ_ONLY | bank_stage2[ab], sizeof(cl_float) * HMS::n_planes, nullptr, &status)));
         cl_chkref(detection_location_buffers[ab].reset(new cl::Buffer(*context, CL_MEM_WRITE_ONLY | bank_stage2[ab], sizeof(cl_uint) * Output::n_candidates, nullptr, &status)));
-        cl_chkref(detection_power_buffers[0].reset(new cl::Buffer(*context, CL_MEM_WRITE_ONLY | bank_stage2[ab], sizeof(cl_float) * Output::n_candidates, nullptr, &status)));
+        cl_chkref(detection_power_buffers[ab].reset(new cl::Buffer(*context, CL_MEM_WRITE_ONLY | bank_stage2[ab], sizeof(cl_float) * Output::n_candidates, nullptr, &status)));
     }
 
     // Queues
