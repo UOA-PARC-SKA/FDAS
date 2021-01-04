@@ -74,7 +74,7 @@ protected:
 
     std::string det_pwr_file(bool ref = false) { return GetParam() + "/det_pwr" + (ref ? "_ref" : "") + ".npy"; }
 
-    std::string log_file(bool pipelined, bool crossover) {
+    std::string log_file(bool pipelined, FDAS::BufferMode mode) {
         std::stringstream stream;
         stream << "fdas";
         if (HMS::baseline)
@@ -85,8 +85,18 @@ protected:
             stream << "_pipelined";
         else
             stream << "_serial";
-        if (crossover)
-            stream << "_x";
+        switch (mode) {
+            case FDAS::PerSet:
+                stream << "_set";
+                break;
+            case FDAS::PerStage:
+                stream << "_stage";
+                break;
+            case FDAS::Crossed:
+                stream << "_crossed";
+                break;
+        }
+
         stream << ".log";
         return stream.str();
     }
@@ -217,8 +227,8 @@ protected:
         ASSERT_EQ(n_non_cands, 0);
     }
 
-    void drive_serially(bool crossover);
-    void drive_pipelined(bool crossover);
+    void drive_serially(FDAS::BufferMode mode);
+    void drive_pipelined(FDAS::BufferMode mode);
 };
 
 #if TEST_SINGLE
@@ -302,12 +312,12 @@ TEST_P(FDASTest, FDAS_steps) {
 #endif // TEST_SINGLE
 
 #if TEST_CONTINUOUS
-void FDASTest::drive_serially(bool crossover) {
-    std::ofstream log(log_file(false, crossover));
+void FDASTest::drive_serially(FDAS::BufferMode mode) {
+    std::ofstream log(log_file(false, mode));
     FDAS pipeline(log);
     ASSERT_TRUE(pipeline.initialise_accelerator(bitstream_file,
                                                 FDAS::choose_first_platform, FDAS::choose_accelerator_devices,
-                                                input.size(), crossover));
+                                                input.size(), mode));
     validateInputDimensions(pipeline);
     allocateAlignedBuffers(pipeline);
 
@@ -344,15 +354,15 @@ TEST_P(FDASTest, flash) {
     FDAS pipeline(std::cerr);
     ASSERT_TRUE(pipeline.initialise_accelerator(bitstream_file,
                                                 FDAS::choose_first_platform, FDAS::choose_accelerator_devices,
-                                                input.size(), false));
+                                                input.size()));
     std::chrono::seconds cool_down_period(30);
     std::this_thread::sleep_for(cool_down_period);
     ASSERT_TRUE(true);
 }
 #endif
 
-TEST_P(FDASTest, FDAS_serial) {
-    drive_serially(false);
+TEST_P(FDASTest, FDAS_serial_set) {
+    drive_serially(FDAS::PerSet);
 }
 
 #if POWER_MEASUREMENT
@@ -363,8 +373,8 @@ TEST_P(FDASTest, cool_down_1) {
 }
 #endif
 
-TEST_P(FDASTest, FDAS_serial_x) {
-    drive_serially(true);
+TEST_P(FDASTest, FDAS_serial_stage) {
+    drive_serially(FDAS::PerStage);
 }
 
 #if POWER_MEASUREMENT
@@ -375,12 +385,12 @@ TEST_P(FDASTest, cool_down_2) {
 }
 #endif
 
-void FDASTest::drive_pipelined(bool crossover) {
-    std::ofstream log(log_file(true, crossover));
+void FDASTest::drive_pipelined(FDAS::BufferMode mode) {
+    std::ofstream log(log_file(true, mode));
     FDAS pipeline(log);
     ASSERT_TRUE(pipeline.initialise_accelerator(bitstream_file,
                                                 FDAS::choose_first_platform, FDAS::choose_accelerator_devices,
-                                                input.size(), crossover, true));
+                                                input.size(), mode, true));
     validateInputDimensions(pipeline);
     allocateAlignedBuffers(pipeline);
 
@@ -426,8 +436,8 @@ void FDASTest::drive_pipelined(bool crossover) {
     log.close();
 }
 
-TEST_P(FDASTest, FDAS_pipelined) {
-    drive_pipelined(false);
+TEST_P(FDASTest, FDAS_pipelined_set) {
+    drive_pipelined(FDAS::PerSet);
 }
 
 #if POWER_MEASUREMENT
@@ -438,12 +448,24 @@ TEST_P(FDASTest, cool_down_3) {
 }
 #endif
 
-TEST_P(FDASTest, FDAS_pipelined_x) {
-    drive_pipelined(true);
+TEST_P(FDASTest, FDAS_pipelined_stage) {
+    drive_pipelined(FDAS::PerStage);
 }
 
 #if POWER_MEASUREMENT
 TEST_P(FDASTest, cool_down_4) {
+    std::chrono::seconds cool_down_period(30);
+    std::this_thread::sleep_for(cool_down_period);
+    ASSERT_TRUE(true);
+}
+#endif
+
+TEST_P(FDASTest, FDAS_pipelined_crossed) {
+    drive_pipelined(FDAS::Crossed);
+}
+
+#if POWER_MEASUREMENT
+TEST_P(FDASTest, cool_down_5) {
     std::chrono::seconds cool_down_period(30);
     std::this_thread::sleep_for(cool_down_period);
     ASSERT_TRUE(true);

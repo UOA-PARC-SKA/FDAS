@@ -37,6 +37,7 @@ class FDAS {
 public:
     enum FOPPart {NegativeAccelerations, PositiveAccelerations, AllAccelerations};
     enum BufferSet {A=0, B=1};
+    enum BufferMode {PerSet, PerStage, Crossed};
 
 public:
     FDAS(std::ostream &log) : log(log) {}
@@ -44,7 +45,7 @@ public:
     bool initialise_accelerator(std::string bitstream_file_name,
                                 const std::function<bool(const std::string &, const std::string &)> &platform_selector,
                                 const std::function<bool(cl_uint, cl_uint, const std::string &)> &device_selector,
-                                cl_uint input_sz, bool crossover_banks = false, bool sync_pipeline = false);
+                                cl_uint input_sz, BufferMode mode = PerSet, bool sync_pipeline = false);
 
     bool upload_templates(const cl_float2 *templates, BufferSet ab);
 

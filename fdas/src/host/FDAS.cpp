@@ -54,7 +54,7 @@ using std::fixed;
 bool FDAS::initialise_accelerator(std::string bitstream_file_name,
                                   const std::function<bool(const std::string &, const std::string &)> &platform_selector,
                                   const std::function<bool(cl_uint, cl_uint, const std::string &)> &device_selector,
-                                  cl_uint input_sz, bool crossover_banks, bool sync_pipeline) {
+                                  cl_uint input_sz, BufferMode mode, bool sync_pipeline) {
     cl_int status;
 
     // emit timestamp to be able to sync between wall-clock time and the "steady" time later
@@ -185,43 +185,37 @@ bool FDAS::initialise_accelerator(std::string bitstream_file_name,
     templates_sz = Input::n_templates * FTC::tile_sz;
     fop_sz = Input::n_templates * n_frequency_bins;
 
-    cl_chkref(input_buffers[0].reset(new cl::Buffer(*context, CL_MEM_READ_ONLY | CL_CHANNEL_1_INTELFPGA, sizeof(cl_float2) * n_frequency_bins, nullptr, &status)));
-    cl_chkref(input_buffers[1].reset(new cl::Buffer(*context, CL_MEM_READ_ONLY | CL_CHANNEL_2_INTELFPGA, sizeof(cl_float2) * n_frequency_bins, nullptr, &status)));
+    cl_uint bank_stage1[2], bank_stage2[2];
+    switch (mode) {
+        case PerSet:
+            bank_stage1[A] = CL_CHANNEL_1_INTELFPGA;
+            bank_stage2[A] = CL_CHANNEL_1_INTELFPGA;
+            bank_stage1[B] = CL_CHANNEL_2_INTELFPGA;
+            bank_stage2[B] = CL_CHANNEL_2_INTELFPGA;
+            break;
+        case PerStage:
+            bank_stage1[A] = CL_CHANNEL_1_INTELFPGA;
+            bank_stage2[A] = CL_CHANNEL_2_INTELFPGA;
+            bank_stage1[B] = CL_CHANNEL_1_INTELFPGA;
+            bank_stage2[B] = CL_CHANNEL_2_INTELFPGA;
+            break;
+        case Crossed:
+            bank_stage1[A] = CL_CHANNEL_1_INTELFPGA;
+            bank_stage2[A] = CL_CHANNEL_2_INTELFPGA;
+            bank_stage1[B] = CL_CHANNEL_2_INTELFPGA;
+            bank_stage2[B] = CL_CHANNEL_1_INTELFPGA;
+            break;
+    }
 
-    cl_chkref(tiles_buffers[0].reset(new cl::Buffer(*context, CL_MEM_READ_WRITE | CL_CHANNEL_1_INTELFPGA, sizeof(cl_float2) * tiles_sz, nullptr, &status)));
-    cl_chkref(tiles_buffers[1].reset(new cl::Buffer(*context, CL_MEM_READ_WRITE | CL_CHANNEL_2_INTELFPGA, sizeof(cl_float2) * tiles_sz, nullptr, &status)));
-
-    cl_chkref(templates_buffers[0].reset(new cl::Buffer(*context, CL_MEM_READ_ONLY | CL_CHANNEL_1_INTELFPGA, sizeof(cl_float2) * templates_sz, nullptr, &status)));
-    cl_chkref(templates_buffers[1].reset(new cl::Buffer(*context, CL_MEM_READ_ONLY | CL_CHANNEL_2_INTELFPGA, sizeof(cl_float2) * templates_sz, nullptr, &status)));
-
-    if (crossover_banks) {
-        cl_chkref(fop_buffers[0].reset(new cl::Buffer(*context, CL_MEM_READ_WRITE | CL_CHANNEL_2_INTELFPGA, sizeof(cl_float) * fop_sz, nullptr, &status)));
-        cl_chkref(fop_buffers[1].reset(new cl::Buffer(*context, CL_MEM_READ_WRITE | CL_CHANNEL_1_INTELFPGA, sizeof(cl_float) * fop_sz, nullptr, &status)));
-
-        if (HMS::baseline) {
-            cl_chkref(thresholds_buffers[0].reset(new cl::Buffer(*context, CL_MEM_READ_ONLY | CL_CHANNEL_2_INTELFPGA, sizeof(cl_float) * HMS::n_planes, nullptr, &status)));
-            cl_chkref(thresholds_buffers[1].reset(new cl::Buffer(*context, CL_MEM_READ_ONLY | CL_CHANNEL_1_INTELFPGA, sizeof(cl_float) * HMS::n_planes, nullptr, &status)));
-        }
-
-        cl_chkref(detection_location_buffers[0].reset(new cl::Buffer(*context, CL_MEM_WRITE_ONLY | CL_CHANNEL_2_INTELFPGA, sizeof(cl_uint) * Output::n_candidates, nullptr, &status)));
-        cl_chkref(detection_location_buffers[1].reset(new cl::Buffer(*context, CL_MEM_WRITE_ONLY | CL_CHANNEL_1_INTELFPGA, sizeof(cl_uint) * Output::n_candidates, nullptr, &status)));
-
-        cl_chkref(detection_power_buffers[0].reset(new cl::Buffer(*context, CL_MEM_WRITE_ONLY | CL_CHANNEL_2_INTELFPGA, sizeof(cl_float) * Output::n_candidates, nullptr, &status)));
-        cl_chkref(detection_power_buffers[1].reset(new cl::Buffer(*context, CL_MEM_WRITE_ONLY | CL_CHANNEL_1_INTELFPGA, sizeof(cl_float) * Output::n_candidates, nullptr, &status)));
-    } else {
-        cl_chkref(fop_buffers[0].reset(new cl::Buffer(*context, CL_MEM_READ_WRITE | CL_CHANNEL_1_INTELFPGA, sizeof(cl_float) * fop_sz, nullptr, &status)));
-        cl_chkref(fop_buffers[1].reset(new cl::Buffer(*context, CL_MEM_READ_WRITE | CL_CHANNEL_2_INTELFPGA, sizeof(cl_float) * fop_sz, nullptr, &status)));
-
-        if (HMS::baseline) {
-            cl_chkref(thresholds_buffers[0].reset(new cl::Buffer(*context, CL_MEM_READ_ONLY | CL_CHANNEL_1_INTELFPGA, sizeof(cl_float) * HMS::n_planes, nullptr, &status)));
-            cl_chkref(thresholds_buffers[1].reset(new cl::Buffer(*context, CL_MEM_READ_ONLY | CL_CHANNEL_2_INTELFPGA, sizeof(cl_float) * HMS::n_planes, nullptr, &status)));
-        }
-
-        cl_chkref(detection_location_buffers[0].reset(new cl::Buffer(*context, CL_MEM_WRITE_ONLY | CL_CHANNEL_1_INTELFPGA, sizeof(cl_uint) * Output::n_candidates, nullptr, &status)));
-        cl_chkref(detection_location_buffers[1].reset(new cl::Buffer(*context, CL_MEM_WRITE_ONLY | CL_CHANNEL_2_INTELFPGA, sizeof(cl_uint) * Output::n_candidates, nullptr, &status)));
-
-        cl_chkref(detection_power_buffers[0].reset(new cl::Buffer(*context, CL_MEM_WRITE_ONLY | CL_CHANNEL_1_INTELFPGA, sizeof(cl_float) * Output::n_candidates, nullptr, &status)));
-        cl_chkref(detection_power_buffers[1].reset(new cl::Buffer(*context, CL_MEM_WRITE_ONLY | CL_CHANNEL_2_INTELFPGA, sizeof(cl_float) * Output::n_candidates, nullptr, &status)));
+    for (auto ab : {A, B}) {
+        cl_chkref(input_buffers[ab].reset(new cl::Buffer(*context, CL_MEM_READ_ONLY | bank_stage1[ab], sizeof(cl_float2) * n_frequency_bins, nullptr, &status)));
+        cl_chkref(tiles_buffers[ab].reset(new cl::Buffer(*context, CL_MEM_READ_WRITE | bank_stage1[ab], sizeof(cl_float2) * tiles_sz, nullptr, &status)));
+        cl_chkref(templates_buffers[ab].reset(new cl::Buffer(*context, CL_MEM_READ_ONLY | bank_stage1[ab], sizeof(cl_float2) * templates_sz, nullptr, &status)));
+        cl_chkref(fop_buffers[ab].reset(new cl::Buffer(*context, CL_MEM_READ_WRITE | bank_stage2[ab], sizeof(cl_float) * fop_sz, nullptr, &status)));
+        if (HMS::baseline)
+            cl_chkref(thresholds_buffers[ab].reset(new cl::Buffer(*context, CL_MEM_READ_ONLY | bank_stage2[ab], sizeof(cl_float) * HMS::n_planes, nullptr, &status)));
+        cl_chkref(detection_location_buffers[ab].reset(new cl::Buffer(*context, CL_MEM_WRITE_ONLY | bank_stage2[ab], sizeof(cl_uint) * Output::n_candidates, nullptr, &status)));
+        cl_chkref(detection_power_buffers[0].reset(new cl::Buffer(*context, CL_MEM_WRITE_ONLY | bank_stage2[ab], sizeof(cl_float) * Output::n_candidates, nullptr, &status)));
     }
 
     // Queues
