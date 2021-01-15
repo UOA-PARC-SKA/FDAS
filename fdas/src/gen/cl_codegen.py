@@ -59,13 +59,20 @@ def bit_rev(x, bits):
 def main():
     parser = ArgumentParser(description="Generates FDAS architecture tailored to parameters")
 
-    parser.add_argument('-c', dest='cl_file', metavar='path', default='../device/fdas_gen.cl')
-    parser.add_argument('-g', dest='gen_info_file', metavar='path', default='../host/gen_info.h')
-    parser.add_argument('--n-engines', dest='fft_n_engines', type=int, default=4)
-    parser.add_argument('--group-sz', dest='hms_group_sz', type=int, default=8)
-    parser.add_argument('--bundle-sz', dest='hms_bundle_sz', type=int, default=2)
-    parser.add_argument('--hms-baseline', dest='hms_baseline', action='store_true')
-    parser.add_argument('--unroll-x', dest='unroll_x', type=int, default=1)
+    parser.add_argument('-c', dest='cl_file', metavar='path', default='../device/fdas_gen.cl',
+                        help="Path to the generated OpenCL file")
+    parser.add_argument('-g', dest='gen_info_file', metavar='path', default='../host/gen_info.h',
+                        help="Path to the generated host header file")
+    parser.add_argument('--n-engines', dest='fft_n_engines', type=int, default=5,
+                        help="Number of FFT engines (parameter E)")
+    parser.add_argument('--group-sz', dest='hms_group_sz', type=int, default=4,
+                        help="Number of acceleration templates (= FOP rows) to process concurrently (parameter T)")
+    parser.add_argument('--bundle-sz', dest='hms_bundle_sz', type=int, default=2,
+                        help="Number of frequency bins (= FOP columns) to process concurrently (parameter F)")
+    parser.add_argument('--hms-baseline', dest='hms_baseline', action='store_true',
+                        help="Emits the baseline harmonic summing kernel")
+    parser.add_argument('--unroll-x', dest='unroll_x', type=int, default=1,
+                        help="Unroll factor for inner loop in baseline HSUM kernel")
 
     args = parser.parse_args()
 
