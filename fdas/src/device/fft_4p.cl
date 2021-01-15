@@ -43,9 +43,6 @@
 //  This implementation was combined and adapted from the Altera examples
 //   - 'fft1d'         (-> the overall structure and interface), and
 //   - 'fft1d_offchip' (-> twiddle factors suitable for a 4-parallel engine),
-//  by Haomiao Wang. The original comments from the authors at Altera are
-//  updated to reflect the change to a 4-parallel engine, but left intact
-//  otherwise. Additional comments by Julian Oppermann are marked with '[JO]'.
 
 // Includes tabled twiddle factors - storing constants uses fewer resources
 // than instantiating 'cos' or 'sin' hardware
@@ -105,7 +102,7 @@ float2x4 trivial_swap(float2x4 data) {
 
 // FFT data swap building block associated with complex rotations
 float2x4 swap(float2x4 data) {
-    // [JO] Reduced to 4 parallel points, the complex swap is equivalent to
+    //      Reduced to 4 parallel points, the complex swap is equivalent to
     //      the trivial one
     float2 tmp = data.i1;
     data.i1 = data.i2;
@@ -188,7 +185,7 @@ float2 twiddle(int index, int stage, int size, int stream) {
         twid.y = twiddles_sin[twid_stage][stream]
                                   [index * ((1 << (TWID_STAGES * 2 + 2)) / size)];
     } else {
-        // [JO] The capability to compute the twiddle factors is deliberately
+        //      The capability to compute the twiddle factors is deliberately
         //      omitted here to save FPGA resources
         twid.x = 0.0f;
         twid.y = 0.0f;
@@ -214,7 +211,7 @@ float2x4 complex_rotate(float2x4 data, int index, int stage, int size) {
 // 'step' specifies the index of the current invocation
 // 'fft_delay_elements' is an array representing a sliding window of size
 //                      N + 4 * (log(N) - 3)
-//   [JO] Modified this to the exact size required by the algorithm.
+//        Modified this to the exact size required by the algorithm.
 //        The architecture prescribes data shuffling blocks on stages [1, log(N)-2],
 //        whose buffers take up N - 4 elements in total (cf. Eq. (4) in the paper).
 //        As this implementation uses 4 extra elements per stage in order to model
@@ -238,7 +235,7 @@ float2x4 fft_step(float2x4 data, int step, float2 *fft_delay_elements,
     data = trivial_rotate(data);
     data = trivial_swap(data);
 
-    // [JO] In the 4-parallel architecture, only the very first stage has no
+    //      In the 4-parallel architecture, only the very first stage has no
     //      delay elements (cf. Fig. 5 in Garrido et al.). This means that
     //      stages [1, logN-2] are handled in the loop below.
 
@@ -254,7 +251,7 @@ float2x4 fft_step(float2x4 data, int step, float2 *fft_delay_elements,
         // Figure out the index of the element processed at this stage
         // Subtract (add modulo size / 4) the delay incurred as data travels
         // from one stage to the next
-        // [JO] Read the (previous stage's) delay as (1 << ((logN - 2) - (stage - 1))).
+        //      Read the (previous stage's) delay as (1 << ((logN - 2) - (stage - 1))).
         //      In stage 1, data_index == step, as stage 0 does not delay the data.
         int data_index = (step + ( 1 << (logN - 1 - stage))) & (size / 4 - 1);
 
@@ -267,7 +264,7 @@ float2x4 fft_step(float2x4 data, int step, float2 *fft_delay_elements,
         data = swap(data);
 
         // Compute the delay of this stage
-        // [JO] cf. Fig. 5 in Garrido et al. (they use 1-based stage indices, though)
+        //      cf. Fig. 5 in Garrido et al. (they use 1-based stage indices, though)
         int delay = 1 << (logN - 2 - stage);
 
         // Reordering multiplexers must toggle every 'delay' steps
@@ -275,7 +272,7 @@ float2x4 fft_step(float2x4 data, int step, float2 *fft_delay_elements,
 
         // Assign unique sections of the buffer for the set of delay elements at
         // each stage
-        // [JO] Garrido et al. say that for a given stage s, one needs P buffers
+        //      Garrido et al. say that for a given stage s, one needs P buffers
         //      of length N/2^(s+1).
         //      Here, keeping in mind that we use 0-based stage indices, we need
         //      4 * N/2^((stage+1)+1) == 2^(logN - stage) elements.

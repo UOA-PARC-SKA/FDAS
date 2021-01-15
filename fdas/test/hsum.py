@@ -1,9 +1,7 @@
 #!/usr/bin/env python3
 
 # FDAS -- Fourier Domain Acceleration Search, FPGA-accelerated with OpenCL
-# Copyright (C) 2020  Parallel and Reconfigurable Computing Lab,
-#                     Dept. of Electrical, Computer, and Software Engineering,
-#                     University of Auckland, New Zealand
+# Copyright (C) 2020  <removed for double-blind review>
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -92,7 +90,7 @@ def compute_test_data(fop_file, args):
             # 'freq' is the (always positive) frequency bin number -- no special handling required
             freq_sp_idx = freq // k
 
-            # see: Eq. (2) in Haomiao's VLSI paper
+            # see: Eq. (1)
             hps[h][tmpl][freq] = hps[h - 1][tmpl][freq] + fop[tmpl_sp_idx][freq_sp_idx]
 
     # save the planes

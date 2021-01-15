@@ -1,8 +1,6 @@
 /*
  * FDAS -- Fourier Domain Acceleration Search, FPGA-accelerated with OpenCL
- * Copyright (C) 2020  Parallel and Reconfigurable Computing Lab,
- *                     Dept. of Electrical, Computer, and Software Engineering,
- *                     University of Auckland, New Zealand
+ * Copyright (C) 2020  <removed for double-blind review>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by

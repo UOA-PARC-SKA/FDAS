@@ -63,9 +63,7 @@ Add `--num-frequency-bins 32768` to the first command to produce a much smaller 
 
 ### License
 
-    Copyright (C) 2020  Parallel and Reconfigurable Computing Lab,
-                        Dept. of Electrical, Computer, and Software Engineering,
-                        University of Auckland, New Zealand
+    Copyright (C) 2020  <removed for double-blind review>
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -87,17 +85,12 @@ This implementation uses and distributes the following third-party libraries:
 
 ### Major contributors
 
-*listed in alphabetical order*
-- Julian Oppermann
-- Oliver Sinnen
-- Haomiao Wang
+<removed for double-blind review>
 
 ### References
 
-- H. Wang, P. Thiagaraj, and O. Sinnen, “FPGA-based Acceleration of FT Convolution for Pulsar Search Using OpenCL,” TRETS, vol. 11, no. 4, p. 24:1–24:25, 2019, doi: 10.1145/3268933.
-- H. Wang, P. Thiagaraj, and O. Sinnen, “Harmonic-Summing Module of SKA on FPGA - Optimizing the Irregular Memory Accesses,” IEEE Trans. Very Large Scale Integr. Syst., vol. 27, no. 3, pp. 624–636, 2019, doi: 10.1109/TVLSI.2018.2882238.
-- H. Wang, P. Thiagaraj, and O. Sinnen, “Combining Multiple Optimised FPGA-based Pulsar Search Modules Using OpenCL,” Journal of Astronomical Instrumentation, 2019, doi: 10.1142/S2251171719500089.
+<removed for double-blind review>
 
 ### Acknowledgement
 
-This work benefitted from discussions with the SKA Time Domain Team (TDT), a collaboration between Manchester and Oxford Universities, and MPIfR Bonn.
+<removed for double-blind review>

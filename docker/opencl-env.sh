@@ -1,6 +1,6 @@
 #!/bin/bash
 
-export LM_LICENSE_FILE=1717@altera.licenses.foe.auckland.ac.nz
+export LM_LICENSE_FILE=1717@your.license.server
 
 export QUARTUS_ROOTDIR=/opt/intelFPGA_pro/17.1/quartus
 export QUARTUS_ROOTDIR_OVERRIDE=$QUARTUS_ROOTDIR
