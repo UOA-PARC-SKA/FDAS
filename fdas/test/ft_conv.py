@@ -36,28 +36,29 @@ def get_tim_header_field(tag, fmt, buf):
     return val
 
 
-def read_tim_file(tim_file):
+def read_tim_file(tim_file, read_header=True):
     offset = 0
     t_samp = None
 
-    # Attempt to read header section, check the format, and extract the sampling time
-    with open(tim_file, 'rb') as tim:
-        header = tim.read(512)  # arbitrarily chosen. The actual header size seems to be around 300 bytes
-        tag = b'HEADER_START'
-        start_idx = header.find(tag)
-        if start_idx == 4:  # first 4 bytes encode the length of the label
-            tag = b'HEADER_END'
-            end_idx = header.find(tag)
-            if end_idx < 0:
-                raise RuntimeError(f"Header end tag ({tag}) not found")
-            offset = end_idx + len(tag)
+    if read_header:
+        # Attempt to read header section, check the format, and extract the sampling time
+        with open(tim_file, 'rb') as tim:
+            header = tim.read(512)  # arbitrarily chosen. The actual header size seems to be around 300 bytes
+            tag = b'HEADER_START'
+            start_idx = header.find(tag)
+            if start_idx == 4:  # first 4 bytes encode the length of the label
+                tag = b'HEADER_END'
+                end_idx = header.find(tag)
+                if end_idx < 0:
+                    raise RuntimeError(f"Header end tag ({tag}) not found")
+                offset = end_idx + len(tag)
 
-            data_type = get_tim_header_field(b'data_type', '<i', header)
-            nbits = get_tim_header_field(b'nbits', '<i', header)
-            if data_type != 2 or nbits != 32:
-                raise RuntimeError(f"Format mismatch: Expecting 32-bit FP time series data")
+                data_type = get_tim_header_field(b'data_type', '<i', header)
+                nbits = get_tim_header_field(b'nbits', '<i', header)
+                if data_type != 2 or nbits != 32:
+                    raise RuntimeError(f"Format mismatch: Expecting 32-bit FP time series data")
 
-            t_samp = get_tim_header_field(b'tsamp', '<d', header)
+                t_samp = get_tim_header_field(b'tsamp', '<d', header)
 
     # Let NumPy read the actual samples
     samples = np.fromfile(tim_file, dtype=np.float32, offset=offset)
@@ -80,6 +81,8 @@ def main():
 
     parser.add_argument(dest='input', metavar='tim-file', nargs='+',
                         help="SIGPROC *.tim file(s) containing time-series samples")
+    parser.add_argument("-H", "--headerless", dest='headerless', action='store_true',
+                        help="indicate that input is a headerless *.tim file")
     parser.add_argument("-t", "--templates", dest='tmpls', metavar='path', required=True,
                         help="NumPy *.npy file containing the templates")
     parser.add_argument("-B", "--base-directory", dest='base_dir', metavar='path',
@@ -112,7 +115,7 @@ def compute_test_data(tim_file, args):
     pathlib.Path(od).mkdir(parents=True, exist_ok=True)
 
     # read samples from time series
-    samples, t_samp = read_tim_file(tim_file)
+    samples, t_samp = read_tim_file(tim_file, read_header=not args.headerless)
     t_samp = t_samp or args.t_samp  # take sampling time from (in this order): 1) file, 2) command line, 3) default
 
     # we need twice as many samples as the requested number of frequency bins for the test data, as we will discard the
