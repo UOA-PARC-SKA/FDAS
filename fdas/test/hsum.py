@@ -40,6 +40,9 @@ def main():
                            help="set number of harmonic planes to compute, i.e. FOP = HP_1, HP_2, ..., HP_n")
     test_args.add_argument("--num-candidates-per-plane", dest='test_data_n_cand_per_plane', type=int, metavar='n',
                            default=64, help="set desired number of candidates per plane (default: 64)")
+    test_args.add_argument("--thresholds", dest='test_data_thresholds', metavar='list_or_file',
+                           help="comma-separated list of floating-point thresholds, or '@' followed by a path, e.g. "
+                                "'0.1,0.2,0.3,0.4' or '@../my_thresholds.npy'")
 
     args = parser.parse_args()
 
@@ -48,6 +51,27 @@ def main():
 
 
 def compute_test_data(fop_file, args):
+    # check user-specified thresholds first (and fail early, if needed)
+    thrsh = np.zeros(args.test_data_n_plane, dtype=np.float32)
+    if args.test_data_thresholds:
+        spec = args.test_data_thresholds
+        if spec[0] == '@':
+            user_thrsh = np.load(spec[1:])
+            if user_thrsh.dtype != np.float32:
+                print(f"[ERROR] File '{spec[1:]}' does not contain an `np.float32` array")
+                return
+            if user_thrsh.size != thrsh.size:
+                print(f"[ERROR] Number of thresholds ({user_thrsh.size}) does not match number of planes ({thrsh.size})")
+                return
+            print(f"[INFO] Using thresholds from file '{spec[1:]}': {user_thrsh}")
+        else:
+            user_thrsh = np.array([float(x) for x in spec.split(',')], dtype=np.float32)
+            if user_thrsh.size != thrsh.size:
+                print(f"[ERROR] Number of thresholds ({user_thrsh.size}) does not match number of planes ({thrsh.size})")
+                return
+            print(f"[INFO] Using thresholds from command line: {user_thrsh}")
+        thrsh[:] = user_thrsh
+
     # determine output directory
     if args.base_dir:
         od = pathlib.Path(args.base_dir).joinpath(pathlib.Path(fop_file).absolute().parent.name)
@@ -98,11 +122,11 @@ def compute_test_data(fop_file, args):
     # save the planes
     np.save(f"{od}/hps_ref.npy", hps[1:])
 
-    # produce mock-up (!) thresholds, resulting in the requested number of candidates per plane
-    thrsh = np.empty(n_plane, dtype=np.float32)
-    for h in range(n_plane):
-        thrsh[h] = np.quantile(hps[h], q=1 - args.test_data_n_cand_per_plane / fop.size)
-        print(f"[INFO] Threshold for HP_{h + 1} is {thrsh[h]}")
+    if np.all(thrsh == 0.0):
+        # produce mock-up (!) thresholds, resulting in the requested number of candidates per plane
+        for h in range(n_plane):
+            thrsh[h] = np.quantile(hps[h], q=1 - args.test_data_n_cand_per_plane / fop.size)
+            print(f"[INFO] Threshold for HP_{h + 1} is {thrsh[h]}")
 
     np.save(f"{od}/thresholds.npy", thrsh)
 
