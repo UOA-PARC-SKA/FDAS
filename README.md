@@ -2,7 +2,9 @@
 
 Fourier Domain Acceleration Search, FPGA-accelerated with OpenCL.
 
-FDAS is a key component in the detection of pulsars in signals received by radio telescopes. This particular implementation is designed to meet the specifications of the Square Kilometer Array's (SKA) pulsar search engine. See the references below for more details.
+FDAS is a key component in the detection of pulsars in signals received by radio telescopes. This particular implementation is designed to meet the specifications of the Square Kilometer Array's (SKA) pulsar search engine. The approach is described in an open access paper in *Experimental Astronomy*:
+
+> Oppermann, J., Mickaliger, M.B. & Sinnen, O.: **Pulsar search acceleration using FPGAs and OpenCL templates.** *Exp Astron (2023).* https://doi.org/10.1007/s10686-022-09888-z
 
 ### Prerequisites
 
@@ -92,7 +94,7 @@ This implementation uses and distributes the following third-party libraries:
 - Oliver Sinnen
 - Haomiao Wang
 
-### References
+### Additional references
 
 - H. Wang, P. Thiagaraj, and O. Sinnen, “FPGA-based Acceleration of FT Convolution for Pulsar Search Using OpenCL,” TRETS, vol. 11, no. 4, p. 24:1–24:25, 2019, doi: 10.1145/3268933.
 - H. Wang, P. Thiagaraj, and O. Sinnen, “Harmonic-Summing Module of SKA on FPGA - Optimizing the Irregular Memory Accesses,” IEEE Trans. Very Large Scale Integr. Syst., vol. 27, no. 3, pp. 624–636, 2019, doi: 10.1109/TVLSI.2018.2882238.
