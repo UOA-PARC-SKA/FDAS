@@ -18,15 +18,37 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-// Check compiler compatibility
-#if defined(INTELFPGA_CL) && INTELFPGA_CL >= 171
+#ifndef FDAS_ALIGNEDBUFFER_H
+#define FDAS_ALIGNEDBUFFER_H
 
-#include "fdas_config.h"
-#include "ft_conv.cl"
-#include "hsum.cl"
+#include <memory>
 
-#else
+template <typename T, size_t alignment>
+class AlignedBuffer {
+public:
+    AlignedBuffer() = default;
+    ~AlignedBuffer() = default;
 
-#error "This implementation requires Intel FPGA SDK for OpenCL >= 17.1"
+    T* allocate(size_t n_elements) {
+        auto extra = alignment / sizeof(T) + 1;
+        alloc.reset(new T[n_elements + extra]);
 
-#endif
+        auto alloc_uint = reinterpret_cast<std::uintptr_t>(alloc.get());
+        auto offset = alloc_uint & (alignment - 1);
+        if (offset == 0)
+            aligned = alloc.get();
+        auto aligned_uint = alloc_uint - offset + alignment;
+        aligned = reinterpret_cast<T*>(aligned_uint);
+        return aligned;
+    }
+
+    T* operator()() {
+        return aligned;
+    }
+
+private:
+    std::unique_ptr<T[]> alloc;
+    T* aligned;
+};
+
+#endif // FDAS_ALIGNEDBUFFER_H

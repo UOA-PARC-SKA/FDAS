@@ -158,7 +158,7 @@ def compute_test_data(tim_file, args):
     # produce tiled and Fourier transformed input data, if requested
     if args.test_data_tile_sz:
         tile_sz = args.test_data_tile_sz
-        tile_olap = max_tmpl_len - 1  # overlap
+        tile_olap = int(np.ceil((max_tmpl_len - 1) / 4)) * 4  # overlap FIXME magic number
         tile_pld = tile_sz - tile_olap  # payload
         n_tile = int(np.ceil(n_freq / tile_pld))
         tiles = np.empty((n_tile, tile_sz), dtype=np.complex64)

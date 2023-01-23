@@ -190,6 +190,8 @@ float2 twiddle(int index, int stage, int size, int stream) {
     } else {
         // [JO] The capability to compute the twiddle factors is deliberately
         //      omitted here to save FPGA resources
+        twid.x = 0.0f;
+        twid.y = 0.0f;
     }
     return twid;
 }

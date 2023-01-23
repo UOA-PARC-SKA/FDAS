@@ -9,8 +9,9 @@ FDAS is a key component in the detection of pulsars in signals received by radio
 **For the hardware synthesis:**
 - Bittware 385A FPGA accelerator card
 - Quartus Prime Software v17.1 Update 1
-- Intel FPGA SDK for OpenCL Pro Edition v17.1 Update 1
+- Intel FPGA SDK for OpenCL Pro Edition v19.1
 - Bittware OpenCL BSP `p385a_sch_ax115` version R001.005.0004
+- Python 3 with Mako package (`python 3.6.8` + `Mako 1.1.4`, as found in CentOS 7.8, are known to work)
 
 Instructions to set up the required toolchain inside a Docker image are provided in `docker/README.md`. The script `docker/setup.sh` may also serve as a starting point for a manual setup.
 
@@ -32,12 +33,13 @@ Make sure the environment variables `INTELFPGAOCLSDKROOT` and `AOCL_BOARD_PACKAG
     $ cmake ..
 
 The following `make` targets are available:
+- `fdas_gen`: invokes the template code generation
 - `fdas_gtest`: builds the host application
 - `fdas_emu`: compiles the OpenCL kernels for software emulation
 - `fdas_report`: creates the HLS report
 - `fdas_synth`: performs the full FPGA synthesis
 
-The command-line flags passed to `aoc` can be configured in `fdas/CMakeLists.txt`
+The architecture's parameters, as well as the command-line flags passed to `aoc`, can be configured in `fdas/CMakeLists.txt`
 
 ### Creating reference test data
 
